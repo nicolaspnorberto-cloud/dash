@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mis-Scan Control Center</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-wrap">
+      <div class="brand-mark">MS</div>
+      <div>
+        <div class="brand">MIS-SCAN CONTROL CENTER</div>
+        <div class="subtitle">Produtividade • Tratativas • Calendarização</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label class="upload-btn" for="csvUpload">Carregar Misscan</label>
+      <input id="csvUpload" type="file" accept=".csv,text/csv" hidden />
+      <label class="upload-btn secondary-upload" for="hcUpload">Carregar Base HC</label>
+      <input id="hcUpload" type="file" accept=".csv,text/csv" hidden />
+      <button id="exportBtn" class="ghost-btn">Exportar filtrado</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Navegação principal">
+    <button class="tab active" data-tab="produtividade">Produtividade</button>
+    <button class="tab" data-tab="tratativas">Tratativas</button>
+    <button class="tab" data-tab="calendarizacao">Calendarização</button>
+  </nav>
+
+  <main>
+    <section id="produtividade" class="view active">
+      <div class="filter-panel">
+        <div class="filter-grid filter-grid-wide">
+          <label>Responsabilidade<select id="areaFilter"><option value="">Todas</option></select></label>
+          <label>Processo<select id="processFilter"><option value="">Todos</option></select></label>
+          <label>Identificação<select id="identFilter"><option value="">Todas</option></select></label>
+          <label>Turno<select id="turnoFilter"><option value="">Todos</option></select></label>
+          <label>Setor<select id="setorFilter"><option value="">Todos</option></select></label>
+          <label>Líder<select id="liderFilter"><option value="">Todos</option></select></label>
+          <label>Tipo HC<select id="tipoFilter"><option value="">Todos</option></select></label>
+          <label>Destino<select id="stationFilter"><option value="">Todos</option></select></label>
+          <label class="search-label">Colaborador / OPSID<input id="operatorSearch" type="search" placeholder="Buscar colaborador..." /></label>
+          <button id="resetBtn" class="reset-btn">Limpar filtros</button>
+        </div>
+        <div id="dataNote" class="data-note"></div>
+      </div>
+
+      <div class="kpi-grid kpi-grid-7">
+        <article class="kpi"><span>BR Misscan</span><strong id="kBR">—</strong><small id="kDate">—</small></article>
+        <article class="kpi"><span>TO envolvidas</span><strong id="kTO">—</strong><small>TO únicas</small></article>
+        <article class="kpi kpi-yellow"><span>Esteira</span><strong id="kEsteira">—</strong><small id="pEsteira">—</small></article>
+        <article class="kpi kpi-purple"><span>Expedição</span><strong id="kExpedicao">—</strong><small id="pExpedicao">—</small></article>
+        <article class="kpi kpi-gray"><span>Operador não identificado</span><strong id="kUnidentified">—</strong><small id="pUnidentified">—</small></article>
+        <article class="kpi"><span>Colaboradores</span><strong id="kOperators">—</strong><small>identificados</small></article>
+        <article class="kpi kpi-alert"><span>Pendências HC</span><strong id="kHCPending">—</strong><small>cadastro/ambiguidade</small></article>
+      </div>
+
+      <div class="dashboard-grid">
+        <article class="panel">
+          <div class="panel-head"><div><h2>Responsabilidade operacional</h2><p>Process Fail como regra principal; TO Mis Status como fallback</p></div></div>
+          <div id="areaBars" class="bar-list"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Process Fail</h2><p>BR únicos por tipo de falha</p></div></div>
+          <div id="processBars" class="bar-list"></div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid dashboard-grid-3">
+        <article class="panel">
+          <div class="panel-head"><div><h2>Por turno</h2><p>BR atribuídos a colaboradores identificados</p></div></div>
+          <div id="turnoBars" class="bar-list compact"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Por setor</h2><p>Enriquecimento da Base de HC</p></div></div>
+          <div id="setorBars" class="bar-list compact"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Por liderança</h2><p>Visibilidade para tratativas</p></div></div>
+          <div id="liderBars" class="bar-list compact"></div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid">
+        <article class="panel">
+          <div class="panel-head"><div><h2>Last Status</h2><p>Etapa do fluxo onde o BR aparece</p></div></div>
+          <div id="statusBars" class="bar-list compact"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Top destinos</h2><p>Hubs com maior quantidade de BR</p></div></div>
+          <div id="stationBars" class="bar-list compact"></div>
+        </article>
+      </div>
+
+      <article class="panel table-panel">
+        <div class="panel-head table-head">
+          <div><h2>Ranking de ofensores</h2><p>Somente erros com um colaborador identificado</p></div>
+          <div class="pill-group">
+            <button class="rank-pill active" data-rank="all">Todos</button>
+            <button class="rank-pill" data-rank="ESTEIRA">Esteira</button>
+            <button class="rank-pill" data-rank="EXPEDIÇÃO">Expedição</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Colaborador</th><th>OPSID</th><th>BR</th><th>TO</th><th>Turno</th><th>Setor</th><th>Líder</th><th>Tipo</th><th>Responsabilidade</th></tr></thead>
+            <tbody id="rankingBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="tratativas" class="view">
+      <div class="projection-hero compact-hero">
+        <div><span class="eyebrow">TRATATIVAS</span><h1>Quem precisa de ação</h1><p>Ranking por liderança e pendências de cadastro do HC.</p></div>
+      </div>
+
+      <article class="panel table-panel">
+        <div class="panel-head"><div><h2>Visibilidade por liderança</h2><p>BR únicos, TO e ofensores identificados por líder.</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Líder</th><th>BR</th><th>TO</th><th>Colaboradores</th><th>Esteira</th><th>Expedição</th><th>Turnos</th></tr></thead>
+            <tbody id="leaderBody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel table-panel">
+        <div class="panel-head"><div><h2>Pendências de Base HC</h2><p>Colaboradores identificados no Misscan que não possuem vínculo único/confiável na Base HC.</p></div><button id="exportPendingBtn" class="ghost-dark">Exportar pendências</button></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Colaborador / valor</th><th>OPSID</th><th>BR</th><th>Status HC</th><th>Turno</th><th>Setor</th><th>Líder</th></tr></thead>
+            <tbody id="pendingBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="calendarizacao" class="view">
+      <div class="projection-hero">
+        <div>
+          <span class="eyebrow">CALENDARIZAÇÃO</span>
+          <h1>Projeção do indicador</h1>
+          <p>Misscan realizado usa BR únicos da base filtrada. Informe o volume operacional e a expectativa futura para projetar o fechamento.</p>
+        </div>
+      </div>
+
+      <div class="projection-controls panel">
+        <div class="input-grid">
+          <label>Volume realizado<input id="actualVolume" type="number" min="0" step="1" placeholder="Ex.: 250000" /></label>
+          <label>Meta Misscan (%)<input id="targetRate" type="number" min="0" step="0.001" value="0.94" /></label>
+        </div>
+      </div>
+
+      <div class="kpi-grid projection-kpis">
+        <article class="kpi"><span>Misscan realizado</span><strong id="projMisscan">—</strong><small>BR únicos</small></article>
+        <article class="kpi"><span>Indicador atual</span><strong id="currentRate">—</strong><small>Misscan / volume</small></article>
+        <article class="kpi kpi-purple"><span>Meta</span><strong id="targetCard">—</strong><small>referência</small></article>
+        <article class="kpi kpi-yellow"><span>Projeção fechamento</span><strong id="forecastRate">—</strong><small id="forecastGap">—</small></article>
+      </div>
+
+      <div class="dashboard-grid calendar-grid">
+        <article class="panel">
+          <div class="panel-head"><div><h2>Adicionar dia futuro</h2><p>Inclua volume previsto e taxa esperada de Misscan.</p></div></div>
+          <div class="forecast-form">
+            <label>Data<input id="futureDate" type="date" /></label>
+            <label>Volume previsto<input id="futureVolume" type="number" min="0" step="1" /></label>
+            <label>Taxa esperada (%)<input id="futureRate" type="number" min="0" step="0.001" value="0.94" /></label>
+            <button id="addForecastBtn" class="primary-btn">Adicionar</button>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Resumo da projeção</h2><p>Resultado ponderado entre realizado e futuro.</p></div></div>
+          <div id="projectionGauge" class="gauge"></div>
+        </article>
+      </div>
+
+      <article class="panel table-panel">
+        <div class="panel-head"><div><h2>Calendário de projeção</h2><p>Linhas salvas neste navegador.</p></div><button id="clearForecastBtn" class="ghost-dark">Limpar calendário</button></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Data</th><th>Volume previsto</th><th>Taxa esperada</th><th>Misscan projetado</th><th>Status</th><th></th></tr></thead>
+            <tbody id="forecastBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer>Mis-Scan Control Center • V2 • Base HC integrada</footer>
+  <script src="app.js"></script>
+</body>
+</html>
