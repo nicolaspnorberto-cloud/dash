@@ -1,0 +1,34 @@
+[
+  {
+    "periodo_inicio": "2026-07-27",
+    "periodo_fim": "2026-08-18",
+    "turno": "GERAL",
+    "real": 2496400,
+    "meta": 3005800,
+    "aderencia": 83.1
+  },
+  {
+    "periodo_inicio": "2026-07-27",
+    "periodo_fim": "2026-08-18",
+    "turno": "T1",
+    "real": 737700,
+    "meta": 991800,
+    "aderencia": 74.4
+  },
+  {
+    "periodo_inicio": "2026-07-27",
+    "periodo_fim": "2026-08-18",
+    "turno": "T2",
+    "real": 745200,
+    "meta": 924600,
+    "aderencia": 80.6
+  },
+  {
+    "periodo_inicio": "2026-07-27",
+    "periodo_fim": "2026-08-18",
+    "turno": "T3",
+    "real": 1013500,
+    "meta": 1089500,
+    "aderencia": 93.0
+  }
+]

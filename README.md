@@ -1,43 +1,51 @@
-# Mis-Scan Control Center V2
+# Mis-Scan Control Center V3 — Calendarização Inteligente
 
-Dashboard estático para Vercel, com Base de HC integrada e botões/filtros funcionais.
+## Modelo da projeção
 
-## Regras implementadas
+A projeção agora deixa de usar apenas uma taxa manual.
 
-- `shipment_id` = BR.
-- `socpacked_tonumber` = TO.
-- `process_fail = Packed TO` => EXPEDIÇÃO.
-- `process_fail` começando com `Extra Parcel` => ESTEIRA.
-- Quando `process_fail` não classifica, `to_mis_status = Whole TO` => EXPEDIÇÃO e `to_mis_status = Extra Parcel` => ESTEIRA.
-- `operator_fail` com exatamente um colaborador válido => IDENTIFICADO.
-- `operator_fail` com mais de um colaborador => NÃO IDENTIFICADO.
-- Valores vazios, `Not Identified`, OPS sem nome ou e-mail técnico => NÃO IDENTIFICADO.
-- Colaborador encontrado na Base HC => Fixo + Turno + Setor + Líder.
-- Colaborador identificado e não encontrado na Base HC => Diarista / cadastro pendente.
-- Registros duplicados de `shipment_id` são consolidados para contar BR único.
+### Capacidade
+Capacidade = HC planejado × horas produtivas × produtividade por HC/hora
 
-## Arquivos
+### Carga
+Carga = Volume previsto / Capacidade
 
-- `index.html` — interface.
-- `styles.css` — visual.
-- `app.js` — regras, filtros, ranking e projeção.
-- `misscan.json` — base Misscan padrão.
-- `hc.json` — Base HC tratada.
-- `vercel.json` — configuração estática.
+### Fator de carga
+- até 90% de carga: 0,95x
+- acima de 90% até 100%: 1,00x
+- acima de 100% até 110%: 1,10x
+- acima de 110%: 1,25x
 
-## Deploy na Vercel
+### Cenários
+- Otimista: 0,90x
+- Base: 1,00x
+- Conservador: 1,15x
 
-Envie esta pasta para um projeto Vercel como site estático. Não há etapa de build.
+### Taxa projetada
+Taxa projetada = taxa histórica base do turno × fator de carga × fator do cenário
 
-## Atualização das bases
+### Fechamento projetado
+(Misscan realizado + Misscan futuro estimado) /
+(Volume realizado + Volume futuro)
 
-Na própria interface há dois botões:
+## Referência de produtividade usada
+Período 27/07/2026 a 18/08/2026:
+- Geral: 2.496,4 mil / meta 3.005,8 mil / aderência 83,1%
+- T1: 737,7 mil / meta 991,8 mil / aderência 74,4%
+- T2: 745,2 mil / meta 924,6 mil / aderência 80,6%
+- T3: 1.013,5 mil / meta 1.089,5 mil / aderência 93,0%
 
-- **Carregar Misscan**: aceita CSV com as mesmas colunas da base LM.
-- **Carregar Base HC**: aceita o CSV da Base de HC contendo o cabeçalho `colaborador`, seguido de Turno, Setor e líder.
+## Importante
+As taxas históricas por turno estão inicialmente em 0,94%.
+Quando a base histórica completa de Misscan + volume por turno estiver consolidada,
+substitua T1/T2/T3/T4/T5 pelos valores reais.
 
-O carregamento é feito no navegador para teste. Para produção, a recomendação é conectar uma API/Google Sheets e manter a base HC fora de repositórios públicos.
+## Publicação
+Substitua os arquivos do mesmo repositório GitHub:
+- index.html
+- styles.css
+- app.js
+- misscan.json
+- hc.json
 
-## Privacidade
-
-A Base HC contém nomes e e-mails corporativos. Não publique `hc.json` ou o CSV bruto em um repositório público ou em um dashboard de acesso aberto. Para produção, use controle de acesso e backend/API.
+Faça Commit. A Vercel fará um novo deploy automaticamente.

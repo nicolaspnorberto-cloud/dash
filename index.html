@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas • Calendarização</div>
+        <div class="subtitle">Produtividade • Tratativas • Calendarização V3</div>
       </div>
     </div>
     <div class="header-actions">
@@ -142,47 +142,239 @@
     <section id="calendarizacao" class="view">
       <div class="projection-hero">
         <div>
-          <span class="eyebrow">CALENDARIZAÇÃO</span>
-          <h1>Projeção do indicador</h1>
-          <p>Misscan realizado usa BR únicos da base filtrada. Informe o volume operacional e a expectativa futura para projetar o fechamento.</p>
+          <span class="eyebrow">CALENDARIZAÇÃO INTELIGENTE</span>
+          <h1>Projeção operacional do Misscan</h1>
+          <p>
+            Projeção ponderada por volume, com taxa histórica por turno, capacidade planejada,
+            carga operacional e cenários Otimista / Base / Conservador.
+          </p>
         </div>
       </div>
 
       <div class="projection-controls panel">
-        <div class="input-grid">
-          <label>Volume realizado<input id="actualVolume" type="number" min="0" step="1" placeholder="Ex.: 250000" /></label>
-          <label>Meta Misscan (%)<input id="targetRate" type="number" min="0" step="0.001" value="0.94" /></label>
+        <div class="panel-head">
+          <div>
+            <h2>Parâmetros do realizado</h2>
+            <p>Use o volume correspondente à mesma janela da base de Misscan analisada.</p>
+          </div>
+        </div>
+
+        <div class="calendar-params">
+          <label>Volume realizado
+            <input id="actualVolume" type="number" min="0" step="1" placeholder="Ex.: 2496400" />
+          </label>
+
+          <label>Meta Misscan (%)
+            <input id="targetRate" type="number" min="0" step="0.001" value="0.94" />
+          </label>
+
+          <div class="scenario-box">
+            <span>Cenário</span>
+            <div class="scenario-buttons">
+              <button type="button" class="scenario-btn" data-scenario="optimistic">Otimista</button>
+              <button type="button" class="scenario-btn active" data-scenario="base">Base</button>
+              <button type="button" class="scenario-btn" data-scenario="conservative">Conservador</button>
+            </div>
+            <small id="scenarioLabel">Base • fator 1,00x</small>
+          </div>
         </div>
       </div>
 
-      <div class="kpi-grid projection-kpis">
-        <article class="kpi"><span>Misscan realizado</span><strong id="projMisscan">—</strong><small>BR únicos</small></article>
-        <article class="kpi"><span>Indicador atual</span><strong id="currentRate">—</strong><small>Misscan / volume</small></article>
-        <article class="kpi kpi-purple"><span>Meta</span><strong id="targetCard">—</strong><small>referência</small></article>
-        <article class="kpi kpi-yellow"><span>Projeção fechamento</span><strong id="forecastRate">—</strong><small id="forecastGap">—</small></article>
+      <div class="kpi-grid calendar-kpis">
+        <article class="kpi">
+          <span>Misscan realizado</span>
+          <strong id="projMisscan">—</strong>
+          <small>BR únicos da base filtrada</small>
+        </article>
+
+        <article class="kpi">
+          <span>Indicador atual</span>
+          <strong id="currentRate">—</strong>
+          <small>Misscan / volume realizado</small>
+        </article>
+
+        <article class="kpi kpi-purple">
+          <span>Meta</span>
+          <strong id="targetCard">—</strong>
+          <small>referência operacional</small>
+        </article>
+
+        <article class="kpi kpi-yellow">
+          <span>Projeção fechamento</span>
+          <strong id="forecastRate">—</strong>
+          <small id="forecastGap">—</small>
+        </article>
+
+        <article class="kpi">
+          <span>Volume futuro</span>
+          <strong id="futureVolumeCard">—</strong>
+          <small>calendarizado</small>
+        </article>
+
+        <article class="kpi kpi-alert">
+          <span>Dias de risco</span>
+          <strong id="riskDaysCard">—</strong>
+          <small>projeção acima da faixa</small>
+        </article>
+      </div>
+
+      <div class="dashboard-grid calendar-reference-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Referência histórica de produtividade</h2>
+              <p>Período de referência: 27/07/2026 a 18/08/2026.</p>
+            </div>
+          </div>
+
+          <div class="prod-reference">
+            <div class="prod-ref-row prod-ref-head">
+              <span>Turno</span><span>Real</span><span>Meta operação</span><span>Aderência</span>
+            </div>
+            <div class="prod-ref-row"><strong>GERAL</strong><span>2.496,4 mil</span><span>3.005,8 mil</span><b>83,1%</b></div>
+            <div class="prod-ref-row"><strong>T1</strong><span>737,7 mil</span><span>991,8 mil</span><b>74,4%</b></div>
+            <div class="prod-ref-row"><strong>T2</strong><span>745,2 mil</span><span>924,6 mil</span><b>80,6%</b></div>
+            <div class="prod-ref-row"><strong>T3</strong><span>1.013,5 mil</span><span>1.089,5 mil</span><b>93,0%</b></div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Taxa histórica base por turno</h2>
+              <p>Começa igual à meta. Depois substitua pelas taxas reais quando consolidarmos todo o histórico.</p>
+            </div>
+          </div>
+
+          <div class="turn-rate-grid">
+            <label>T1 (%)<input id="rateT1" type="number" min="0" step="0.001" value="0.94" /></label>
+            <label>T2 (%)<input id="rateT2" type="number" min="0" step="0.001" value="0.94" /></label>
+            <label>T3 (%)<input id="rateT3" type="number" min="0" step="0.001" value="0.94" /></label>
+            <label>T4 (%)<input id="rateT4" type="number" min="0" step="0.001" value="0.94" /></label>
+            <label>T5 (%)<input id="rateT5" type="number" min="0" step="0.001" value="0.94" /></label>
+          </div>
+
+          <div class="model-note">
+            <strong>Modelo V3:</strong><br>
+            Capacidade = HC × horas produtivas × produtividade/h.<br>
+            Carga = volume previsto ÷ capacidade.<br>
+            Taxa projetada = taxa base do turno × fator de carga × cenário.
+          </div>
+        </article>
       </div>
 
       <div class="dashboard-grid calendar-grid">
         <article class="panel">
-          <div class="panel-head"><div><h2>Adicionar dia futuro</h2><p>Inclua volume previsto e taxa esperada de Misscan.</p></div></div>
-          <div class="forecast-form">
-            <label>Data<input id="futureDate" type="date" /></label>
-            <label>Volume previsto<input id="futureVolume" type="number" min="0" step="1" /></label>
-            <label>Taxa esperada (%)<input id="futureRate" type="number" min="0" step="0.001" value="0.94" /></label>
-            <button id="addForecastBtn" class="primary-btn">Adicionar</button>
+          <div class="panel-head">
+            <div>
+              <h2>Adicionar operação futura</h2>
+              <p>Informe a capacidade planejada. O dashboard calcula automaticamente o risco.</p>
+            </div>
+          </div>
+
+          <div class="smart-forecast-form">
+            <label>Data
+              <input id="futureDate" type="date" />
+            </label>
+
+            <label>Turno
+              <select id="futureTurno">
+                <option value="T1">T1</option>
+                <option value="T2">T2</option>
+                <option value="T3">T3</option>
+                <option value="T4">T4</option>
+                <option value="T5">T5</option>
+              </select>
+            </label>
+
+            <label>Responsabilidade
+              <select id="futureArea">
+                <option value="ESTEIRA">Esteira</option>
+                <option value="EXPEDIÇÃO">Expedição</option>
+              </select>
+            </label>
+
+            <label>Volume previsto
+              <input id="futureVolume" type="number" min="0" step="1" placeholder="Ex.: 350000" />
+            </label>
+
+            <label>HC planejado
+              <input id="futureHC" type="number" min="1" step="1" placeholder="Ex.: 45" />
+            </label>
+
+            <label>Horas produtivas
+              <input id="futureHours" type="number" min="0.1" step="0.1" value="8" />
+            </label>
+
+            <label>Produtividade / HC / h
+              <input id="futureProd" type="number" min="0.1" step="0.1" placeholder="Ex.: 950" />
+            </label>
+
+            <label>Taxa base do turno (%)
+              <input id="futureBaseRate" type="number" min="0" step="0.001" readonly />
+            </label>
+
+            <button id="addForecastBtn" class="primary-btn">Adicionar à projeção</button>
           </div>
         </article>
+
         <article class="panel">
-          <div class="panel-head"><div><h2>Resumo da projeção</h2><p>Resultado ponderado entre realizado e futuro.</p></div></div>
+          <div class="panel-head">
+            <div>
+              <h2>Resumo da projeção</h2>
+              <p>Resultado ponderado entre realizado e calendário futuro.</p>
+            </div>
+          </div>
           <div id="projectionGauge" class="gauge"></div>
+          <div id="forecastSummaryText" class="forecast-summary"></div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <div><h2>Projeção por turno</h2><p>Misscan futuro estimado por turno.</p></div>
+          </div>
+          <div id="forecastTurnBars" class="bar-list compact"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div><h2>Projeção por responsabilidade</h2><p>Esteira x Expedição no calendário futuro.</p></div>
+          </div>
+          <div id="forecastAreaBars" class="bar-list compact"></div>
         </article>
       </div>
 
       <article class="panel table-panel">
-        <div class="panel-head"><div><h2>Calendário de projeção</h2><p>Linhas salvas neste navegador.</p></div><button id="clearForecastBtn" class="ghost-dark">Limpar calendário</button></div>
+        <div class="panel-head">
+          <div>
+            <h2>Calendário de projeção</h2>
+            <p>Verde = dentro da meta • amarelo = atenção • vermelho = alto risco.</p>
+          </div>
+          <button id="clearForecastBtn" class="ghost-dark">Limpar calendário</button>
+        </div>
+
         <div class="table-wrap">
-          <table>
-            <thead><tr><th>Data</th><th>Volume previsto</th><th>Taxa esperada</th><th>Misscan projetado</th><th>Status</th><th></th></tr></thead>
+          <table class="calendar-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Turno</th>
+                <th>Área</th>
+                <th>Volume</th>
+                <th>HC</th>
+                <th>Horas</th>
+                <th>Prod./h</th>
+                <th>Capacidade</th>
+                <th>Carga</th>
+                <th>Taxa base</th>
+                <th>Taxa projetada</th>
+                <th>Misscan proj.</th>
+                <th>Risco</th>
+                <th></th>
+              </tr>
+            </thead>
             <tbody id="forecastBody"></tbody>
           </table>
         </div>

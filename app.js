@@ -319,24 +319,266 @@ function exportPending(){
   exportCSV(hcPendingRows().map(x=>({colaborador:x.name,opsid:x.opsid,br:x.br.size,status_hc:x.status,turno:x.turno,setor:x.setor,lider:x.lider})),'pendencias_base_hc.csv');
 }
 
+const SCENARIOS={
+  optimistic:{label:'Otimista',factor:.90},
+  base:{label:'Base',factor:1.00},
+  conservative:{label:'Conservador',factor:1.15}
+};
+
+function getTurnBaseRate(turno){
+  const el=$(`rate${turno}`);
+  const target=Number($('targetRate').value)||0;
+  return el ? (Number(el.value)||target) : target;
+}
+
+function loadFactor(load){
+  if(!Number.isFinite(load)||load<=0) return 1;
+  if(load<=.90) return .95;
+  if(load<=1.00) return 1.00;
+  if(load<=1.10) return 1.10;
+  return 1.25;
+}
+
+function riskForRate(rate,target){
+  if(!Number.isFinite(rate)) return {key:'na',label:'Sem cálculo',cls:'tag-na'};
+  if(rate<=target) return {key:'good',label:'Dentro da meta',cls:'tag-good'};
+  if(rate<=target*1.10) return {key:'watch',label:'Atenção',cls:'tag-watch'};
+  return {key:'bad',label:'Alto risco',cls:'tag-bad'};
+}
+
 function loadForecast(){
-  try{state.forecast=JSON.parse(localStorage.getItem('misscanForecastV2')||'[]')}catch{state.forecast=[]}
-  const av=localStorage.getItem('actualVolumeV2');if(av)$('actualVolume').value=av;
-  const tr=localStorage.getItem('targetRateV2');if(tr)$('targetRate').value=tr;
+  try{state.forecast=JSON.parse(localStorage.getItem('misscanForecastV3')||'[]')}catch{state.forecast=[]}
+  state.scenario=localStorage.getItem('misscanScenarioV3')||'base';
+
+  const av=localStorage.getItem('actualVolumeV3');
+  if(av)$('actualVolume').value=av;
+
+  const tr=localStorage.getItem('targetRateV3');
+  if(tr)$('targetRate').value=tr;
+
+  ['T1','T2','T3','T4','T5'].forEach(t=>{
+    const saved=localStorage.getItem(`misscanRate${t}V3`);
+    if(saved && $(`rate${t}`)) $(`rate${t}`).value=saved;
+  });
+
+  updateScenarioButtons();
+  updateFutureBaseRate();
   renderForecastTable();
 }
-function saveForecast(){localStorage.setItem('misscanForecastV2',JSON.stringify(state.forecast));localStorage.setItem('actualVolumeV2',$('actualVolume').value);localStorage.setItem('targetRateV2',$('targetRate').value)}
-function renderProjection(){
-  const actualVol=Number($('actualVolume').value)||0,target=Number($('targetRate').value)||0,miss=state.filtered.length,current=actualVol?miss/actualVol*100:NaN;
-  const futVol=state.forecast.reduce((a,x)=>a+x.volume,0),futMiss=state.forecast.reduce((a,x)=>a+x.volume*x.rate/100,0),forecast=(actualVol+futVol)?(miss+futMiss)/(actualVol+futVol)*100:NaN;
-  $('currentRate').textContent=fmtPct(current);$('targetCard').textContent=fmtPct(target);$('forecastRate').textContent=fmtPct(forecast);$('forecastGap').textContent=Number.isFinite(forecast)?`${forecast-target>=0?'+':''}${(forecast-target).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})} p.p. vs meta`:'Informe volume realizado';
-  const gauge=$('projectionGauge'),value=Number.isFinite(forecast)?forecast:0,max=Math.max(target*1.7,value*1.2,1),angle=Math.min(360,value/max*360),ok=Number.isFinite(forecast)&&forecast<=target;
-  gauge.innerHTML=`<div class="gauge-ring" style="background:conic-gradient(${ok?'#2f9e6f':'#d94b4b'} ${angle}deg,#eceef1 ${angle}deg)"><div class="gauge-text"><strong>${fmtPct(forecast)}</strong><span>${Number.isFinite(forecast)?(ok?'Dentro da meta':'Acima da meta'):'Aguardando volume'}</span></div></div>`;
-}
-function addForecast(){const date=$('futureDate').value,volume=Number($('futureVolume').value),rate=Number($('futureRate').value);if(!date||!volume||rate<0)return alert('Preencha data, volume e taxa esperada.');state.forecast.push({id:crypto.randomUUID(),date,volume,rate});state.forecast.sort((a,b)=>a.date.localeCompare(b.date));saveForecast();renderForecastTable();renderProjection();$('futureVolume').value=''}
-function renderForecastTable(){const target=Number($('targetRate').value)||0;$('forecastBody').innerHTML=state.forecast.map(x=>{const miss=x.volume*x.rate/100,ok=x.rate<=target;return `<tr><td>${x.date.split('-').reverse().join('/')}</td><td>${fmtInt.format(x.volume)}</td><td>${fmtPct(x.rate)}</td><td>${fmtInt.format(Math.round(miss))}</td><td><span class="tag ${ok?'tag-good':'tag-bad'}">${ok?'Dentro da meta':'Risco'}</span></td><td><button class="ghost-dark" onclick="removeForecast('${x.id}')">Excluir</button></td></tr>`}).join('')||'<tr><td colspan="6" class="empty">Nenhum dia futuro adicionado.</td></tr>'}
-window.removeForecast=id=>{state.forecast=state.forecast.filter(x=>x.id!==id);saveForecast();renderForecastTable();renderProjection()}
 
+function saveForecast(){
+  localStorage.setItem('misscanForecastV3',JSON.stringify(state.forecast));
+  localStorage.setItem('actualVolumeV3',$('actualVolume').value);
+  localStorage.setItem('targetRateV3',$('targetRate').value);
+  localStorage.setItem('misscanScenarioV3',state.scenario||'base');
+  ['T1','T2','T3','T4','T5'].forEach(t=>{
+    if($(`rate${t}`)) localStorage.setItem(`misscanRate${t}V3`,$(`rate${t}`).value);
+  });
+}
+
+function updateScenarioButtons(){
+  document.querySelectorAll('.scenario-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.scenario===(state.scenario||'base'));
+  });
+  const s=SCENARIOS[state.scenario||'base'];
+  if($('scenarioLabel')){
+    $('scenarioLabel').textContent=`${s.label} • fator ${s.factor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}x`;
+  }
+}
+
+function updateFutureBaseRate(){
+  if(!$('futureTurno')||!$('futureBaseRate')) return;
+  $('futureBaseRate').value=getTurnBaseRate($('futureTurno').value).toFixed(3);
+}
+
+function calcForecastRow(x){
+  const scenario=SCENARIOS[state.scenario||'base'];
+  const capacity=x.hc*x.hours*x.productivity;
+  const load=capacity>0?x.volume/capacity:NaN;
+  const loadFactorValue=loadFactor(load);
+  const projectedRate=x.baseRate*loadFactorValue*scenario.factor;
+  const projectedMiss=x.volume*projectedRate/100;
+
+  return {
+    ...x,
+    capacity,
+    load,
+    loadFactor:loadFactorValue,
+    scenarioFactor:scenario.factor,
+    projectedRate,
+    projectedMiss
+  };
+}
+
+function aggregateForecast(rows,field){
+  const map=new Map();
+
+  rows.forEach(r=>{
+    const key=r[field]||'NA';
+    if(!map.has(key)) map.set(key,{volume:0,miss:0});
+    const item=map.get(key);
+    item.volume+=r.volume;
+    item.miss+=r.projectedMiss;
+  });
+
+  return [...map.entries()]
+    .map(([key,v])=>[
+      `${key} • ${v.volume?fmtPct(v.miss/v.volume*100):'—'}`,
+      Math.round(v.miss)
+    ])
+    .sort((a,b)=>b[1]-a[1]);
+}
+
+function renderForecastBreakdowns(rows){
+  renderBars('forecastTurnBars',aggregateForecast(rows,'turno'),8);
+  renderBars('forecastAreaBars',aggregateForecast(rows,'area'),8);
+}
+
+function renderProjection(){
+  if(!$('actualVolume')) return;
+
+  const actualVol=Number($('actualVolume').value)||0;
+  const target=Number($('targetRate').value)||0;
+  const actualMiss=state.filtered.length;
+  const current=actualVol?actualMiss/actualVol*100:NaN;
+
+  const rows=state.forecast.map(calcForecastRow);
+  const futureVol=rows.reduce((sum,x)=>sum+x.volume,0);
+  const futureMiss=rows.reduce((sum,x)=>sum+x.projectedMiss,0);
+  const forecast=(actualVol+futureVol)
+    ?(actualMiss+futureMiss)/(actualVol+futureVol)*100
+    :NaN;
+
+  $('projMisscan').textContent=fmtInt.format(actualMiss);
+  $('currentRate').textContent=fmtPct(current);
+  $('targetCard').textContent=fmtPct(target);
+  $('forecastRate').textContent=fmtPct(forecast);
+  $('futureVolumeCard').textContent=fmtInt.format(Math.round(futureVol));
+
+  const riskyDates=new Set(
+    rows
+      .filter(x=>riskForRate(x.projectedRate,target).key==='bad')
+      .map(x=>x.date)
+  );
+  $('riskDaysCard').textContent=fmtInt.format(riskyDates.size);
+
+  $('forecastGap').textContent=Number.isFinite(forecast)
+    ?`${forecast-target>=0?'+':''}${(forecast-target).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})} p.p. vs meta`
+    :'Informe o volume realizado';
+
+  const gauge=$('projectionGauge');
+  const value=Number.isFinite(forecast)?forecast:0;
+  const max=Math.max(target*1.7,value*1.2,1);
+  const angle=Math.min(360,value/max*360);
+  const risk=riskForRate(forecast,target);
+  const gaugeColor=risk.key==='good'?'#00a66a':risk.key==='watch'?'#f0a500':'#dc294b';
+
+  gauge.innerHTML=`
+    <div class="gauge-ring" style="background:conic-gradient(${gaugeColor} ${angle}deg,#e5edf5 ${angle}deg)">
+      <div class="gauge-text">
+        <strong>${fmtPct(forecast)}</strong>
+        <span>${Number.isFinite(forecast)?risk.label:'Aguardando volume'}</span>
+      </div>
+    </div>`;
+
+  const avgFuture=futureVol?futureMiss/futureVol*100:NaN;
+
+  const turnMap=new Map();
+  rows.forEach(r=>{
+    if(!turnMap.has(r.turno)) turnMap.set(r.turno,{volume:0,miss:0});
+    const x=turnMap.get(r.turno);
+    x.volume+=r.volume;
+    x.miss+=r.projectedMiss;
+  });
+
+  const highTurn=[...turnMap.entries()]
+    .map(([turno,x])=>({turno,rate:x.volume?x.miss/x.volume*100:0}))
+    .sort((a,b)=>b.rate-a.rate)[0];
+
+  $('forecastSummaryText').innerHTML=`
+    <strong>Cenário ${escapeHtml(SCENARIOS[state.scenario||'base'].label)}:</strong>
+    taxa futura ponderada <b>${fmtPct(avgFuture)}</b> •
+    Misscan futuro estimado <b>${fmtInt.format(Math.round(futureMiss))}</b> •
+    ${highTurn
+      ?`turno de maior risco <b>${escapeHtml(highTurn.turno)} (${fmtPct(highTurn.rate)})</b>`
+      :'adicione dias para identificar o turno de maior risco'}.
+  `;
+
+  renderForecastBreakdowns(rows);
+}
+
+function addForecast(){
+  const date=$('futureDate').value;
+  const turno=$('futureTurno').value;
+  const area=$('futureArea').value;
+  const volume=Number($('futureVolume').value);
+  const hc=Number($('futureHC').value);
+  const hours=Number($('futureHours').value);
+  const productivity=Number($('futureProd').value);
+  const baseRate=getTurnBaseRate(turno);
+
+  if(!date||!volume||!hc||!hours||!productivity||baseRate<0){
+    return alert('Preencha data, turno, volume, HC, horas e produtividade.');
+  }
+
+  state.forecast.push({
+    id:crypto.randomUUID(),
+    date,
+    turno,
+    area,
+    volume,
+    hc,
+    hours,
+    productivity,
+    baseRate
+  });
+
+  state.forecast.sort((a,b)=>a.date.localeCompare(b.date)||a.turno.localeCompare(b.turno));
+
+  saveForecast();
+  renderForecastTable();
+  renderProjection();
+
+  $('futureVolume').value='';
+  $('futureHC').value='';
+  $('futureProd').value='';
+}
+
+function renderForecastTable(){
+  if(!$('forecastBody')) return;
+
+  const target=Number($('targetRate').value)||0;
+  const rows=state.forecast.map(calcForecastRow);
+
+  $('forecastBody').innerHTML=rows.map(x=>{
+    const risk=riskForRate(x.projectedRate,target);
+    const loadPct=Number.isFinite(x.load)?x.load*100:NaN;
+
+    return `<tr>
+      <td>${x.date.split('-').reverse().join('/')}</td>
+      <td><strong>${escapeHtml(x.turno)}</strong></td>
+      <td><span class="tag ${x.area==='ESTEIRA'?'tag-esteira':'tag-expedicao'}">${escapeHtml(x.area)}</span></td>
+      <td>${fmtInt.format(x.volume)}</td>
+      <td>${fmtInt.format(x.hc)}</td>
+      <td>${x.hours.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
+      <td>${fmtInt.format(Math.round(x.productivity))}</td>
+      <td>${fmtInt.format(Math.round(x.capacity))}</td>
+      <td>${fmtPct(loadPct)}</td>
+      <td>${fmtPct(x.baseRate)}</td>
+      <td><strong>${fmtPct(x.projectedRate)}</strong></td>
+      <td>${fmtInt.format(Math.round(x.projectedMiss))}</td>
+      <td><span class="tag ${risk.cls}">${risk.label}</span></td>
+      <td><button class="ghost-dark" onclick="removeForecast('${x.id}')">Excluir</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="14" class="empty">Nenhum dia futuro adicionado.</td></tr>';
+}
+
+window.removeForecast=id=>{
+  state.forecast=state.forecast.filter(x=>x.id!==id);
+  saveForecast();
+  renderForecastTable();
+  renderProjection();
+};
 function tabs(){
   document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
@@ -359,6 +601,39 @@ async function boot(){
   document.querySelectorAll('.rank-pill').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.rank-pill').forEach(x=>x.classList.toggle('active',x===b));state.rankArea=b.dataset.rank;renderRanking()}));
   $('csvUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;const data=csvParse(await f.text());if(!data.length)return alert('CSV de Misscan sem dados.');loadMisscanRows(data)});
   $('hcUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{buildHCMap(parseHCUpload(await f.text()));loadMisscanRows(state.raw.map(r=>{const copy={...r};['responsabilidade','identificacao','operator_count','operator_name','opsid','operator_original','turno','setor','lider_nome','lider_email','tipo_hc','hc_status'].forEach(k=>delete copy[k]);return copy;}));alert('Base HC atualizada e dados reprocessados.')}catch(err){alert(err.message)}});
-  $('actualVolume').addEventListener('input',()=>{saveForecast();renderProjection()});$('targetRate').addEventListener('input',()=>{saveForecast();renderForecastTable();renderProjection()});$('addForecastBtn').addEventListener('click',addForecast);$('clearForecastBtn').addEventListener('click',()=>{if(confirm('Limpar toda a calendarização salva?')){state.forecast=[];saveForecast();renderForecastTable();renderProjection()}});
+  $('actualVolume').addEventListener('input',()=>{saveForecast();renderProjection()});
+  $('targetRate').addEventListener('input',()=>{saveForecast();renderForecastTable();renderProjection()});
+
+  ['T1','T2','T3','T4','T5'].forEach(t=>{
+    $(`rate${t}`).addEventListener('input',()=>{
+      saveForecast();
+      updateFutureBaseRate();
+      renderForecastTable();
+      renderProjection();
+    });
+  });
+
+  $('futureTurno').addEventListener('change',updateFutureBaseRate);
+
+  document.querySelectorAll('.scenario-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      state.scenario=b.dataset.scenario;
+      updateScenarioButtons();
+      saveForecast();
+      renderForecastTable();
+      renderProjection();
+    });
+  });
+
+  $('addForecastBtn').addEventListener('click',addForecast);
+
+  $('clearForecastBtn').addEventListener('click',()=>{
+    if(confirm('Limpar toda a calendarização salva?')){
+      state.forecast=[];
+      saveForecast();
+      renderForecastTable();
+      renderProjection();
+    }
+  });
 }
 boot();
