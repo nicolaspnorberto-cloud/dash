@@ -5,7 +5,14 @@ const state = {
   hcRecords: [],
   hcMap: new Map(),
   rankArea: 'all',
-  forecast: []
+  forecast: [],
+  treatmentSource: [],
+  treatmentThreshold: 0.88,
+  treatmentProgress: {},
+  treatmentCurrent: null,
+  treatmentMode: null,
+  treatmentCycle: 1,
+  treatmentFiltered: []
 };
 
 const $ = id => document.getElementById(id);
@@ -218,8 +225,8 @@ function countBy(field,data=state.filtered){
 function renderBars(id,entries,limit=10){
   const max=Math.max(1,...entries.map(x=>x[1]));
   const total=entries.reduce((a,b)=>a+b[1],0)||1;
-  const colors={'ESTEIRA':'#f4c542','EXPEDIÇÃO':'#7656d8','NA':'#9ca3af','Extra Parcel - normal flow':'#f4c542','Extra Parcel - abnormal flow':'#e3aa18','Packed TO':'#7656d8'};
-  $(id).innerHTML=entries.slice(0,limit).map(([label,val],i)=>`<div class="bar-row"><div class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(1,val/max*100)}%;background:${colors[label]||['#161616','#61656d','#a2a6ae','#6860b9'][i%4]}"></div></div><div class="bar-value">${fmtInt.format(val)} <span style="color:#999;font-weight:650">${(val/total*100).toFixed(1)}%</span></div></div>`).join('')||'<div class="empty">Sem dados para os filtros selecionados.</div>';
+  const colors={'ESTEIRA':'#ee4d2d','EXPEDIÇÃO':'#184a86','NA':'#9aa8bb','Extra Parcel - normal flow':'#ee4d2d','Extra Parcel - abnormal flow':'#ff7b5f','Packed TO':'#184a86'};
+  $(id).innerHTML=entries.slice(0,limit).map(([label,val],i)=>`<div class="bar-row"><div class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(1,val/max*100)}%;background:${colors[label]||['#184a86','#ee4d2d','#00a66a','#9aa8bb'][i%4]}"></div></div><div class="bar-value">${fmtInt.format(val)} <span style="color:#999;font-weight:650">${(val/total*100).toFixed(1)}%</span></div></div>`).join('')||'<div class="empty">Sem dados para os filtros selecionados.</div>';
 }
 
 function dominant(map){return [...map.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||'NA'}
@@ -299,7 +306,7 @@ function renderAll(){
   renderBars('liderBars',countBy('lider_nome',state.filtered.filter(r=>r.identificacao==='IDENTIFICADO')),10);
   renderBars('statusBars',countBy('last_status'),10);
   renderBars('stationBars',countBy('lmreceived_station'),10);
-  renderRanking();renderLeaders();renderPending();renderProjection();
+  renderRanking();renderTreatments();renderProjection();
   const duplicateNote=state.sourceRows-state.raw.length;
   $('dataNote').textContent=`${fmtInt.format(state.filtered.length)} de ${fmtInt.format(state.raw.length)} BR únicos exibidos • ${fmtInt.format(state.sourceRows)} linhas de origem${duplicateNote>0?` • ${duplicateNote} duplicidade(s) de BR consolidada(s)`:''}. Regras: Packed TO = Expedição • Extra Parcel = Esteira • múltiplos operadores = não identificado.`;
 }
@@ -317,6 +324,263 @@ function exportFiltered(){
 
 function exportPending(){
   exportCSV(hcPendingRows().map(x=>({colaborador:x.name,opsid:x.opsid,br:x.br.size,status_hc:x.status,turno:x.turno,setor:x.setor,lider:x.lider})),'pendencias_base_hc.csv');
+}
+
+
+// ========================= TRATATIVAS V4 =========================
+const TREATMENT_STORAGE='misscanTreatmentProgressV4';
+const TREATMENT_DB='misscanTreatmentEvidenceV4';
+const TREATMENT_STORE='files';
+
+function treatmentKey(name=''){return normalizeName(name)||String(name)}
+function nowISO(){return new Date().toISOString()}
+function brDate(v){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?v:d.toLocaleString('pt-BR')}
+
+function loadTreatmentProgress(){
+  try{state.treatmentProgress=JSON.parse(localStorage.getItem(TREATMENT_STORAGE)||'{}')}catch{state.treatmentProgress={}}
+}
+function saveTreatmentProgress(){localStorage.setItem(TREATMENT_STORAGE,JSON.stringify(state.treatmentProgress))}
+
+function baseProgress(){
+  return {requiredCycle:1,history:[],dialogue1:{},recycle1:{signatures:{}},dialogue2:{},recycle2:{signatures:{}},dialogue3:{},recycle3:{signatures:{}}};
+}
+function progressFor(id){
+  if(!state.treatmentProgress[id])state.treatmentProgress[id]=baseProgress();
+  const p=state.treatmentProgress[id];
+  p.requiredCycle=Math.min(3,Math.max(1,Number(p.requiredCycle)||1));
+  p.history=p.history||[];
+  [1,2,3].forEach(c=>{p[`dialogue${c}`]=p[`dialogue${c}`]||{};p[`recycle${c}`]=p[`recycle${c}`]||{};p[`recycle${c}`].signatures=p[`recycle${c}`].signatures||{};});
+  return p;
+}
+function addTreatmentHistory(id,title,detail=''){
+  const p=progressFor(id);p.history.unshift({at:nowISO(),title,detail});p.history=p.history.slice(0,100);saveTreatmentProgress();
+}
+
+function enrichTreatmentRow(r){
+  const name=String(r.colaborador||r.Colaborador||r.nome||r.Nome||'').trim();
+  const norm=treatmentKey(name);
+  const hc=state.hcMap.get(norm);
+  let rawInd=r.indicador??r.Indicador??r.share??r.Share??r['Indicador (%)']??0;
+  if(typeof rawInd==='string')rawInd=rawInd.replace('%','').replace(',','.').trim();
+  const indicator=Number(rawInd)||0;
+  const miss=Number(r.miss_scan??r['Miss Scan']??r.ocorrencias??r.Ocorrencias??r.ocorr??0)||0;
+  return {
+    id:norm,
+    colaborador:name||'Não identificado',
+    indicador:indicator,
+    miss_scan:miss,
+    operacao:String(r.operacao||r['Operação dominante']||r.responsabilidade||'NA'),
+    periodo:String(r.periodo||r.Periodo||r.Semana||''),
+    fonte_indicador:String(r.fonte_indicador||r.Fonte||'Indicador importado'),
+    turno:hc?hc.turno:'Não cadastrado',
+    setor:hc?hc.setor:'Não cadastrado',
+    lider:hc?hc.lider_nome:'Não cadastrado',
+    tipo_hc:hc?'Fixo':'Diarista',
+    hc_status:hc?(hc.ambiguous?'Ambíguo':'OK'):'Não cadastrado'
+  };
+}
+
+function loadTreatmentRows(rows){
+  state.treatmentSource=(rows||[]).map(enrichTreatmentRow).filter(x=>x.id&&x.colaborador!=='Não identificado');
+  loadTreatmentProgress();
+  setupTreatmentFilters();
+  renderTreatments();
+}
+
+function setupTreatmentFilters(){
+  if(!$('treatTurnoFilter'))return;
+  const turns=[...new Set(state.treatmentSource.map(x=>x.turno).filter(Boolean))].sort();
+  const sectors=[...new Set(state.treatmentSource.map(x=>x.setor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  fillSelect('treatTurnoFilter',turns,'Todos');
+  fillSelect('treatSetorFilter',sectors,'Todos');
+}
+
+function cycleComplete(p,c){return !!p[`dialogue${c}`]?.done && !!p[`recycle${c}`]?.done}
+function treatmentStatus(row){
+  const p=progressFor(row.id), c=p.requiredCycle;
+  const d=p[`dialogue${c}`]||{}, r=p[`recycle${c}`]||{};
+  if(!d.done)return {group:'PENDENTE',text:`Realizar ${c}º Diálogo de Perf.`,className:'status-link'};
+  if(!r.done)return {group:'PENDENTE',text:`Realizar ${c}ª Reciclagem`,className:'status-link'};
+  return {group:'MONITORAMENTO',text:'Em monitoramento',className:'status-monitor'};
+}
+
+function filteredTreatments(){
+  if(!$('treatmentThreshold'))return [];
+  const threshold=Number($('treatmentThreshold').value)||0.88;
+  state.treatmentThreshold=threshold;
+  const turno=$('treatTurnoFilter').value;
+  const setor=$('treatSetorFilter').value;
+  const status=$('treatStatusFilter').value;
+  const q=$('treatSearch').value.trim().toLowerCase();
+  return state.treatmentSource.filter(x=>{
+    const st=treatmentStatus(x);
+    return x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && (!q||`${x.colaborador} ${x.turno} ${x.setor}`.toLowerCase().includes(q));
+  }).sort((a,b)=>b.indicador-a.indicador||b.miss_scan-a.miss_scan);
+}
+
+function dialogueButton(row,c){
+  const p=progressFor(row.id),d=p[`dialogue${c}`],enabled=c<=p.requiredCycle;
+  if(!enabled)return `<button class="step-btn disabled" disabled>—</button>`;
+  return `<button class="step-btn ${d.done?'done':'pending'}" onclick="openDialogue('${row.id}',${c})">${d.done?'Realizado':'Não realizado'}</button>`;
+}
+function recycleLabel(r){
+  if(r.done)return ['Concluída','done'];
+  if(r.infoSaved||r.evidenceCount||r.signatures?.colaborador||r.signatures?.responsavel)return ['Em andamento','recycle-ready'];
+  return ['Não realizada','pending'];
+}
+function recycleButton(row,c){
+  const p=progressFor(row.id),r=p[`recycle${c}`],enabled=c<=p.requiredCycle && !!p[`dialogue${c}`]?.done;
+  if(!enabled)return `<button class="step-btn disabled" disabled>—</button>`;
+  const [label,cls]=recycleLabel(r);
+  return `<button class="step-btn ${cls}" onclick="openRecycle('${row.id}',${c})">${label}</button>`;
+}
+
+function renderTreatments(){
+  if(!$('treatmentBody'))return;
+  state.treatmentFiltered=filteredTreatments();
+  const rows=state.treatmentFiltered;
+  const pending=rows.filter(x=>treatmentStatus(x).group==='PENDENTE').length;
+  const monitoring=rows.filter(x=>treatmentStatus(x).group==='MONITORAMENTO').length;
+  const repeats=rows.filter(x=>progressFor(x.id).requiredCycle>1).length;
+  const above1=rows.filter(x=>x.indicador>1).length;
+  $('treatTotal').textContent=fmtInt.format(rows.length);$('treatPending').textContent=fmtInt.format(pending);$('treatMonitoring').textContent=fmtInt.format(monitoring);$('treatRepeat').textContent=fmtInt.format(repeats);$('treatAbove1').textContent=fmtInt.format(above1);
+  $('treatCountLabel').textContent=`${rows.length} colaborador(es) acima de ${fmtPct(state.treatmentThreshold)} nos filtros atuais`;
+  $('treatFooterCount').textContent=`${rows.length} colaboradores`;$('treatUpdatedAt').textContent=`Atualizado ${new Date().toLocaleString('pt-BR')}`;
+  $('treatmentBody').innerHTML=rows.map((x,i)=>{
+    const p=progressFor(x.id),st=treatmentStatus(x),rateCls=x.indicador>1?'':'near';
+    return `<tr>
+      <td>${i+1}</td>
+      <td><strong>${escapeHtml(x.colaborador)}</strong><div class="cell-sub">${escapeHtml(x.operacao)} • ${escapeHtml(x.tipo_hc)}</div></td>
+      <td><span class="metric-rate ${rateCls}">${fmtPct(x.indicador)}</span></td>
+      <td><strong>${fmtInt.format(x.miss_scan)}</strong></td>
+      <td><span class="tag tag-good">${escapeHtml(x.turno)}</span></td>
+      <td>${escapeHtml(x.setor)}</td>
+      <td>${dialogueButton(x,1)}</td><td>${recycleButton(x,1)}</td>
+      <td>${dialogueButton(x,2)}</td><td>${recycleButton(x,2)}</td>
+      <td>${dialogueButton(x,3)}</td><td>${recycleButton(x,3)}</td>
+      <td><span class="${st.className}">${escapeHtml(st.text)}</span></td>
+      <td><button class="mini-action" onclick="registerRecurrence('${x.id}')">+ Reincidência</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="14" class="empty">Nenhum colaborador acima da meta nos filtros atuais.</td></tr>';
+}
+
+window.registerRecurrence=id=>{
+  const row=state.treatmentSource.find(x=>x.id===id);if(!row)return;
+  const p=progressFor(id);
+  if(!cycleComplete(p,p.requiredCycle))return alert('Conclua o ciclo atual antes de registrar uma reincidência.');
+  if(p.requiredCycle>=3)return alert('O colaborador já está no 3º ciclo de tratativa.');
+  p.requiredCycle++;
+  addTreatmentHistory(id,'Reincidência registrada',`Novo ciclo: ${p.requiredCycle}`);
+  saveTreatmentProgress();renderTreatments();
+};
+
+function modalRow(){return state.treatmentSource.find(x=>x.id===state.treatmentCurrent)}
+function showModal(){const m=$('treatmentModal');m.classList.add('open');m.setAttribute('aria-hidden','false');document.body.style.overflow='hidden'}
+function closeModal(){const m=$('treatmentModal');m.classList.remove('open');m.setAttribute('aria-hidden','true');document.body.style.overflow='';state.treatmentCurrent=null;state.treatmentMode=null}
+function modalHeader(row,cycle,label){$('modalEyebrow').textContent=`${label} • CICLO ${cycle}`;$('modalTitle').textContent=row.colaborador;$('modalMeta').textContent=`Indicador ${fmtPct(row.indicador)} • ${row.turno} • ${row.setor} • Líder: ${row.lider}`}
+
+window.openDialogue=(id,cycle)=>{
+  const row=state.treatmentSource.find(x=>x.id===id);if(!row)return;
+  state.treatmentCurrent=id;state.treatmentMode='dialogue';state.treatmentCycle=cycle;
+  const d=progressFor(id)[`dialogue${cycle}`]||{};
+  modalHeader(row,cycle,'DIÁLOGO DE PERFORMANCE');
+  $('dialogueEditor').classList.remove('hidden');$('recycleEditor').classList.add('hidden');
+  $('dialogueDate').value=d.date||new Date().toISOString().slice(0,10);$('dialogueResponsible').value=d.responsible||'';$('dialogueNotes').value=d.notes||'';
+  showModal();
+};
+
+window.openRecycle=async(id,cycle)=>{
+  const row=state.treatmentSource.find(x=>x.id===id);if(!row)return;
+  state.treatmentCurrent=id;state.treatmentMode='recycle';state.treatmentCycle=cycle;
+  const r=progressFor(id)[`recycle${cycle}`]||{};
+  modalHeader(row,cycle,'RECICLAGEM');
+  $('dialogueEditor').classList.add('hidden');$('recycleEditor').classList.remove('hidden');
+  document.querySelectorAll('.inner-tab').forEach((b,i)=>b.classList.toggle('active',i===0));document.querySelectorAll('.inner-view').forEach((v,i)=>v.classList.toggle('active',i===0));
+  $('recycleDate').value=r.date||new Date().toISOString().slice(0,10);$('recycleResponsible').value=r.responsible||'';$('recycleTopic').value=r.topic||'';$('recycleCause').value=r.cause||'';$('recycleOrientation').value=r.orientation||'';$('recycleNotes').value=r.notes||'';
+  await refreshEvidenceList();refreshSignatureStatus();renderTreatmentHistory();renderRecycleChecklist();prepareSignatureCanvas();showModal();
+};
+
+function saveDialogue(){
+  const row=modalRow();if(!row)return;
+  const p=progressFor(row.id),c=state.treatmentCycle,d=p[`dialogue${c}`];
+  d.date=$('dialogueDate').value;d.responsible=$('dialogueResponsible').value.trim();d.notes=$('dialogueNotes').value.trim();
+  if(!d.date||!d.responsible||!d.notes)return alert('Preencha data, responsável e registro do diálogo.');
+  d.done=true;d.updatedAt=nowISO();addTreatmentHistory(row.id,`${c}º diálogo realizado`,`${d.responsible} • ${d.date}`);saveTreatmentProgress();closeModal();renderTreatments();
+}
+
+function saveRecycleInfo(){
+  const row=modalRow();if(!row)return;
+  const p=progressFor(row.id),c=state.treatmentCycle,r=p[`recycle${c}`];
+  Object.assign(r,{date:$('recycleDate').value,responsible:$('recycleResponsible').value.trim(),topic:$('recycleTopic').value.trim(),cause:$('recycleCause').value.trim(),orientation:$('recycleOrientation').value.trim(),notes:$('recycleNotes').value.trim()});
+  if(!r.date||!r.responsible||!r.topic||!r.orientation)return alert('Preencha data, responsável, tema e orientação aplicada.');
+  r.infoSaved=true;r.updatedAt=nowISO();addTreatmentHistory(row.id,`${c}ª reciclagem — informações salvas`,`${r.responsible} • ${r.topic}`);saveTreatmentProgress();renderRecycleChecklist();
+}
+function recycleRequirements(r){return {info:!!r.infoSaved,evidence:(Number(r.evidenceCount)||0)>0,colab:!!r.signatures?.colaborador,resp:!!r.signatures?.responsavel}}
+function renderRecycleChecklist(){
+  const row=modalRow();if(!row||state.treatmentMode!=='recycle')return;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`],q=recycleRequirements(r);
+  $('recycleChecklist').innerHTML=`<strong>Requisitos para conclusão</strong><br><span class="${q.info?'check-ok':'check-bad'}">${q.info?'✓':'✕'} Informações da reciclagem</span><br><span class="${q.evidence?'check-ok':'check-bad'}">${q.evidence?'✓':'✕'} Pelo menos 1 evidência / lista anexada</span><br><span class="${q.colab?'check-ok':'check-bad'}">${q.colab?'✓':'✕'} Assinatura do colaborador</span><br><span class="${q.resp?'check-ok':'check-bad'}">${q.resp?'✓':'✕'} Assinatura do responsável</span>`;
+}
+function completeRecycle(){
+  const row=modalRow();if(!row)return;const p=progressFor(row.id),c=state.treatmentCycle,r=p[`recycle${c}`],q=recycleRequirements(r);
+  if(!Object.values(q).every(Boolean))return alert('A reciclagem só pode ser concluída após informações, evidência e as duas assinaturas.');
+  r.done=true;r.completedAt=nowISO();addTreatmentHistory(row.id,`${c}ª reciclagem concluída`,'Evidência e assinaturas validadas.');saveTreatmentProgress();closeModal();renderTreatments();
+}
+
+function openEvidenceDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(TREATMENT_DB,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(TREATMENT_STORE)){const s=db.createObjectStore(TREATMENT_STORE,{keyPath:'id'});s.createIndex('treatmentCycle',['treatmentId','cycle']);}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);})}
+async function dbPut(record){const db=await openEvidenceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(TREATMENT_STORE,'readwrite');tx.objectStore(TREATMENT_STORE).put(record);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>reject(tx.error)})}
+async function dbDelete(id){const db=await openEvidenceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(TREATMENT_STORE,'readwrite');tx.objectStore(TREATMENT_STORE).delete(id);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>reject(tx.error)})}
+async function dbGet(id){const db=await openEvidenceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(TREATMENT_STORE,'readonly'),req=tx.objectStore(TREATMENT_STORE).get(id);req.onsuccess=()=>{db.close();resolve(req.result)};req.onerror=()=>reject(req.error)})}
+async function dbList(treatmentId,cycle){const db=await openEvidenceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(TREATMENT_STORE,'readonly'),req=tx.objectStore(TREATMENT_STORE).index('treatmentCycle').getAll([treatmentId,cycle]);req.onsuccess=()=>{db.close();resolve(req.result||[])};req.onerror=()=>reject(req.error)})}
+
+async function addEvidenceFile(file){
+  const row=modalRow();if(!row||!file)return;const c=state.treatmentCycle,id=crypto.randomUUID();
+  await dbPut({id,treatmentId:row.id,cycle:c,kind:'evidence',name:file.name,type:file.type||'application/octet-stream',size:file.size,createdAt:nowISO(),blob:file});
+  const r=progressFor(row.id)[`recycle${c}`];r.evidenceCount=(Number(r.evidenceCount)||0)+1;addTreatmentHistory(row.id,`Evidência anexada — ${c}ª reciclagem`,file.name);saveTreatmentProgress();await refreshEvidenceList();renderRecycleChecklist();
+}
+async function refreshEvidenceList(){
+  const row=modalRow();if(!row||state.treatmentMode!=='recycle')return;const items=(await dbList(row.id,state.treatmentCycle)).filter(x=>x.kind==='evidence');
+  $('evidenceBadge').textContent=items.length;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`];r.evidenceCount=items.length;saveTreatmentProgress();
+  $('evidenceList').innerHTML=items.map(x=>`<div class="evidence-item"><div><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.type||'arquivo')} • ${Math.max(1,Math.round((x.size||0)/1024))} KB • ${brDate(x.createdAt)}</small></div><div class="evidence-item-actions"><button onclick="viewTreatmentFile('${x.id}')">Visualizar</button><button onclick="deleteTreatmentFile('${x.id}')">Excluir</button></div></div>`).join('')||'<div class="empty">Nenhuma evidência anexada neste ciclo.</div>';
+}
+window.viewTreatmentFile=async id=>{const x=await dbGet(id);if(!x?.blob)return;const url=URL.createObjectURL(x.blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000)};
+window.deleteTreatmentFile=async id=>{if(!confirm('Excluir este arquivo?'))return;await dbDelete(id);const row=modalRow();if(row)addTreatmentHistory(row.id,'Evidência removida',id);await refreshEvidenceList();renderRecycleChecklist()};
+
+let sigCtx=null,sigDrawing=false,sigDirty=false;
+function prepareSignatureCanvas(){
+  const canvas=$('signatureCanvas');if(!canvas)return;sigCtx=canvas.getContext('2d');sigCtx.lineWidth=3;sigCtx.lineCap='round';sigCtx.strokeStyle='#0b1f35';clearSignature();
+}
+function canvasPoint(ev){const c=$('signatureCanvas'),r=c.getBoundingClientRect(),p=ev.touches?.[0]||ev;return {x:(p.clientX-r.left)*c.width/r.width,y:(p.clientY-r.top)*c.height/r.height}}
+function sigStart(ev){ev.preventDefault();sigDrawing=true;sigDirty=true;const p=canvasPoint(ev);sigCtx.beginPath();sigCtx.moveTo(p.x,p.y)}
+function sigMove(ev){if(!sigDrawing)return;ev.preventDefault();const p=canvasPoint(ev);sigCtx.lineTo(p.x,p.y);sigCtx.stroke()}
+function sigEnd(){sigDrawing=false}
+function clearSignature(){const c=$('signatureCanvas');if(!c||!sigCtx)return;sigCtx.clearRect(0,0,c.width,c.height);sigDirty=false}
+async function saveSignature(){
+  const row=modalRow();if(!row||!sigDirty)return alert('Faça a assinatura no campo antes de salvar.');const c=state.treatmentCycle,type=$('signatureType').value,canvas=$('signatureCanvas');
+  const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));const id=`sig-${row.id}-${c}-${type}`;await dbPut({id,treatmentId:row.id,cycle:c,kind:'signature',signatureType:type,name:`assinatura_${type}.png`,type:'image/png',size:blob.size,createdAt:nowISO(),blob});
+  const r=progressFor(row.id)[`recycle${c}`];r.signatures=r.signatures||{};r.signatures[type]=true;r.signatures[`${type}At`]=nowISO();addTreatmentHistory(row.id,`Assinatura registrada — ${type}`,`${c}ª reciclagem`);saveTreatmentProgress();clearSignature();refreshSignatureStatus();renderRecycleChecklist();
+}
+function refreshSignatureStatus(){
+  const row=modalRow();if(!row)return;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`],s=r.signatures||{};
+  $('sigStatusColab').textContent=`Colaborador: ${s.colaborador?'assinado':'pendente'}`;$('sigStatusColab').classList.toggle('signed',!!s.colaborador);$('sigStatusResp').textContent=`Responsável: ${s.responsavel?'assinado':'pendente'}`;$('sigStatusResp').classList.toggle('signed',!!s.responsavel);
+}
+function renderTreatmentHistory(){
+  const row=modalRow();if(!row)return;const hist=progressFor(row.id).history||[];$('treatmentHistory').innerHTML=hist.map(x=>`<div class="history-item"><strong>${escapeHtml(x.title)}</strong><span>${brDate(x.at)}</span><p>${escapeHtml(x.detail||'')}</p></div>`).join('')||'<div class="empty">Ainda não há histórico registrado.</div>';
+}
+
+function parseTreatmentCSV(text){
+  const first=(text.split(/\r?\n/)[0]||'');const delimiter=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
+  const rows=[];let row=[],field='',quoted=false;
+  for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];if(quoted){if(c==='"'&&n==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c}else{if(c==='"')quoted=true;else if(c===delimiter){row.push(field);field=''}else if(c==='\n'){row.push(field.replace(/\r$/,''));rows.push(row);row=[];field=''}else field+=c}}
+  if(field||row.length){row.push(field);rows.push(row)}
+  const clean=rows.filter(r=>r.some(x=>String(x).trim()));const headers=(clean.shift()||[]).map(x=>x.trim());return clean.map(r=>Object.fromEntries(headers.map((h,i)=>[h,(r[i]??'').trim()])));
+}
+
+function exportTreatmentList(){exportCSV(state.treatmentFiltered.map(x=>{const p=progressFor(x.id),st=treatmentStatus(x);return {colaborador:x.colaborador,indicador_pct:x.indicador,miss_scan:x.miss_scan,turno:x.turno,setor:x.setor,tipo_hc:x.tipo_hc,ciclo:p.requiredCycle,status:st.text,periodo:x.periodo,fonte:x.fonte_indicador}}),'tratativas_colaboradores.csv')}
+function generateTreatmentReport(){
+  const rows=state.treatmentFiltered;if(!rows.length)return alert('Não há colaboradores para o relatório.');const body=rows.map((x,i)=>{const p=progressFor(x.id),st=treatmentStatus(x);return `<tr><td>${i+1}</td><td>${escapeHtml(x.colaborador)}</td><td>${fmtPct(x.indicador)}</td><td>${x.miss_scan}</td><td>${escapeHtml(x.turno)}</td><td>${escapeHtml(x.setor)}</td><td>${p.requiredCycle}</td><td>${escapeHtml(st.text)}</td></tr>`}).join('');const w=window.open('','_blank');w.document.write(`<!doctype html><html><head><title>Relatório de Tratativas</title><style>body{font-family:Arial;padding:30px;color:#10233f}h1{margin-bottom:4px}p{color:#667}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#184a86;color:white}th,td{padding:9px;border:1px solid #ddd;text-align:left}</style></head><body><h1>Relatório de Tratativas Mis-Scan</h1><p>Meta de corte: ${fmtPct(state.treatmentThreshold)} • Gerado em ${new Date().toLocaleString('pt-BR')}</p><table><thead><tr><th>#</th><th>Colaborador</th><th>Indicador</th><th>Miss Scan</th><th>Turno</th><th>Setor</th><th>Ciclo</th><th>Status</th></tr></thead><tbody>${body}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();
+}
+function openFirstPendingEvidence(){
+  const row=state.treatmentFiltered.find(x=>{const p=progressFor(x.id),c=p.requiredCycle;return p[`dialogue${c}`]?.done&&!p[`recycle${c}`]?.done})||state.treatmentFiltered[0];if(!row)return alert('Nenhum colaborador em tratativa.');const p=progressFor(row.id),c=p.requiredCycle;if(!p[`dialogue${c}`]?.done)return openDialogue(row.id,c);openRecycle(row.id,c);
 }
 
 const SCENARIOS={
@@ -584,23 +848,44 @@ function tabs(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
     if(b.dataset.tab==='calendarizacao')renderProjection();
+    if(b.dataset.tab==='tratativas')renderTreatments();
   }));
 }
 
 async function boot(){
   tabs();loadForecast();
   try{
-    const [hcRes,missRes]=await Promise.all([fetch('hc.json'),fetch('misscan.json')]);
+    const [hcRes,missRes,treatRes]=await Promise.all([fetch('hc.json'),fetch('misscan.json'),fetch('tratativas.json')]);
     buildHCMap(await hcRes.json());
+    loadTreatmentProgress();
     loadMisscanRows(await missRes.json());
+    loadTreatmentRows(await treatRes.json());
   }catch(e){
     console.error(e);$('dataNote').textContent='Não foi possível carregar os arquivos padrão. Use os botões para carregar os CSVs.';
   }
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
-  $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);$('exportPendingBtn').addEventListener('click',exportPending);
+  $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   document.querySelectorAll('.rank-pill').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.rank-pill').forEach(x=>x.classList.toggle('active',x===b));state.rankArea=b.dataset.rank;renderRanking()}));
   $('csvUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;const data=csvParse(await f.text());if(!data.length)return alert('CSV de Misscan sem dados.');loadMisscanRows(data)});
-  $('hcUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{buildHCMap(parseHCUpload(await f.text()));loadMisscanRows(state.raw.map(r=>{const copy={...r};['responsabilidade','identificacao','operator_count','operator_name','opsid','operator_original','turno','setor','lider_nome','lider_email','tipo_hc','hc_status'].forEach(k=>delete copy[k]);return copy;}));alert('Base HC atualizada e dados reprocessados.')}catch(err){alert(err.message)}});
+  $('hcUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{buildHCMap(parseHCUpload(await f.text()));loadMisscanRows(state.raw.map(r=>{const copy={...r};['responsabilidade','identificacao','operator_count','operator_name','opsid','operator_original','turno','setor','lider_nome','lider_email','tipo_hc','hc_status'].forEach(k=>delete copy[k]);return copy;}));state.treatmentSource=state.treatmentSource.map(enrichTreatmentRow);setupTreatmentFilters();renderTreatments();alert('Base HC atualizada e dados reprocessados.')}catch(err){alert(err.message)}});
+  // Tratativas V4
+  ['treatmentThreshold','treatTurnoFilter','treatSetorFilter','treatStatusFilter'].forEach(id=>$(id).addEventListener('change',renderTreatments));
+  $('treatSearch').addEventListener('input',renderTreatments);
+  $('treatResetBtn').addEventListener('click',()=>{$('treatmentThreshold').value='0.88';$('treatTurnoFilter').value='';$('treatSetorFilter').value='';$('treatStatusFilter').value='';$('treatSearch').value='';renderTreatments()});
+  $('treatmentUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const data=parseTreatmentCSV(await f.text());if(!data.length)throw new Error('Arquivo sem dados.');loadTreatmentRows(data);alert('Indicadores de tratativa carregados. O corte de 0,88% foi aplicado.')}catch(err){alert(err.message)}});
+  $('exportTreatBtn').addEventListener('click',exportTreatmentList);
+  $('generateReportBtn').addEventListener('click',generateTreatmentReport);
+  $('registerEvidenceBtn').addEventListener('click',openFirstPendingEvidence);
+  $('closeTreatmentModal').addEventListener('click',closeModal);
+  $('treatmentModal').addEventListener('click',e=>{if(e.target===$('treatmentModal'))closeModal()});
+  $('saveDialogueBtn').addEventListener('click',saveDialogue);
+  $('saveRecycleInfoBtn').addEventListener('click',saveRecycleInfo);
+  $('completeRecycleBtn').addEventListener('click',completeRecycle);
+  $('evidenceFile').addEventListener('change',async e=>{const f=e.target.files[0];if(f)await addEvidenceFile(f);e.target.value=''});
+  document.querySelectorAll('.inner-tab').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.inner-tab').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.inner-view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.inner));if(b.dataset.inner==='recycleEvidence')refreshEvidenceList();if(b.dataset.inner==='recycleHistory')renderTreatmentHistory();if(b.dataset.inner==='recycleSignatures'){refreshSignatureStatus();prepareSignatureCanvas()}}));
+  const sigCanvas=$('signatureCanvas');['pointerdown'].forEach(ev=>sigCanvas.addEventListener(ev,sigStart));['pointermove'].forEach(ev=>sigCanvas.addEventListener(ev,sigMove));['pointerup','pointercancel','pointerleave'].forEach(ev=>sigCanvas.addEventListener(ev,sigEnd));
+  $('clearSignatureBtn').addEventListener('click',clearSignature);$('saveSignatureBtn').addEventListener('click',saveSignature);
+
   $('actualVolume').addEventListener('input',()=>{saveForecast();renderProjection()});
   $('targetRate').addEventListener('input',()=>{saveForecast();renderForecastTable();renderProjection()});
 

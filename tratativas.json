@@ -1,0 +1,786 @@
+[
+  {
+    "colaborador": "KAROLAINE FRANCISCO DE MOURA",
+    "indicador": 10.0,
+    "miss_scan": 217,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "JOHNNY PATRICK SOUZA NASCIMENTO",
+    "indicador": 8.62,
+    "miss_scan": 187,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "SALEH KHALED AMORIM KBAR FILHO",
+    "indicador": 5.99,
+    "miss_scan": 130,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ELIENAI CRISTINA OLIVEIRA GOMES",
+    "indicador": 3.73,
+    "miss_scan": 81,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "GREICIELLE ANDRÉ DA SILVA",
+    "indicador": 1.89,
+    "miss_scan": 41,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MARIA EDUARDA ALVES RUFINO",
+    "indicador": 1.8,
+    "miss_scan": 39,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MATEUS CARDOSO DOS SANTOS",
+    "indicador": 1.75,
+    "miss_scan": 38,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LUANA ROCHA",
+    "indicador": 1.52,
+    "miss_scan": 33,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LUCINEIA DE OLIVEIRA SOUSA",
+    "indicador": 1.48,
+    "miss_scan": 32,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "OTAVIO LUIS SILVA ALVES",
+    "indicador": 1.2,
+    "miss_scan": 26,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "SUELEN THAMIRES MARTINS SILVA SANTOS",
+    "indicador": 0.97,
+    "miss_scan": 21,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "YASMIM LUMINA ASSIS DE PAULA",
+    "indicador": 0.92,
+    "miss_scan": 20,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Ana Clara Rosa de Jesus Melo",
+    "indicador": 0.88,
+    "miss_scan": 19,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "PATRICIA MADALENA DOS SANTOS",
+    "indicador": 0.78,
+    "miss_scan": 17,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ESTHEFANY MARTINS DE LIMA",
+    "indicador": 0.78,
+    "miss_scan": 17,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANA MARIA RODRIGUES PEREIRA DA MOTA",
+    "indicador": 0.69,
+    "miss_scan": 15,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "QUEZYA CRISTINA LINUS DE JESUS SILVA",
+    "indicador": 0.69,
+    "miss_scan": 15,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Ivan Ribeiro De Carvalho",
+    "indicador": 0.65,
+    "miss_scan": 14,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "GIOVANIA MAXIMIANO MOREIRA",
+    "indicador": 0.65,
+    "miss_scan": 14,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LUCILEIDE  FERREIRA DE CASTRO",
+    "indicador": 0.6,
+    "miss_scan": 13,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "KAMILLY KETHLEN PEREIRA LOPES",
+    "indicador": 0.6,
+    "miss_scan": 13,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "WANDSON BARBOSA GOMES SANTOS",
+    "indicador": 0.6,
+    "miss_scan": 13,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Raquel Ferreira Lemos",
+    "indicador": 0.6,
+    "miss_scan": 13,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ELZA MENEZES DA SILVA",
+    "indicador": 0.6,
+    "miss_scan": 13,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MARIA EDUARDA DE FREITAS MELLO",
+    "indicador": 0.55,
+    "miss_scan": 12,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Lucas Henrique Dias De Deus",
+    "indicador": 0.55,
+    "miss_scan": 12,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ALEJANDRO VIEIRA SANTOS BASTOS",
+    "indicador": 0.51,
+    "miss_scan": 11,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "EDUARDA KESIA DOS ANJOS DE OLIVEIRA",
+    "indicador": 0.46,
+    "miss_scan": 10,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MAIARA SANTOS DE JESUS",
+    "indicador": 0.46,
+    "miss_scan": 10,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "KETLEM SABRINA DE PAULA SILVA",
+    "indicador": 0.46,
+    "miss_scan": 10,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANDREA SILVA PINTO",
+    "indicador": 0.46,
+    "miss_scan": 10,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Paloma Perreira de Sousa Silva",
+    "indicador": 0.41,
+    "miss_scan": 9,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Cinde Carla Santos de Sousa",
+    "indicador": 0.41,
+    "miss_scan": 9,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Fernanda Aparecida Santos de Araujo",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "BRENDA ISLA SILVA DE JESUS",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Jeferson Victor Lima De Jesus",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "EUSTAQUIO DE PAULA JUNIOR",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "SAMUEL MATHEUS FERREIRA DA SILVA",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "KATHLEEN CAROLINE DE JESUS MIRANDA",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "BARBARA CAMILA ROCHA",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LILIAM RODRIGUES DOS SANTOS",
+    "indicador": 0.37,
+    "miss_scan": 8,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MAIANE DE MELO LEITE ARAUJO",
+    "indicador": 0.32,
+    "miss_scan": 7,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "PATRICK MIRANDA ESTEVES",
+    "indicador": 0.32,
+    "miss_scan": 7,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "DANIEL PARANHAS RIBEIRO",
+    "indicador": 0.32,
+    "miss_scan": 7,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "JOSE COELHO DA SILVA",
+    "indicador": 0.32,
+    "miss_scan": 7,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "NICOLAS ALEF GOMES GONÇALVES",
+    "indicador": 0.32,
+    "miss_scan": 7,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Ops482208",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANA CAROLINA DA SILVA TOMAZ",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "JENNIFER STEPHANY BERNARDO",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LUCELIA SANTOS DE SOUSA",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "JADE CRISTINA PEREIRA DE OLIVEIRA",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ISABELLE VITORIA MESSIAS DE AZEVEDO",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANNA LUIZA DUARTE DA SILVA",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Lídia Dias Santana Roza",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MICHEL KATHERINE VILLAFRANCA MORENO",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ESTER EMANUELE DOS SANTOS RIBEIRO",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "KAYLANNE SOPHIA DE ALMEIDA RIBEIRO ALVES",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LAURA DINIZ RODRIGUES",
+    "indicador": 0.28,
+    "miss_scan": 6,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANA CLARA ALVES DA SILVA",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "BERNARDO CANTARIN SOUSA PEREIRA",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ROGERIO DE SALES PINTO",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "rafaela de jesus rocha",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "HELAINE RODRIGUES DA CRUZ",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "BRUNO HENRIQUE DE QUEIROZ",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "PAMELA CRISTINA FERREIRA SANTANA",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "DAYANNE MARA ALVES MENDES",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "EMILY GUIMARAES SILVA",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "JANIA ALVES DE OLIVEIRA",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MICHELE FONSECA DE SOUZA",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ALEXANDRE VIEIRA MARTINS FIGUEIREDO",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Josilane Araujo Costa",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "CAMILLE VITORIA SOARES RODRIGUES",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LUANA CELINA MESQUITA DIAS",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LUANA EVILHIN MOREIRA DE MELO",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Gabriela Oracio Gonçalves da silva",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Daniela Nascimento De Souza Amancio",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "CARLIANE DOS SANTOS BARRETO",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Expedição",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ROBSON LUIZ PORTO DOS SANTOS",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MARIA LUIZA MANHAES RODRIGUES",
+    "indicador": 0.23,
+    "miss_scan": 5,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "AMANDA FELIPE SILVA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANA PAULA DOS SANTOS ROCHA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "LUIZ GUSTAVO BATISTA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Sem identificação da operação",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "GILMARA SILVA COELHO",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "WESLLEY PIRES DE SOUZA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "DAYANE FERNANDA DE SOUZA SILVA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANDREIA LUCIA RODRIGUES BISPO DOS SANTOS",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "MICAELA OLIVEIRA NASCIMENTO",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANGELICA DE CARVALHO PEREIRA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "VALERIA CAMARGO DA SILVA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ÂNGELO DHERLISON DOS SANTOS BARBOSA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "CAIO HENRIQUE DAMACENO BEZERRA",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "GUILHERME LUCAS SANTOS RODRIGUES",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "VITOR SIQUEIRA FERNANDES",
+    "indicador": 0.18,
+    "miss_scan": 4,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "Hellen Gomes",
+    "indicador": 0.14,
+    "miss_scan": 3,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ANA LUIZA CORDEIRO COSTA",
+    "indicador": 0.14,
+    "miss_scan": 3,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "PRISCILLA STEFFANY SILVA DOS REIS",
+    "indicador": 0.14,
+    "miss_scan": 3,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "BARBARA LAIS SANTOS BARBOSA",
+    "indicador": 0.14,
+    "miss_scan": 3,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  },
+  {
+    "colaborador": "ELAINE ROCHA DA SILVA",
+    "indicador": 0.14,
+    "miss_scan": 3,
+    "operacao": "Esteira",
+    "periodo": "W34",
+    "fonte_indicador": "Share W34"
+  }
+]

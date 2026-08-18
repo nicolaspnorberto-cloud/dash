@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas • Calendarização V3</div>
+        <div class="subtitle">Produtividade • Tratativas V4 • Calendarização</div>
       </div>
     </div>
     <div class="header-actions">
@@ -114,28 +114,95 @@
     </section>
 
     <section id="tratativas" class="view">
-      <div class="projection-hero compact-hero">
-        <div><span class="eyebrow">TRATATIVAS</span><h1>Quem precisa de ação</h1><p>Ranking por liderança e pendências de cadastro do HC.</p></div>
+      <div class="treatment-hero">
+        <div>
+          <span class="eyebrow">TRATATIVAS V4</span>
+          <h1>Acompanhamento de colaboradores ofensores</h1>
+          <p>Todo colaborador com indicador acima de <strong>0,88%</strong> entra automaticamente na fila de tratativas.</p>
+        </div>
+        <div class="treatment-rule-card">
+          <span>REGRA DE ENTRADA</span>
+          <strong>Indicador &gt; 0,88%</strong>
+          <small>Múltiplos operadores não entram em tratativa individual.</small>
+        </div>
       </div>
 
-      <article class="panel table-panel">
-        <div class="panel-head"><div><h2>Visibilidade por liderança</h2><p>BR únicos, TO e ofensores identificados por líder.</p></div></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>#</th><th>Líder</th><th>BR</th><th>TO</th><th>Colaboradores</th><th>Esteira</th><th>Expedição</th><th>Turnos</th></tr></thead>
-            <tbody id="leaderBody"></tbody>
-          </table>
+      <div class="treatment-filter-panel panel">
+        <div class="treatment-filter-grid">
+          <label>Meta de corte (%)
+            <input id="treatmentThreshold" type="number" min="0" step="0.01" value="0.88" />
+          </label>
+          <label>Turno
+            <select id="treatTurnoFilter"><option value="">Todos</option></select>
+          </label>
+          <label>Setor
+            <select id="treatSetorFilter"><option value="">Todos</option></select>
+          </label>
+          <label>Status
+            <select id="treatStatusFilter">
+              <option value="">Todos</option>
+              <option value="PENDENTE">Ação pendente</option>
+              <option value="MONITORAMENTO">Em monitoramento</option>
+              <option value="CONCLUIDO">Concluído</option>
+            </select>
+          </label>
+          <label class="treatment-search">Colaborador
+            <input id="treatSearch" type="search" placeholder="Buscar colaborador..." />
+          </label>
+          <button id="treatResetBtn" class="reset-btn">Limpar</button>
         </div>
-      </article>
+        <div class="treatment-source-note">
+          <strong>Base inicial:</strong> W34. O arquivo padrão usa o campo <em>Share</em> como indicador importado para demonstração do fluxo. Quando a taxa individual oficial estiver disponível, use “Carregar Indicadores”.
+        </div>
+      </div>
 
-      <article class="panel table-panel">
-        <div class="panel-head"><div><h2>Pendências de Base HC</h2><p>Colaboradores identificados no Misscan que não possuem vínculo único/confiável na Base HC.</p></div><button id="exportPendingBtn" class="ghost-dark">Exportar pendências</button></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>#</th><th>Colaborador / valor</th><th>OPSID</th><th>BR</th><th>Status HC</th><th>Turno</th><th>Setor</th><th>Líder</th></tr></thead>
-            <tbody id="pendingBody"></tbody>
+      <div class="treatment-kpi-grid">
+        <article class="treatment-kpi"><div class="treatment-kpi-icon purple">👥</div><div><span>Total em tratativa</span><strong id="treatTotal">0</strong></div></article>
+        <article class="treatment-kpi"><div class="treatment-kpi-icon yellow">⚠</div><div><span>Ações pendentes</span><strong id="treatPending">0</strong></div></article>
+        <article class="treatment-kpi"><div class="treatment-kpi-icon green">✓</div><div><span>Em monitoramento</span><strong id="treatMonitoring">0</strong></div></article>
+        <article class="treatment-kpi"><div class="treatment-kpi-icon orange">↻</div><div><span>Reincidentes</span><strong id="treatRepeat">0</strong></div></article>
+        <article class="treatment-kpi"><div class="treatment-kpi-icon red">!</div><div><span>Acima de 1,00%</span><strong id="treatAbove1">0</strong></div></article>
+      </div>
+
+      <div class="treatment-toolbar">
+        <div>
+          <h2>Acompanhamento de ofensores</h2>
+          <p id="treatCountLabel">—</p>
+        </div>
+        <div class="treatment-actions">
+          <label class="treat-upload-btn" for="treatmentUpload">Carregar Indicadores</label>
+          <input id="treatmentUpload" type="file" accept=".csv,text/csv" hidden />
+          <button id="registerEvidenceBtn" class="action-btn green">Registrar Evidência</button>
+          <button id="generateReportBtn" class="action-btn blue">Gerar Relatório</button>
+          <button id="exportTreatBtn" class="action-btn orange">Gerar Lista</button>
+        </div>
+      </div>
+
+      <article class="treatment-table-card">
+        <div class="table-wrap treatment-table-wrap">
+          <table class="treatment-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Colaborador</th>
+                <th>Indicador</th>
+                <th>Miss Scan</th>
+                <th>Turno</th>
+                <th>Setor</th>
+                <th>1º Diálogo</th>
+                <th>1ª Reciclagem</th>
+                <th>2º Diálogo</th>
+                <th>2ª Reciclagem</th>
+                <th>3º Diálogo</th>
+                <th>3ª Reciclagem</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="treatmentBody"></tbody>
           </table>
         </div>
+        <div class="treatment-table-footer"><span id="treatFooterCount">0 colaboradores</span><span id="treatUpdatedAt">—</span></div>
       </article>
     </section>
 
@@ -380,9 +447,93 @@
         </div>
       </article>
     </section>
+
+
+    <div id="treatmentModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal-card treatment-modal-card">
+        <div class="modal-head">
+          <div>
+            <span id="modalEyebrow" class="modal-eyebrow">TRATATIVA</span>
+            <h2 id="modalTitle">Colaborador</h2>
+            <p id="modalMeta">—</p>
+          </div>
+          <button id="closeTreatmentModal" class="modal-close" aria-label="Fechar">×</button>
+        </div>
+
+        <div id="dialogueEditor" class="modal-section hidden">
+          <div class="modal-form-grid">
+            <label>Data<input id="dialogueDate" type="date" /></label>
+            <label>Responsável<input id="dialogueResponsible" type="text" placeholder="Nome do responsável" /></label>
+            <label class="span-2">Registro do diálogo<textarea id="dialogueNotes" rows="6" placeholder="Descreva o diálogo de performance, orientação e combinados..."></textarea></label>
+          </div>
+          <div class="modal-actions">
+            <button id="saveDialogueBtn" class="primary-btn">Salvar e marcar realizado</button>
+          </div>
+        </div>
+
+        <div id="recycleEditor" class="modal-section hidden">
+          <div class="inner-tabs">
+            <button class="inner-tab active" data-inner="recycleInfo">Informações</button>
+            <button class="inner-tab" data-inner="recycleEvidence">Evidências <span id="evidenceBadge" class="mini-badge">0</span></button>
+            <button class="inner-tab" data-inner="recycleSignatures">Assinaturas</button>
+            <button class="inner-tab" data-inner="recycleHistory">Histórico</button>
+          </div>
+
+          <div id="recycleInfo" class="inner-view active">
+            <div class="modal-form-grid">
+              <label>Data da reciclagem<input id="recycleDate" type="date" /></label>
+              <label>Responsável<input id="recycleResponsible" type="text" placeholder="Responsável pela reciclagem" /></label>
+              <label class="span-2">Tema abordado<input id="recycleTopic" type="text" placeholder="Ex.: Misscan / procedimento operacional" /></label>
+              <label class="span-2">Causa identificada<textarea id="recycleCause" rows="3" placeholder="Causa ou desvio identificado..."></textarea></label>
+              <label class="span-2">Orientação aplicada<textarea id="recycleOrientation" rows="3" placeholder="Orientação, conteúdo e reforço aplicado..."></textarea></label>
+              <label class="span-2">Observações<textarea id="recycleNotes" rows="3" placeholder="Informações complementares..."></textarea></label>
+            </div>
+            <div class="modal-actions">
+              <button id="saveRecycleInfoBtn" class="primary-btn">Salvar informações</button>
+              <button id="completeRecycleBtn" class="completion-btn">Concluir reciclagem</button>
+            </div>
+            <div id="recycleChecklist" class="completion-checklist"></div>
+          </div>
+
+          <div id="recycleEvidence" class="inner-view">
+            <div class="evidence-upload-zone">
+              <div>
+                <strong>Anexar lista de reciclagem / evidência</strong>
+                <p>PDF, imagem ou documento. Na V4 os arquivos ficam armazenados neste navegador.</p>
+              </div>
+              <label class="treat-upload-btn" for="evidenceFile">Adicionar arquivo</label>
+              <input id="evidenceFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" hidden />
+            </div>
+            <div id="evidenceList" class="evidence-list"></div>
+          </div>
+
+          <div id="recycleSignatures" class="inner-view">
+            <div class="signature-status-grid">
+              <div id="sigStatusColab" class="signature-status">Colaborador: pendente</div>
+              <div id="sigStatusResp" class="signature-status">Responsável: pendente</div>
+            </div>
+            <label class="signature-type-label">Assinatura de
+              <select id="signatureType"><option value="colaborador">Colaborador</option><option value="responsavel">Responsável pela reciclagem</option></select>
+            </label>
+            <div class="signature-pad-wrap">
+              <canvas id="signatureCanvas" width="900" height="260"></canvas>
+            </div>
+            <div class="signature-actions">
+              <button id="clearSignatureBtn" class="ghost-dark">Limpar</button>
+              <button id="saveSignatureBtn" class="primary-btn">Salvar assinatura</button>
+            </div>
+            <p class="signature-legal-note">A assinatura registra a evidência gráfica, data/hora e o ciclo da reciclagem. Para validade corporativa compartilhada, conecte a V4 a um backend/Google Drive.</p>
+          </div>
+
+          <div id="recycleHistory" class="inner-view">
+            <div id="treatmentHistory" class="history-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 
-  <footer>Mis-Scan Control Center • V2 • Base HC integrada</footer>
+  <footer>Mis-Scan Control Center • V4 • Tratativas por colaborador + Calendarização inteligente</footer>
   <script src="app.js"></script>
 </body>
 </html>

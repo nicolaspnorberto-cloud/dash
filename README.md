@@ -49,3 +49,27 @@ Substitua os arquivos do mesmo repositório GitHub:
 - hc.json
 
 Faça Commit. A Vercel fará um novo deploy automaticamente.
+
+
+## V4 — Tratativas por colaborador
+
+- Corte padrão: indicador > 0,88%.
+- A base padrão `tratativas.json` foi gerada a partir da W34 enviada e usa o campo `Share` como indicador importado de demonstração.
+- É possível substituir por um CSV real usando o botão **Carregar Indicadores**. Recomenda-se ter as colunas `Colaborador`, `Indicador`, `Miss Scan`, `Operação` e `Período`.
+- Turno, setor, líder e tipo HC são enriquecidos pela Base HC.
+- O foco visual da tratativa é o colaborador; liderança fica apenas como metadado no detalhe.
+
+### Fluxo
+1. Indicador > 0,88% -> 1º Diálogo.
+2. 1ª Reciclagem exige informações + pelo menos uma evidência + assinatura do colaborador + assinatura do responsável.
+3. Após conclusão, o colaborador fica em monitoramento.
+4. O botão `+ Reincidência` abre o 2º ciclo e depois o 3º ciclo.
+
+### Evidências e assinaturas
+A V4 estática salva anexos e assinaturas no **IndexedDB do navegador**. Isso torna o fluxo funcional no mesmo dispositivo, mas **não compartilha os arquivos entre usuários**.
+
+Para produção multiusuário, o próximo passo é conectar:
+- Vercel -> API/backend;
+- arquivos -> Google Drive ou storage corporativo;
+- progresso -> Google Sheets/DB;
+- autenticação corporativa.
