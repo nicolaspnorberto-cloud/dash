@@ -92,3 +92,7 @@ Para produção multiusuário, o próximo passo é conectar:
 - O e-mail do instrutor é obrigatório no modal.
 - Backend: Vercel `/api/notificar` -> Apps Script -> MailApp.
 - Consulte `EMAIL_SETUP.md`.
+
+
+## V4.2.2
+Pacote de substituição total com rotas `/api/ping` e `/api/notificar` no formato oficial de handlers GET/POST.

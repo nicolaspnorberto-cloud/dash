@@ -1,0 +1,6 @@
+{
+  "name": "misscan-control-center",
+  "version": "4.2.2",
+  "private": true,
+  "type": "module"
+}
