@@ -926,3 +926,69 @@ thead,
   font-weight:750;
   line-height:1.45;
 }
+
+
+/* =========================================================
+   V5 — DADOS AUTOMÁTICOS
+========================================================= */
+.live-source{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  min-height:34px;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:9px;
+}
+.live-source strong{
+  display:block;
+  color:#fff;
+  font-size:10px;
+  line-height:1.2;
+}
+.live-source small{
+  display:block;
+  margin-top:2px;
+  color:#aebdd0;
+  font-size:8px;
+  line-height:1.2;
+}
+.live-dot{
+  width:9px;
+  height:9px;
+  flex:0 0 9px;
+  border-radius:50%;
+  background:#00a66a;
+  box-shadow:0 0 0 3px rgba(0,166,106,.14);
+}
+.live-dot.loading{
+  background:#f0a500;
+  box-shadow:0 0 0 3px rgba(240,165,0,.14);
+  animation:livePulse 1.1s infinite ease-in-out;
+}
+.live-dot.error{
+  background:#dc294b;
+  box-shadow:0 0 0 3px rgba(220,41,75,.14);
+}
+@keyframes livePulse{
+  0%,100%{opacity:.45}
+  50%{opacity:1}
+}
+.source-strip{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 20px;
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:8px;
+  background:#eef5fd;
+  border:1px solid #d5e4f4;
+  color:#5a718c;
+  font-size:10px;
+}
+.source-strip b{color:#123a69}
+#refreshDataBtn:disabled{
+  opacity:.55;
+  cursor:wait;
+}

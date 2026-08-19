@@ -12,7 +12,9 @@ const state = {
   treatmentCurrent: null,
   treatmentMode: null,
   treatmentCycle: 1,
-  treatmentFiltered: []
+  treatmentFiltered: [],
+  liveMeta: null,
+  liveRefreshing: false
 };
 
 const $ = id => document.getElementById(id);
@@ -1003,27 +1005,136 @@ function tabs(){
   }));
 }
 
+
+function setLiveStatus(mode,text,detail=''){
+  const dot=$('liveDot'),status=$('liveStatus'),updated=$('liveUpdated');
+  if(dot){
+    dot.classList.remove('loading','error');
+    if(mode==='loading')dot.classList.add('loading');
+    if(mode==='error')dot.classList.add('error');
+  }
+  if(status)status.textContent=text;
+  if(updated)updated.textContent=detail||'Google Sheets • automático';
+}
+
+function liveTreatmentRows(){
+  const identified=state.raw.filter(r=>r.identificacao==='IDENTIFICADO' && r.responsabilidade!=='NA');
+  const total=identified.length||1;
+  const groups=new Map();
+
+  identified.forEach(r=>{
+    const id=normalizeName(r.operator_name);
+    if(!id)return;
+    if(!groups.has(id)){
+      groups.set(id,{
+        colaborador:r.operator_name,
+        miss_scan:0,
+        areaCounts:{},
+        periodo:state.liveMeta?.periodLabel||'Janela automática'
+      });
+    }
+    const g=groups.get(id);
+    g.miss_scan++;
+    g.areaCounts[r.responsabilidade]=(g.areaCounts[r.responsabilidade]||0)+1;
+  });
+
+  return [...groups.values()].map(g=>{
+    const operacao=Object.entries(g.areaCounts)
+      .sort((a,b)=>b[1]-a[1])[0]?.[0]||'NA';
+
+    return {
+      colaborador:g.colaborador,
+      miss_scan:g.miss_scan,
+      indicador:g.miss_scan/total*100,
+      operacao,
+      periodo:g.periodo,
+      fonte_indicador:'Share Misscan automático'
+    };
+  });
+}
+
+async function refreshLiveData({silent=false}={}){
+  if(state.liveRefreshing)return;
+  state.liveRefreshing=true;
+
+  const btn=$('refreshDataBtn');
+  if(btn)btn.disabled=true;
+  setLiveStatus('loading','Atualizando...','Lendo Base HC + LM');
+
+  try{
+    const response=await fetch(`/api/dados?days=35&t=${Date.now()}`,{
+      headers:{'Accept':'application/json'},
+      cache:'no-store'
+    });
+
+    let data={};
+    try{data=await response.json()}catch{}
+
+    if(!response.ok||!data.ok){
+      throw new Error(data.error||`Falha ao carregar dados (${response.status}).`);
+    }
+
+    state.liveMeta=data.meta||{};
+
+    buildHCMap(data.hc||[]);
+    loadTreatmentProgress();
+    loadMisscanRows(data.misscan||[]);
+    loadTreatmentRows(liveTreatmentRows());
+
+    const generated=state.liveMeta.generatedAt
+      ?new Date(state.liveMeta.generatedAt).toLocaleString('pt-BR')
+      :new Date().toLocaleString('pt-BR');
+
+    setLiveStatus('ok','Dados online',`Atualizado ${generated}`);
+
+    if($('hcSourceInfo')){
+      $('hcSourceInfo').textContent=
+        `${fmtInt.format(state.liveMeta.hcRecords??(data.hc||[]).length)} colaboradores • Base de HC 26`;
+    }
+
+    if($('misscanSourceInfo')){
+      $('misscanSourceInfo').textContent=
+        `${fmtInt.format((data.misscan||[]).length)} BR • LM`;
+    }
+
+    if($('dataWindowInfo')){
+      $('dataWindowInfo').textContent=
+        state.liveMeta.periodLabel||'últimos 35 dias';
+    }
+
+    if($('dataNote')){
+      $('dataNote').textContent=
+        `Fonte automática ativa. ${fmtInt.format(state.sourceRows)} registros recebidos; ${fmtInt.format(state.raw.length)} BR únicos após deduplicação.`;
+    }
+  }catch(err){
+    console.error(err);
+    setLiveStatus('error','Falha na atualização',err.message);
+    if($('dataNote')){
+      $('dataNote').textContent=
+        `Não foi possível atualizar automaticamente: ${err.message}`;
+    }
+    if(!silent)alert(`Falha na atualização automática:\n${err.message}`);
+  }finally{
+    state.liveRefreshing=false;
+    if(btn)btn.disabled=false;
+  }
+}
+
 async function boot(){
   tabs();loadForecast();
-  try{
-    const [hcRes,missRes,treatRes]=await Promise.all([fetch('hc.json'),fetch('misscan.json'),fetch('tratativas.json')]);
-    buildHCMap(await hcRes.json());
-    loadTreatmentProgress();
-    loadMisscanRows(await missRes.json());
-    loadTreatmentRows(await treatRes.json());
-  }catch(e){
-    console.error(e);$('dataNote').textContent='Não foi possível carregar os arquivos padrão. Use os botões para carregar os CSVs.';
-  }
+  await refreshLiveData({silent:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
+  $('refreshDataBtn').addEventListener('click',()=>refreshLiveData({silent:false}));
+  setInterval(()=>refreshLiveData({silent:true}),15*60*1000);
   document.querySelectorAll('.rank-pill').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.rank-pill').forEach(x=>x.classList.toggle('active',x===b));state.rankArea=b.dataset.rank;renderRanking()}));
-  $('csvUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;const data=csvParse(await f.text());if(!data.length)return alert('CSV de Misscan sem dados.');loadMisscanRows(data)});
-  $('hcUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{buildHCMap(parseHCUpload(await f.text()));loadMisscanRows(state.raw.map(r=>{const copy={...r};['responsabilidade','identificacao','operator_count','operator_name','opsid','operator_original','turno','setor','lider_nome','lider_email','tipo_hc','hc_status'].forEach(k=>delete copy[k]);return copy;}));state.treatmentSource=state.treatmentSource.map(enrichTreatmentRow);setupTreatmentFilters();renderTreatments();alert('Base HC atualizada e dados reprocessados.')}catch(err){alert(err.message)}});
+
+
   // Tratativas V4
   ['treatmentThreshold','treatTurnoFilter','treatSetorFilter','treatStatusFilter'].forEach(id=>$(id).addEventListener('change',renderTreatments));
   $('treatSearch').addEventListener('input',renderTreatments);
   $('treatResetBtn').addEventListener('click',()=>{$('treatmentThreshold').value='0.88';$('treatTurnoFilter').value='';$('treatSetorFilter').value='';$('treatStatusFilter').value='';$('treatSearch').value='';renderTreatments()});
-  $('treatmentUpload').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const data=parseTreatmentCSV(await f.text());if(!data.length)throw new Error('Arquivo sem dados.');loadTreatmentRows(data);alert('Indicadores de tratativa carregados. O corte de 0,88% foi aplicado.')}catch(err){alert(err.message)}});
+
   $('exportTreatBtn').addEventListener('click',exportTreatmentList);
   $('generateReportBtn').addEventListener('click',generateTreatmentReport);
   $('registerEvidenceBtn').addEventListener('click',openFirstPendingEvidence);

@@ -12,14 +12,18 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas V4.2 • Calendarização</div>
+        <div class="subtitle">Produtividade • Tratativas V5 • Calendarização</div>
       </div>
     </div>
     <div class="header-actions">
-      <label class="upload-btn" for="csvUpload">Carregar Misscan</label>
-      <input id="csvUpload" type="file" accept=".csv,text/csv" hidden />
-      <label class="upload-btn secondary-upload" for="hcUpload">Carregar Base HC</label>
-      <input id="hcUpload" type="file" accept=".csv,text/csv" hidden />
+      <div class="live-source">
+        <span id="liveDot" class="live-dot loading"></span>
+        <div>
+          <strong id="liveStatus">Conectando...</strong>
+          <small id="liveUpdated">Google Sheets • automático</small>
+        </div>
+      </div>
+      <button id="refreshDataBtn" class="ghost-btn">Atualizar agora</button>
       <button id="exportBtn" class="ghost-btn">Exportar filtrado</button>
     </div>
   </header>
@@ -46,6 +50,11 @@
           <button id="resetBtn" class="reset-btn">Limpar filtros</button>
         </div>
         <div id="dataNote" class="data-note"></div>
+        <div class="source-strip">
+          <span><b>HC:</b> <span id="hcSourceInfo">aguardando...</span></span>
+          <span><b>Misscan:</b> <span id="misscanSourceInfo">aguardando...</span></span>
+          <span><b>Janela:</b> <span id="dataWindowInfo">35 dias</span></span>
+        </div>
       </div>
 
       <div class="kpi-grid kpi-grid-7">
@@ -116,7 +125,7 @@
     <section id="tratativas" class="view">
       <div class="treatment-hero">
         <div>
-          <span class="eyebrow">TRATATIVAS V4.2</span>
+          <span class="eyebrow">TRATATIVAS V5</span>
           <h1>Acompanhamento de colaboradores ofensores</h1>
           <p>Todo colaborador com indicador acima de <strong>0,88%</strong> entra automaticamente na fila de tratativas.</p>
         </div>
@@ -152,7 +161,7 @@
           <button id="treatResetBtn" class="reset-btn">Limpar</button>
         </div>
         <div class="treatment-source-note">
-          <strong>Base inicial:</strong> W34. O arquivo padrão usa o campo <em>Share</em> como indicador importado para demonstração do fluxo. Quando a taxa individual oficial estiver disponível, use “Carregar Indicadores”.
+          <strong>Fonte automática:</strong> o ranking é recalculado com os Misscan identificados recebidos da aba <em>LM</em> e enriquecido pela aba <em>Base de HC 26</em>. O indicador atual é o <strong>Share dos Misscan identificados</strong>; ele não substitui a taxa individual por volume até que o denominador oficial seja integrado.
         </div>
       </div>
 
@@ -170,8 +179,6 @@
           <p id="treatCountLabel">—</p>
         </div>
         <div class="treatment-actions">
-          <label class="treat-upload-btn" for="treatmentUpload">Carregar Indicadores</label>
-          <input id="treatmentUpload" type="file" accept=".csv,text/csv" hidden />
           <button id="registerEvidenceBtn" class="action-btn green">Registrar Evidência</button>
           <button id="generateReportBtn" class="action-btn blue">Gerar Relatório</button>
           <button id="exportTreatBtn" class="action-btn orange">Gerar Lista</button>
@@ -537,7 +544,7 @@
     </div>
   </main>
 
-  <footer>Mis-Scan Control Center • V4.2 • Tratativas + notificações por e-mail + Calendarização inteligente</footer>
+  <footer>Mis-Scan Control Center • V5 • Dados automáticos + Tratativas + E-mail + Calendarização</footer>
   <script src="app.js"></script>
 </body>
 </html>
