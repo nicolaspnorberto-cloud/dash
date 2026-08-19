@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas V4.1 • Calendarização</div>
+        <div class="subtitle">Produtividade • Tratativas V4.2 • Calendarização</div>
       </div>
     </div>
     <div class="header-actions">
@@ -116,7 +116,7 @@
     <section id="tratativas" class="view">
       <div class="treatment-hero">
         <div>
-          <span class="eyebrow">TRATATIVAS V4.1</span>
+          <span class="eyebrow">TRATATIVAS V4.2</span>
           <h1>Acompanhamento de colaboradores ofensores</h1>
           <p>Todo colaborador com indicador acima de <strong>0,88%</strong> entra automaticamente na fila de tratativas.</p>
         </div>
@@ -463,9 +463,11 @@
         <div id="dialogueEditor" class="modal-section hidden">
           <div class="modal-form-grid">
             <label>Data<input id="dialogueDate" type="date" /></label>
-            <label>Responsável<input id="dialogueResponsible" type="text" placeholder="Nome do responsável" /></label>
+            <label>Instrutor / responsável<input id="dialogueResponsible" type="text" placeholder="Nome de quem realizou o diálogo" /></label>
+            <label class="span-2">E-mail do instrutor<input id="dialogueInstructorEmail" type="email" placeholder="nome@shopee.com" /></label>
             <label class="span-2">Registro do diálogo<textarea id="dialogueNotes" rows="6" placeholder="Descreva o diálogo de performance, orientação e combinados..."></textarea></label>
           </div>
+          <div class="email-notice">Ao concluir, o líder do colaborador e o instrutor receberão um e-mail automático.</div>
           <div class="modal-actions">
             <button id="saveDialogueBtn" class="primary-btn">Salvar e marcar realizado</button>
           </div>
@@ -482,12 +484,14 @@
           <div id="recycleInfo" class="inner-view active">
             <div class="modal-form-grid">
               <label>Data da reciclagem<input id="recycleDate" type="date" /></label>
-              <label>Responsável<input id="recycleResponsible" type="text" placeholder="Responsável pela reciclagem" /></label>
+              <label>Instrutor / responsável<input id="recycleResponsible" type="text" placeholder="Responsável pela reciclagem" /></label>
+              <label class="span-2">E-mail do instrutor<input id="recycleInstructorEmail" type="email" placeholder="nome@shopee.com" /></label>
               <label class="span-2">Tema abordado<input id="recycleTopic" type="text" placeholder="Ex.: Misscan / procedimento operacional" /></label>
               <label class="span-2">Causa identificada<textarea id="recycleCause" rows="3" placeholder="Causa ou desvio identificado..."></textarea></label>
               <label class="span-2">Orientação aplicada<textarea id="recycleOrientation" rows="3" placeholder="Orientação, conteúdo e reforço aplicado..."></textarea></label>
               <label class="span-2">Observações<textarea id="recycleNotes" rows="3" placeholder="Informações complementares..."></textarea></label>
             </div>
+            <div class="email-notice">O e-mail será enviado quando a reciclagem for concluída, após evidência e assinaturas.</div>
             <div class="modal-actions">
               <button id="saveRecycleInfoBtn" class="primary-btn">Salvar informações</button>
               <button id="completeRecycleBtn" class="completion-btn">Concluir reciclagem</button>
@@ -533,7 +537,7 @@
     </div>
   </main>
 
-  <footer>Mis-Scan Control Center • V4 • Tratativas por colaborador + Calendarização inteligente</footer>
+  <footer>Mis-Scan Control Center • V4.2 • Tratativas + notificações por e-mail + Calendarização inteligente</footer>
   <script src="app.js"></script>
 </body>
 </html>

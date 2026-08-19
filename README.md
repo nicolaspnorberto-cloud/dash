@@ -83,3 +83,12 @@ Para produção multiusuário, o próximo passo é conectar:
 - Tabela de Tratativas não possui mais rolagem vertical interna.
 - A página controla a rolagem vertical; a tabela usa apenas rolagem horizontal quando necessário.
 - Área útil ampliada em monitores grandes.
+
+
+## V4.2 — E-mail automático
+- Diálogo realizado: e-mail para líder + instrutor.
+- Reciclagem concluída: e-mail para líder + instrutor.
+- O e-mail do líder vem da Base HC.
+- O e-mail do instrutor é obrigatório no modal.
+- Backend: Vercel `/api/notificar` -> Apps Script -> MailApp.
+- Consulte `EMAIL_SETUP.md`.

@@ -375,6 +375,7 @@ function enrichTreatmentRow(r){
     turno:hc?hc.turno:'Não cadastrado',
     setor:hc?hc.setor:'Não cadastrado',
     lider:hc?hc.lider_nome:'Não cadastrado',
+    lider_email:hc?hc.lider_email:'Não cadastrado',
     tipo_hc:hc?'Fixo':'Diarista',
     hc_status:hc?(hc.ambiguous?'Ambíguo':'OK'):'Não cadastrado'
   };
@@ -485,7 +486,10 @@ window.openDialogue=(id,cycle)=>{
   const d=progressFor(id)[`dialogue${cycle}`]||{};
   modalHeader(row,cycle,'DIÁLOGO DE PERFORMANCE');
   $('dialogueEditor').classList.remove('hidden');$('recycleEditor').classList.add('hidden');
-  $('dialogueDate').value=d.date||new Date().toISOString().slice(0,10);$('dialogueResponsible').value=d.responsible||'';$('dialogueNotes').value=d.notes||'';
+  $('dialogueDate').value=d.date||new Date().toISOString().slice(0,10);
+  $('dialogueResponsible').value=d.responsible||'';
+  $('dialogueInstructorEmail').value=d.instructorEmail||localStorage.getItem('lastTreatmentInstructorEmail')||'';
+  $('dialogueNotes').value=d.notes||'';
   showModal();
 };
 
@@ -496,23 +500,126 @@ window.openRecycle=async(id,cycle)=>{
   modalHeader(row,cycle,'RECICLAGEM');
   $('dialogueEditor').classList.add('hidden');$('recycleEditor').classList.remove('hidden');
   document.querySelectorAll('.inner-tab').forEach((b,i)=>b.classList.toggle('active',i===0));document.querySelectorAll('.inner-view').forEach((v,i)=>v.classList.toggle('active',i===0));
-  $('recycleDate').value=r.date||new Date().toISOString().slice(0,10);$('recycleResponsible').value=r.responsible||'';$('recycleTopic').value=r.topic||'';$('recycleCause').value=r.cause||'';$('recycleOrientation').value=r.orientation||'';$('recycleNotes').value=r.notes||'';
+  $('recycleDate').value=r.date||new Date().toISOString().slice(0,10);
+  $('recycleResponsible').value=r.responsible||'';
+  $('recycleInstructorEmail').value=r.instructorEmail||localStorage.getItem('lastTreatmentInstructorEmail')||'';
+  $('recycleTopic').value=r.topic||'';
+  $('recycleCause').value=r.cause||'';
+  $('recycleOrientation').value=r.orientation||'';
+  $('recycleNotes').value=r.notes||'';
   await refreshEvidenceList();refreshSignatureStatus();renderTreatmentHistory();renderRecycleChecklist();prepareSignatureCanvas();showModal();
 };
 
-function saveDialogue(){
+
+function isValidTreatmentEmail(value){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value||'').trim());
+}
+
+async function notifyTreatmentEmail({row,eventType,cycle,instructorName,instructorEmail,details}){
+  const payload={
+    eventType,
+    cycle,
+    collaborator:row.colaborador,
+    indicator:row.indicador,
+    missScan:row.miss_scan,
+    turno:row.turno,
+    setor:row.setor,
+    leaderName:row.lider,
+    leaderEmail:row.lider_email,
+    instructorName,
+    instructorEmail,
+    details:details||{},
+    occurredAt:nowISO()
+  };
+
+  const response=await fetch('/api/notificar',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+
+  let data={};
+  try{data=await response.json()}catch{}
+  if(!response.ok||!data.ok){
+    throw new Error(data.error||`Falha no serviço de e-mail (${response.status}).`);
+  }
+  return data;
+}
+
+function emailRecipientsDescription(row,instructorEmail){
+  const list=[];
+  if(isValidTreatmentEmail(row.lider_email)) list.push(`líder: ${row.lider_email}`);
+  if(isValidTreatmentEmail(instructorEmail) && !list.includes(`líder: ${instructorEmail}`)) list.push(`instrutor: ${instructorEmail}`);
+  return list.join(' • ')||'nenhum destinatário válido';
+}
+
+async function saveDialogue(){
   const row=modalRow();if(!row)return;
   const p=progressFor(row.id),c=state.treatmentCycle,d=p[`dialogue${c}`];
-  d.date=$('dialogueDate').value;d.responsible=$('dialogueResponsible').value.trim();d.notes=$('dialogueNotes').value.trim();
-  if(!d.date||!d.responsible||!d.notes)return alert('Preencha data, responsável e registro do diálogo.');
-  d.done=true;d.updatedAt=nowISO();addTreatmentHistory(row.id,`${c}º diálogo realizado`,`${d.responsible} • ${d.date}`);saveTreatmentProgress();closeModal();renderTreatments();
+
+  d.date=$('dialogueDate').value;
+  d.responsible=$('dialogueResponsible').value.trim();
+  d.instructorEmail=$('dialogueInstructorEmail').value.trim().toLowerCase();
+  d.notes=$('dialogueNotes').value.trim();
+
+  if(!d.date||!d.responsible||!d.notes||!d.instructorEmail)
+    return alert('Preencha data, instrutor/responsável, e-mail do instrutor e registro do diálogo.');
+  if(!isValidTreatmentEmail(d.instructorEmail))
+    return alert('Informe um e-mail válido para o instrutor.');
+
+  localStorage.setItem('lastTreatmentInstructorEmail',d.instructorEmail);
+
+  d.done=true;
+  d.updatedAt=nowISO();
+  addTreatmentHistory(row.id,`${c}º diálogo realizado`,`${d.responsible} • ${d.date}`);
+  saveTreatmentProgress();
+
+  try{
+    const mail=await notifyTreatmentEmail({
+      row,
+      eventType:'DIALOGO',
+      cycle:c,
+      instructorName:d.responsible,
+      instructorEmail:d.instructorEmail,
+      details:{date:d.date,notes:d.notes}
+    });
+    d.emailSent=true;
+    d.emailSentAt=nowISO();
+    d.emailRecipients=mail.recipients||[];
+    addTreatmentHistory(
+      row.id,
+      `E-mail enviado — ${c}º diálogo`,
+      (mail.recipients||[]).join(', ')||emailRecipientsDescription(row,d.instructorEmail)
+    );
+  }catch(err){
+    d.emailSent=false;
+    d.emailError=err.message;
+    addTreatmentHistory(row.id,`Falha no e-mail — ${c}º diálogo`,err.message);
+    alert(`O diálogo foi salvo, mas o e-mail não pôde ser enviado:\n${err.message}`);
+  }
+
+  saveTreatmentProgress();
+  closeModal();
+  renderTreatments();
 }
 
 function saveRecycleInfo(){
   const row=modalRow();if(!row)return;
   const p=progressFor(row.id),c=state.treatmentCycle,r=p[`recycle${c}`];
-  Object.assign(r,{date:$('recycleDate').value,responsible:$('recycleResponsible').value.trim(),topic:$('recycleTopic').value.trim(),cause:$('recycleCause').value.trim(),orientation:$('recycleOrientation').value.trim(),notes:$('recycleNotes').value.trim()});
-  if(!r.date||!r.responsible||!r.topic||!r.orientation)return alert('Preencha data, responsável, tema e orientação aplicada.');
+  Object.assign(r,{
+    date:$('recycleDate').value,
+    responsible:$('recycleResponsible').value.trim(),
+    instructorEmail:$('recycleInstructorEmail').value.trim().toLowerCase(),
+    topic:$('recycleTopic').value.trim(),
+    cause:$('recycleCause').value.trim(),
+    orientation:$('recycleOrientation').value.trim(),
+    notes:$('recycleNotes').value.trim()
+  });
+  if(!r.date||!r.responsible||!r.instructorEmail||!r.topic||!r.orientation)
+    return alert('Preencha data, instrutor/responsável, e-mail do instrutor, tema e orientação aplicada.');
+  if(!isValidTreatmentEmail(r.instructorEmail))
+    return alert('Informe um e-mail válido para o instrutor.');
+  localStorage.setItem('lastTreatmentInstructorEmail',r.instructorEmail);
   r.infoSaved=true;r.updatedAt=nowISO();addTreatmentHistory(row.id,`${c}ª reciclagem — informações salvas`,`${r.responsible} • ${r.topic}`);saveTreatmentProgress();renderRecycleChecklist();
 }
 function recycleRequirements(r){return {info:!!r.infoSaved,evidence:(Number(r.evidenceCount)||0)>0,colab:!!r.signatures?.colaborador,resp:!!r.signatures?.responsavel}}
@@ -520,10 +627,54 @@ function renderRecycleChecklist(){
   const row=modalRow();if(!row||state.treatmentMode!=='recycle')return;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`],q=recycleRequirements(r);
   $('recycleChecklist').innerHTML=`<strong>Requisitos para conclusão</strong><br><span class="${q.info?'check-ok':'check-bad'}">${q.info?'✓':'✕'} Informações da reciclagem</span><br><span class="${q.evidence?'check-ok':'check-bad'}">${q.evidence?'✓':'✕'} Pelo menos 1 evidência / lista anexada</span><br><span class="${q.colab?'check-ok':'check-bad'}">${q.colab?'✓':'✕'} Assinatura do colaborador</span><br><span class="${q.resp?'check-ok':'check-bad'}">${q.resp?'✓':'✕'} Assinatura do responsável</span>`;
 }
-function completeRecycle(){
-  const row=modalRow();if(!row)return;const p=progressFor(row.id),c=state.treatmentCycle,r=p[`recycle${c}`],q=recycleRequirements(r);
-  if(!Object.values(q).every(Boolean))return alert('A reciclagem só pode ser concluída após informações, evidência e as duas assinaturas.');
-  r.done=true;r.completedAt=nowISO();addTreatmentHistory(row.id,`${c}ª reciclagem concluída`,'Evidência e assinaturas validadas.');saveTreatmentProgress();closeModal();renderTreatments();
+async function completeRecycle(){
+  const row=modalRow();if(!row)return;
+  const p=progressFor(row.id),c=state.treatmentCycle,r=p[`recycle${c}`],q=recycleRequirements(r);
+
+  if(!Object.values(q).every(Boolean))
+    return alert('A reciclagem só pode ser concluída após informações, evidência e as duas assinaturas.');
+  if(!r.instructorEmail||!isValidTreatmentEmail(r.instructorEmail))
+    return alert('Informe e salve o e-mail do instrutor antes de concluir a reciclagem.');
+
+  r.done=true;
+  r.completedAt=nowISO();
+  addTreatmentHistory(row.id,`${c}ª reciclagem concluída`,'Evidência e assinaturas validadas.');
+  saveTreatmentProgress();
+
+  try{
+    const mail=await notifyTreatmentEmail({
+      row,
+      eventType:'RECICLAGEM',
+      cycle:c,
+      instructorName:r.responsible,
+      instructorEmail:r.instructorEmail,
+      details:{
+        date:r.date,
+        topic:r.topic,
+        cause:r.cause,
+        orientation:r.orientation,
+        notes:r.notes,
+        evidenceCount:Number(r.evidenceCount)||0
+      }
+    });
+    r.emailSent=true;
+    r.emailSentAt=nowISO();
+    r.emailRecipients=mail.recipients||[];
+    addTreatmentHistory(
+      row.id,
+      `E-mail enviado — ${c}ª reciclagem`,
+      (mail.recipients||[]).join(', ')||emailRecipientsDescription(row,r.instructorEmail)
+    );
+  }catch(err){
+    r.emailSent=false;
+    r.emailError=err.message;
+    addTreatmentHistory(row.id,`Falha no e-mail — ${c}ª reciclagem`,err.message);
+    alert(`A reciclagem foi concluída, mas o e-mail não pôde ser enviado:\n${err.message}`);
+  }
+
+  saveTreatmentProgress();
+  closeModal();
+  renderTreatments();
 }
 
 function openEvidenceDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(TREATMENT_DB,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(TREATMENT_STORE)){const s=db.createObjectStore(TREATMENT_STORE,{keyPath:'id'});s.createIndex('treatmentCycle',['treatmentId','cycle']);}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);})}

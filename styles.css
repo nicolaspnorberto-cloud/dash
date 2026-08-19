@@ -912,3 +912,17 @@ thead,
     min-width:0;
   }
 }
+
+
+/* V4.2 — Notificação por e-mail */
+.email-notice{
+  margin:12px 0 0;
+  padding:9px 11px;
+  border-radius:9px;
+  border:1px solid #cfe0f2;
+  background:#eef5fd;
+  color:#486783;
+  font-size:10px;
+  font-weight:750;
+  line-height:1.45;
+}
