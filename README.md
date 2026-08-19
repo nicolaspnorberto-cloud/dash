@@ -73,3 +73,13 @@ Para produção multiusuário, o próximo passo é conectar:
 - arquivos -> Google Drive ou storage corporativo;
 - progresso -> Google Sheets/DB;
 - autenticação corporativa.
+
+
+## V4.1 — Ajuste visual e de rolagem
+- Paleta padronizada no modelo Live Prod HC: azul-marinho, azul operacional e laranja Shopee.
+- Removido roxo das ações principais.
+- Botões e filtros reduzidos para uso mais compacto.
+- Tratativas e Calendarização usam cards brancos em vez de grandes blocos azuis.
+- Tabela de Tratativas não possui mais rolagem vertical interna.
+- A página controla a rolagem vertical; a tabela usa apenas rolagem horizontal quando necessário.
+- Área útil ampliada em monitores grandes.
