@@ -1,68 +1,35 @@
-function json(data,status=200){
-  return new Response(JSON.stringify(data),{
-    status,
-    headers:{
-      "content-type":"application/json; charset=utf-8",
-      "cache-control":"no-store, max-age=0"
+import { json, readJson } from '../lib/blob-store.mjs';
+
+export async function GET() {
+  try {
+    const data = await readJson('misscan/live.json', null);
+
+    if (!data) {
+      return json({
+        ok: false,
+        error: 'Ainda não existe sincronização. Execute sincronizarDados() no Apps Script V6.'
+      }, 503);
     }
-  });
-}
 
-export async function GET(request){
-  const endpoint=process.env.APPS_SCRIPT_EMAIL_URL;
-  const token=process.env.EMAIL_WEBHOOK_TOKEN;
+    const last = new Date(data?.meta?.receivedAt || data?.meta?.generatedAt || 0);
+    const ageMinutes = Number.isFinite(last.getTime())
+      ? Math.round((Date.now() - last.getTime()) / 60000)
+      : null;
 
-  if(!endpoint||!token){
     return json({
-      ok:false,
-      error:"Variáveis APPS_SCRIPT_EMAIL_URL e/ou EMAIL_WEBHOOK_TOKEN não configuradas."
-    },500);
-  }
-
-  try{
-    const reqUrl=new URL(request.url);
-    const days=Math.max(1,Math.min(90,Number(reqUrl.searchParams.get("days")||35)));
-
-    const upstreamUrl=new URL(endpoint);
-    upstreamUrl.searchParams.set("action","data");
-    upstreamUrl.searchParams.set("token",token);
-    upstreamUrl.searchParams.set("days",String(days));
-    upstreamUrl.searchParams.set("_t",String(Date.now()));
-
-    const upstream=await fetch(upstreamUrl.toString(),{
-      method:"GET",
-      headers:{"accept":"application/json"},
-      redirect:"follow",
-      cache:"no-store"
+      ...data,
+      ok: true,
+      meta: {
+        ...(data.meta || {}),
+        ageMinutes,
+        stale: ageMinutes === null ? true : ageMinutes > 90
+      }
     });
-
-    const text=await upstream.text();
-    let data;
-
-    try{
-      data=JSON.parse(text);
-    }catch{
-      return json({
-        ok:false,
-        error:"Apps Script não retornou JSON. Atualize a implantação com o Backend V5 e confirme a URL /exec.",
-        upstreamStatus:upstream.status,
-        upstreamPreview:text.slice(0,300)
-      },502);
-    }
-
-    if(!upstream.ok||!data.ok){
-      return json({
-        ok:false,
-        error:data.error||`Apps Script retornou HTTP ${upstream.status}.`
-      },502);
-    }
-
-    return json(data,200);
-  }catch(error){
-    console.error("MISSCAN_DATA_API_ERROR",error);
+  } catch (error) {
+    console.error('MISSCAN_DATA_READ_ERROR', error);
     return json({
-      ok:false,
-      error:error?.message||"Falha ao consultar dados automáticos."
-    },500);
+      ok: false,
+      error: error?.message || 'Falha ao ler a base sincronizada.'
+    }, 500);
   }
 }
