@@ -927,6 +927,7 @@ function normV62_(value){return removerAcentosV6_(String(value||'')).toUpperCase
    T3 + T5 -> bloco T3
 ========================================================= */
 const V63_ORACULO_PAGE_URL = 'https://oraculo-mg4.vercel.app/historico-packing';
+const V63_ORACULO_API_DEFAULT = 'https://oraculo-mg4.vercel.app/api/historico-packing';
 const V63_PROD_HISTORY_DAYS = 35;
 
 function instalarAutomacoesV63(){
@@ -952,6 +953,16 @@ function sincronizarTudoV63(){
   return {dados:dados,calendario:calendario,producao:producao};
 }
 function processarFilaEmailsV63(){return processarFilaEmailsV61();}
+
+/**
+ * Configura diretamente a rota oficial confirmada do Histórico Prod Esteiras.
+ * Execute UMA VEZ se ORACULO_PROD_API_URL ainda não existir.
+ */
+function configurarFonteOraculoV63(){
+  PropertiesService.getScriptProperties().setProperty('ORACULO_PROD_API_URL',V63_ORACULO_API_DEFAULT);
+  Logger.log('ORACULO_PROD_API_URL configurada: '+V63_ORACULO_API_DEFAULT);
+  return V63_ORACULO_API_DEFAULT;
+}
 
 /**
  * Execute uma vez. Tenta localizar automaticamente o endpoint JSON usado pelo Oráculo MG4.
@@ -995,6 +1006,7 @@ function descobrirFonteOraculoV63(){
   for(let i=0;i<found.length;i++){
     const base=found[i].split('?')[0];
     const variants=[
+      base+'?inicio='+testDate+'&fim='+testDate,
       base+'?from='+testDate+'&to='+testDate,
       base+'?startDate='+testDate+'&endDate='+testDate,
       base+'?date='+testDate,
@@ -1049,36 +1061,45 @@ function lerProducaoRealOraculoV63_(days){
   const props=PropertiesService.getScriptProperties();
   let api=String(props.getProperty('ORACULO_PROD_API_URL')||'').trim();
   if(!api)api=descobrirFonteOraculoV63();
+
+  // A rota oficial confirmada no Oráculo usa:
+  // /api/historico-packing?inicio=YYYY-MM-DD&fim=YYYY-MM-DD
+  api=api.split('?')[0];
+
   const tz=Session.getScriptTimeZone()||'America/Sao_Paulo';
   const end=new Date();end.setHours(12,0,0,0);
   const start=new Date(end.getTime()-(Math.max(1,days)-1)*24*3600*1000);
-  const from=Utilities.formatDate(start,tz,'yyyy-MM-dd'),to=Utilities.formatDate(end,tz,'yyyy-MM-dd');
-  const variants=[
-    api+(api.indexOf('?')>=0?'&':'?')+'from='+from+'&to='+to,
-    api+(api.indexOf('?')>=0?'&':'?')+'startDate='+from+'&endDate='+to,
-    api+(api.indexOf('?')>=0?'&':'?')+'start='+from+'&end='+to
-  ];
-  for(let i=0;i<variants.length;i++){
-    try{
-      const r=UrlFetchApp.fetch(variants[i],{muteHttpExceptions:true,followRedirects:true,headers:{Accept:'application/json'}});
-      if(r.getResponseCode()<200||r.getResponseCode()>=300)continue;
-      const rows=parseProducaoV63_(r.getContentText(),'');
-      if(rows.length)return dedupeProducaoV63_(rows);
-    }catch(e){}
-  }
-  // fallback diário: útil quando a API aceita somente uma data.
   const out=[];
+
+  // Consulta dia a dia para preservar o denominador REAL por data + bloco.
+  // Isso permite calcular corretamente janelas móveis de 7/14/30 dias.
   for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
     const key=Utilities.formatDate(d,tz,'yyyy-MM-dd');
-    const qs=[api+(api.indexOf('?')>=0?'&':'?')+'date='+key,api+(api.indexOf('?')>=0?'&':'?')+'from='+key+'&to='+key];
-    for(let i=0;i<qs.length;i++){
-      try{
-        const r=UrlFetchApp.fetch(qs[i],{muteHttpExceptions:true,followRedirects:true,headers:{Accept:'application/json'}});
-        if(r.getResponseCode()<200||r.getResponseCode()>=300)continue;
-        const rows=parseProducaoV63_(r.getContentText(),key);if(rows.length){out.push.apply(out,rows);break;}
-      }catch(e){}
+    const url=api+(api.indexOf('?')>=0?'&':'?')+'inicio='+key+'&fim='+key;
+
+    try{
+      const r=UrlFetchApp.fetch(url,{
+        muteHttpExceptions:true,
+        followRedirects:true,
+        headers:{Accept:'application/json'}
+      });
+
+      if(r.getResponseCode()<200||r.getResponseCode()>=300){
+        Logger.log('Oráculo '+key+' retornou HTTP '+r.getResponseCode()+'.');
+        continue;
+      }
+
+      const rows=parseProducaoV63_(r.getContentText(),key);
+      if(rows.length){
+        out.push.apply(out,rows);
+      }else{
+        Logger.log('Oráculo '+key+': resposta válida, mas sem T1/T2/T3 reconhecidos.');
+      }
+    }catch(e){
+      Logger.log('Falha Oráculo '+key+': '+e.message);
     }
   }
+
   return dedupeProducaoV63_(out);
 }
 
@@ -1086,14 +1107,14 @@ function parseProducaoV63_(text,fallbackDate){
   let data;try{data=JSON.parse(text);}catch(e){return [];}
   const out=[];
   function n(v){if(typeof v==='number')return v;const s=String(v==null?'':v).trim().toLowerCase().replace(/mil/g,'').replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,'');const x=Number(s);return Number.isFinite(x)?x:NaN;}
-  function dateOf(o){const v=o.date||o.data||o.day||o.period||o.periodo||fallbackDate||'';const s=String(v);let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);if(m)return m[3]+'-'+m[2]+'-'+m[1];return fallbackDate||'';}
+  function dateOf(o){const v=o.date||o.data||o.day||o.period||o.periodo||(o.filtroAplicado&&o.filtroAplicado.inicio===o.filtroAplicado.fim?o.filtroAplicado.inicio:'')||fallbackDate||'';const s=String(v);let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);if(m)return m[3]+'-'+m[2]+'-'+m[1];return fallbackDate||'';}
   function add(date,turn,real,meta){let r=n(real),m=n(meta);if(!Number.isFinite(r))return;const raw=String(real||'').toLowerCase();if(raw.indexOf('mil')>=0)r*=1000;if(String(meta||'').toLowerCase().indexOf('mil')>=0&&Number.isFinite(m))m*=1000;out.push({date:date,turno:turn,real:Math.round(r),meta:Number.isFinite(m)?Math.round(m):0,source:'Oráculo MG4'});}
   function walk(v,ctxDate){
     if(v==null)return;
     if(Array.isArray(v)){v.forEach(function(x){walk(x,ctxDate);});return;}
     if(typeof v!=='object')return;
     const date=dateOf(v)||ctxDate||fallbackDate||'';
-    const turn=String(v.turno||v.shift||v.bloco||v.turn||'').toUpperCase();
+    const turn=String(v.turno||v.shift||v.bloco||v.turn||v.label||'').toUpperCase().trim();
     const real=v.real??v.processed??v.processado??v.actual??v.producao_real??v.volume_real;
     const meta=v.meta??v.target??v.meta_operacao??v.operation_target;
     if(['T1','T2','T3'].indexOf(turn)>=0&&real!=null)add(date,turn,real,meta);

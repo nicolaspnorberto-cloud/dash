@@ -10,3 +10,6 @@ Regra de blocos:
 A taxa base usa Misscan histórico / Produção REAL do Histórico Prod Esteiras, ponderada por volume.
 
 Leia V63_CONFIGURACAO.md.
+
+
+V6.3.1: corrigida integração com Oráculo para /api/historico-packing?inicio=...&fim=... e parser de cards label T1/T2/T3.

@@ -107,3 +107,29 @@ T4 é incorporado ao numerador de T2 e T5 ao numerador de T3.
 Abra o Registro de execução de `descobrirFonteOraculoV63`.
 A função lista as rotas candidatas encontradas nos bundles.
 Se necessário, crie manualmente a Script Property `ORACULO_PROD_API_URL` com a rota /api que retorna os dados do Histórico Prod Esteiras. Depois execute `testarProducaoRealV63` novamente.
+
+
+## Correção V6.3.1 — endpoint oficial do Oráculo
+
+A rota confirmada no navegador é:
+
+`https://oraculo-mg4.vercel.app/api/historico-packing`
+
+Parâmetros:
+
+`?inicio=YYYY-MM-DD&fim=YYYY-MM-DD`
+
+Exemplo:
+
+`https://oraculo-mg4.vercel.app/api/historico-packing?inicio=2026-08-18&fim=2026-08-18`
+
+A resposta traz `cards` / `kpis.turno` com `label`, `real`, `meta` e `eficiencia`.
+
+No Apps Script V6.3.1:
+1. Execute `configurarFonteOraculoV63()` uma vez.
+2. Execute `testarProducaoRealV63()`.
+3. Execute `sincronizarHistoricoProducaoInicialV63()`.
+4. Teste `https://dash-b52u.vercel.app/api/taxas?days=14`.
+5. Se estiver OK, execute `instalarAutomacoesV63()`.
+
+O código consulta o Oráculo dia a dia usando `inicio=fim`, preservando produção REAL por data e por bloco T1/T2/T3.
