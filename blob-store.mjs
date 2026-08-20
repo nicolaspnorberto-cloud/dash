@@ -64,3 +64,40 @@ export function normalizeName(value = '') {
 export function isShopeeEmail(value = '') {
   return /^[^\s@]+@shopee\.com$/i.test(String(value || '').trim());
 }
+
+
+export function rowDateKey(row) {
+  const raw = String(row?.lmreceived_date || '').trim();
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+
+  const d = new Date(raw);
+  if (!Number.isFinite(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+export function monthKeyFromDateKey(dateKey) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))
+    ? String(dateKey).slice(0, 7)
+    : '';
+}
+
+export function monthsBetween(from, to) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return [];
+
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  const out = [];
+  let y = fy, m = fm;
+
+  while (y < ty || (y === ty && m <= tm)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++;
+    if (m === 13) { m = 1; y++; }
+    if (out.length > 60) break;
+  }
+  return out;
+}

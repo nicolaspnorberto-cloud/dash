@@ -14,7 +14,10 @@ const state = {
   treatmentCycle: 1,
   treatmentFiltered: [],
   liveMeta: null,
-  liveRefreshing: false
+  liveRefreshing: false,
+  datePreset: 'LAST_7',
+  dateFrom: '',
+  dateTo: ''
 };
 
 const $ = id => document.getElementById(id);
@@ -1008,6 +1011,59 @@ function tabs(){
 }
 
 
+
+function periodQuery(){
+  const preset=state.datePreset||'LAST_7';
+  if(preset==='CUSTOM' && state.dateFrom && state.dateTo){
+    return `from=${encodeURIComponent(state.dateFrom)}&to=${encodeURIComponent(state.dateTo)}`;
+  }
+  return `preset=${encodeURIComponent(preset)}`;
+}
+
+function syncPeriodControlsFromMeta(){
+  const meta=state.liveMeta||{};
+
+  if(meta.periodPreset) state.datePreset=meta.periodPreset;
+  if(meta.periodStart) state.dateFrom=meta.periodStart;
+  if(meta.periodEnd) state.dateTo=meta.periodEnd;
+
+  if($('datePreset')) $('datePreset').value=state.datePreset||'LAST_7';
+  if($('dateFrom')) $('dateFrom').value=state.dateFrom||'';
+  if($('dateTo')) $('dateTo').value=state.dateTo||'';
+
+  if($('periodSummary')) $('periodSummary').textContent=meta.periodLabel||'Período não definido';
+  if($('historyBounds')) $('historyBounds').textContent=`Histórico disponível: ${meta.historyLabel||'—'}`;
+}
+
+function applyPeriodFromControls(){
+  const preset=$('datePreset').value||'LAST_7';
+  state.datePreset=preset;
+
+  if(preset==='CUSTOM'){
+    const from=$('dateFrom').value;
+    const to=$('dateTo').value;
+    if(!from||!to) return alert('Informe data inicial e data final.');
+    state.dateFrom=from;
+    state.dateTo=to;
+  }
+
+  localStorage.setItem('misscanPeriodPresetV61',state.datePreset);
+  localStorage.setItem('misscanPeriodFromV61',state.dateFrom||'');
+  localStorage.setItem('misscanPeriodToV61',state.dateTo||'');
+
+  refreshLiveData({silent:false});
+}
+
+function restorePeriodPreference(){
+  const preset=localStorage.getItem('misscanPeriodPresetV61');
+  const from=localStorage.getItem('misscanPeriodFromV61');
+  const to=localStorage.getItem('misscanPeriodToV61');
+
+  if(preset) state.datePreset=preset;
+  if(from) state.dateFrom=from;
+  if(to) state.dateTo=to;
+}
+
 function setLiveStatus(mode,text,detail=''){
   const dot=$('liveDot'),status=$('liveStatus'),updated=$('liveUpdated');
   if(dot){
@@ -1050,7 +1106,7 @@ function liveTreatmentRows(){
       indicador:g.miss_scan/total*100,
       operacao,
       periodo:g.periodo,
-      fonte_indicador:'Share Misscan automático'
+      fonte_indicador:'Share Misscan por período'
     };
   });
 }
@@ -1061,10 +1117,10 @@ async function refreshLiveData({silent=false}={}){
 
   const btn=$('refreshDataBtn');
   if(btn)btn.disabled=true;
-  setLiveStatus('loading','Atualizando...','Lendo Base HC + LM');
+  setLiveStatus('loading','Atualizando...','Consultando histórico da Matinal');
 
   try{
-    const response=await fetch(`/api/dados?t=${Date.now()}`,{
+    const response=await fetch(`/api/dados?${periodQuery()}&t=${Date.now()}`,{
       headers:{'Accept':'application/json'},
       cache:'no-store'
     });
@@ -1077,6 +1133,7 @@ async function refreshLiveData({silent=false}={}){
     }
 
     state.liveMeta=data.meta||{};
+    syncPeriodControlsFromMeta();
 
     buildHCMap(data.hc||[]);
     loadTreatmentProgress();
@@ -1101,12 +1158,12 @@ async function refreshLiveData({silent=false}={}){
 
     if($('dataWindowInfo')){
       $('dataWindowInfo').textContent=
-        state.liveMeta.periodLabel||'últimos 35 dias';
+        state.liveMeta.periodLabel||'período selecionado';
     }
 
     if($('dataNote')){
       $('dataNote').textContent=
-        `Fonte automática V6 ativa. ${fmtInt.format(state.sourceRows)} registros sincronizados; ${fmtInt.format(state.raw.length)} BR únicos após deduplicação.`;
+        `Histórico V6.1 ativo. ${fmtInt.format(state.raw.length)} BR únicos no período ${state.liveMeta?.periodLabel||'selecionado'}.`;
     }
   }catch(err){
     console.error(err);
@@ -1123,11 +1180,20 @@ async function refreshLiveData({silent=false}={}){
 }
 
 async function boot(){
-  tabs();loadForecast();
+  tabs();loadForecast();restorePeriodPreference();
   await refreshLiveData({silent:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>refreshLiveData({silent:false}));
+  $('applyPeriodBtn').addEventListener('click',applyPeriodFromControls);
+  $('datePreset').addEventListener('change',()=>{
+    state.datePreset=$('datePreset').value;
+    if(state.datePreset!=='CUSTOM') applyPeriodFromControls();
+  });
+  ['dateFrom','dateTo'].forEach(id=>$(id).addEventListener('change',()=>{
+    $('datePreset').value='CUSTOM';
+    state.datePreset='CUSTOM';
+  }));
   setInterval(()=>refreshLiveData({silent:true}),5*60*1000);
   document.querySelectorAll('.rank-pill').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.rank-pill').forEach(x=>x.classList.toggle('active',x===b));state.rankArea=b.dataset.rank;renderRanking()}));
 

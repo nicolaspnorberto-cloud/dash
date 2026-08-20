@@ -992,3 +992,61 @@ thead,
   opacity:.55;
   cursor:wait;
 }
+
+
+/* =========================================================
+   V6.1 — HISTÓRICO + FILTRO GLOBAL DE DATA
+========================================================= */
+.period-bar{
+  max-width:1740px;
+  margin:12px auto 0;
+  padding:10px 24px;
+  display:grid;
+  grid-template-columns:minmax(230px,1.25fr) 175px 160px auto 160px auto;
+  gap:8px;
+  align-items:end;
+}
+.period-summary{
+  min-height:52px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:8px 12px;
+  border-radius:10px;
+  border:1px solid #d6e2ef;
+  border-left:4px solid var(--orange);
+  background:#fff;
+  box-shadow:0 3px 10px rgba(12,34,59,.045);
+}
+.period-summary span{color:#7186a0;font-size:8px;font-weight:900;letter-spacing:.09em}
+.period-summary strong{margin-top:2px;color:var(--navy);font-size:13px}
+.period-summary small{margin-top:2px;color:#8292a6;font-size:8px}
+.period-bar label{
+  display:flex;flex-direction:column;gap:5px;color:#60738d;font-size:9px;
+  font-weight:900;text-transform:uppercase;letter-spacing:.07em
+}
+.period-bar select,.period-bar input{
+  height:36px;border:1px solid #cfdbea;border-radius:8px;background:#fff;
+  padding:0 9px;color:var(--ink);font-size:11px;outline:none
+}
+.period-bar select:focus,.period-bar input:focus{
+  border-color:var(--blue);box-shadow:0 0 0 3px rgba(24,74,134,.08)
+}
+.period-separator{
+  align-self:center;padding-bottom:7px;color:#8796a9;font-size:10px;font-weight:800
+}
+.period-apply-btn{
+  height:36px;padding:0 13px;border:0;border-radius:8px;background:var(--blue);
+  color:#fff;font-size:10px;font-weight:900;cursor:pointer
+}
+.period-apply-btn:hover{filter:brightness(1.05)}
+.period-apply-btn:disabled{opacity:.55;cursor:wait}
+@media(max-width:1100px){
+  .period-bar{grid-template-columns:1fr 1fr 1fr}
+  .period-separator{display:none}
+}
+@media(max-width:650px){
+  .period-bar{grid-template-columns:1fr 1fr;padding-left:14px;padding-right:14px}
+  .period-summary{grid-column:1/-1}
+  .period-apply-btn{grid-column:1/-1}
+}

@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas V6 • Calendarização</div>
+        <div class="subtitle">Produtividade • Tratativas V6.1 • Calendarização</div>
       </div>
     </div>
     <div class="header-actions">
@@ -34,6 +34,40 @@
     <button class="tab" data-tab="calendarizacao">Calendarização</button>
   </nav>
 
+
+  <section class="period-bar" aria-label="Período de análise">
+    <div class="period-summary">
+      <span>PERÍODO DE ANÁLISE</span>
+      <strong id="periodSummary">Carregando histórico...</strong>
+      <small id="historyBounds">Histórico disponível: —</small>
+    </div>
+
+    <label>Atalho
+      <select id="datePreset">
+        <option value="TODAY">Hoje</option>
+        <option value="YESTERDAY">Ontem</option>
+        <option value="CURRENT_WEEK">Semana atual</option>
+        <option value="PREVIOUS_WEEK">Semana anterior</option>
+        <option value="LAST_7" selected>Últimos 7 dias</option>
+        <option value="LAST_30">Últimos 30 dias</option>
+        <option value="ALL">Todo histórico</option>
+        <option value="CUSTOM">Personalizado</option>
+      </select>
+    </label>
+
+    <label>Data inicial
+      <input id="dateFrom" type="date" />
+    </label>
+
+    <span class="period-separator">até</span>
+
+    <label>Data final
+      <input id="dateTo" type="date" />
+    </label>
+
+    <button id="applyPeriodBtn" class="period-apply-btn">Aplicar período</button>
+  </section>
+
   <main>
     <section id="produtividade" class="view active">
       <div class="filter-panel">
@@ -53,7 +87,7 @@
         <div class="source-strip">
           <span><b>HC:</b> <span id="hcSourceInfo">aguardando...</span></span>
           <span><b>Misscan:</b> <span id="misscanSourceInfo">aguardando...</span></span>
-          <span><b>Sincronização:</b> <span id="dataWindowInfo">a cada 30 min</span></span>
+          <span><b>Período carregado:</b> <span id="dataWindowInfo">—</span></span>
         </div>
       </div>
 
@@ -125,7 +159,7 @@
     <section id="tratativas" class="view">
       <div class="treatment-hero">
         <div>
-          <span class="eyebrow">TRATATIVAS V6</span>
+          <span class="eyebrow">TRATATIVAS V6.1</span>
           <h1>Acompanhamento de colaboradores ofensores</h1>
           <p>Todo colaborador com indicador acima de <strong>0,88%</strong> entra automaticamente na fila de tratativas.</p>
         </div>
@@ -161,7 +195,7 @@
           <button id="treatResetBtn" class="reset-btn">Limpar</button>
         </div>
         <div class="treatment-source-note">
-          <strong>Fonte automática:</strong> o ranking é recalculado com os Misscan sincronizados pela rotina privada do Apps Script e enriquecido pela Base HC. O indicador atual é o <strong>Share dos Misscan identificados</strong>; ele não substitui a taxa individual por volume até que o denominador oficial seja integrado.
+          <strong>Fonte automática:</strong> o ranking é recalculado conforme o período selecionado, usando o histórico sincronizado da Matinal e o enriquecimento da Base HC. O indicador atual é o <strong>Share dos Misscan identificados</strong>; ele não substitui a taxa individual por volume até que o denominador oficial seja integrado.
         </div>
       </div>
 
@@ -544,7 +578,7 @@
     </div>
   </main>
 
-  <footer>Mis-Scan Control Center • V6 • Push privado + Tratativas + E-mail + Calendarização</footer>
+  <footer>Mis-Scan Control Center • V6.1 • Histórico + Filtro de Data + Tratativas + E-mail</footer>
   <script src="app.js"></script>
 </body>
 </html>

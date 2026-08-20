@@ -1,20 +1,25 @@
-MIS-SCAN CONTROL CENTER V6
+MIS-SCAN CONTROL CENTER V6.1
 
-Versão sem Google Cloud e sem Apps Script público.
+Versão com histórico permanente e filtro global de data.
 
 Arquitetura:
-- Apps Script privado lê Google Sheets.
-- Apps Script envia dados para Vercel.
-- Vercel armazena o snapshot em Blob privado.
-- Dashboard lê o snapshot.
-- Tratativas colocam e-mails em fila privada.
-- Apps Script envia a fila via MailApp.
+Google Sheets privado
+→ Apps Script privado
+→ Vercel API
+→ Blob privado mensal
+→ Dashboard com filtro de período
 
 Arquivos principais:
-- BackendV6.gs
-- V6_CONFIGURACAO.md
+- BackendV61.gs
+- V61_CONFIGURACAO.md
 - api/sync.mjs
 - api/dados.mjs
-- api/notificar.mjs
-- api/email-queue.mjs
+- api/ping.mjs
 - lib/blob-store.mjs
+- index.html
+- app.js
+- styles.css
+
+Após publicar:
+1. execute sincronizarHistoricoInicialV61 uma vez;
+2. execute instalarAutomacoesV61 uma vez.
