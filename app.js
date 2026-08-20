@@ -6,6 +6,9 @@ const state = {
   hcMap: new Map(),
   rankArea: 'all',
   forecast: [],
+  forecastAuto: [],
+  calendarMeta: null,
+  calendarMode: 'auto',
   treatmentSource: [],
   treatmentThreshold: 0.88,
   treatmentProgress: {},
@@ -771,6 +774,7 @@ function riskForRate(rate,target){
 function loadForecast(){
   try{state.forecast=JSON.parse(localStorage.getItem('misscanForecastV3')||'[]')}catch{state.forecast=[]}
   state.scenario=localStorage.getItem('misscanScenarioV3')||'base';
+  state.calendarMode=localStorage.getItem('misscanCalendarModeV62')||'auto';
 
   const av=localStorage.getItem('actualVolumeV3');
   if(av)$('actualVolume').value=av;
@@ -784,6 +788,7 @@ function loadForecast(){
   });
 
   updateScenarioButtons();
+  updateCalendarModeUI();
   updateFutureBaseRate();
   renderForecastTable();
 }
@@ -793,6 +798,7 @@ function saveForecast(){
   localStorage.setItem('actualVolumeV3',$('actualVolume').value);
   localStorage.setItem('targetRateV3',$('targetRate').value);
   localStorage.setItem('misscanScenarioV3',state.scenario||'base');
+  localStorage.setItem('misscanCalendarModeV62',state.calendarMode||'auto');
   ['T1','T2','T3','T4','T5'].forEach(t=>{
     if($(`rate${t}`)) localStorage.setItem(`misscanRate${t}V3`,$(`rate${t}`).value);
   });
@@ -813,17 +819,65 @@ function updateFutureBaseRate(){
   $('futureBaseRate').value=getTurnBaseRate($('futureTurno').value).toFixed(3);
 }
 
+function updateCalendarModeUI(){
+  const auto=state.calendarMode==='auto';
+  if($('calendarAutoBtn'))$('calendarAutoBtn').classList.toggle('active',auto);
+  if($('calendarManualBtn'))$('calendarManualBtn').classList.toggle('active',!auto);
+  if($('manualForecastForm'))$('manualForecastForm').classList.toggle('calendar-manual-disabled',auto);
+  if($('clearForecastBtn'))$('clearForecastBtn').disabled=auto;
+}
+
+function forecastRowsSource(){
+  if(state.calendarMode==='auto'&&state.forecastAuto.length)return state.forecastAuto;
+  return state.forecast;
+}
+
+function renderCalendarSourceStatus(mode='ok',message='',detail=''){
+  const dot=$('calendarLiveDot');
+  if(dot){dot.classList.remove('loading','error');if(mode==='loading')dot.classList.add('loading');if(mode==='error')dot.classList.add('error')}
+  if($('calendarSource'))$('calendarSource').textContent=message||'Planejamento automático';
+  if($('calendarUpdated'))$('calendarUpdated').textContent=detail||'Fonte: Hc x Posto de Trabalho';
+}
+
+async function loadCalendarizationAuto({silent=true}={}){
+  renderCalendarSourceStatus('loading','Atualizando planejamento...','Lendo snapshot privado da Vercel');
+  try{
+    const res=await fetch(`/api/calendarizacao?t=${Date.now()}`,{cache:'no-store'});
+    let data={};try{data=await res.json()}catch{}
+    if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
+    const today=new Date().toISOString().slice(0,10);
+    state.forecastAuto=(data.rows||[]).filter(x=>String(x.date||'')>=today);
+    state.calendarMeta=data.meta||{};
+    const updated=state.calendarMeta.receivedAt?new Date(state.calendarMeta.receivedAt).toLocaleString('pt-BR'):'—';
+    const sheet=state.calendarMeta.weekSheet||'—';
+    renderCalendarSourceStatus('ok',`${state.forecastAuto.length} turno(s) futuro(s) • ${sheet}`,`Hc x Posto de Trabalho • atualizado ${updated}`);
+    renderForecastTable();renderProjection();
+  }catch(err){
+    console.error(err);
+    renderCalendarSourceStatus('error','Planejamento automático indisponível',err.message);
+    if(!silent)alert(`Falha na calendarização automática:
+${err.message}`);
+  }
+}
+
+function setCalendarMode(mode){
+  state.calendarMode=mode==='manual'?'manual':'auto';
+  saveForecast();updateCalendarModeUI();renderForecastTable();renderProjection();
+}
+
 function calcForecastRow(x){
   const scenario=SCENARIOS[state.scenario||'base'];
-  const capacity=x.hc*x.hours*x.productivity;
+  const capacity=x.productivityUnit==='POR_TURNO'?x.hc*x.productivity:x.hc*x.hours*x.productivity;
   const load=capacity>0?x.volume/capacity:NaN;
   const loadFactorValue=loadFactor(load);
-  const projectedRate=x.baseRate*loadFactorValue*scenario.factor;
+  const baseRate=x.source==='AUTO'?getTurnBaseRate(x.turno):x.baseRate;
+  const projectedRate=baseRate*loadFactorValue*scenario.factor;
   const projectedMiss=x.volume*projectedRate/100;
 
   return {
     ...x,
     capacity,
+    baseRate,
     load,
     loadFactor:loadFactorValue,
     scenarioFactor:scenario.factor,
@@ -864,7 +918,7 @@ function renderProjection(){
   const actualMiss=state.filtered.length;
   const current=actualVol?actualMiss/actualVol*100:NaN;
 
-  const rows=state.forecast.map(calcForecastRow);
+  const rows=forecastRowsSource().map(calcForecastRow);
   const futureVol=rows.reduce((sum,x)=>sum+x.volume,0);
   const futureMiss=rows.reduce((sum,x)=>sum+x.projectedMiss,0);
   const forecast=(actualVol+futureVol)
@@ -918,7 +972,7 @@ function renderProjection(){
     .sort((a,b)=>b.rate-a.rate)[0];
 
   $('forecastSummaryText').innerHTML=`
-    <strong>Cenário ${escapeHtml(SCENARIOS[state.scenario||'base'].label)}:</strong>
+    <strong>${state.calendarMode==='auto'?'Planejamento automático':'Simulação manual'} • Cenário ${escapeHtml(SCENARIOS[state.scenario||'base'].label)}:</strong>
     taxa futura ponderada <b>${fmtPct(avgFuture)}</b> •
     Misscan futuro estimado <b>${fmtInt.format(Math.round(futureMiss))}</b> •
     ${highTurn
@@ -930,6 +984,7 @@ function renderProjection(){
 }
 
 function addForecast(){
+  if(state.calendarMode==='auto')return alert('Troque para o modo Manual para criar uma simulação.');
   const date=$('futureDate').value;
   const turno=$('futureTurno').value;
   const area=$('futureArea').value;
@@ -970,7 +1025,7 @@ function renderForecastTable(){
   if(!$('forecastBody')) return;
 
   const target=Number($('targetRate').value)||0;
-  const rows=state.forecast.map(calcForecastRow);
+  const rows=forecastRowsSource().map(calcForecastRow);
 
   $('forecastBody').innerHTML=rows.map(x=>{
     const risk=riskForRate(x.projectedRate,target);
@@ -979,10 +1034,10 @@ function renderForecastTable(){
     return `<tr>
       <td>${x.date.split('-').reverse().join('/')}</td>
       <td><strong>${escapeHtml(x.turno)}</strong></td>
-      <td><span class="tag ${x.area==='ESTEIRA'?'tag-esteira':'tag-expedicao'}">${escapeHtml(x.area)}</span></td>
-      <td>${fmtInt.format(x.volume)}</td>
-      <td>${fmtInt.format(x.hc)}</td>
-      <td>${x.hours.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
+      <td>${x.source==='AUTO'?'<span class="calendar-auto-tag">AUTO</span>':`<span class="tag ${x.area==='ESTEIRA'?'tag-esteira':x.area==='EXPEDIÇÃO'?'tag-expedicao':'tag-na'}">MANUAL</span>`}<div class="calendar-source-note">${escapeHtml(x.sourceLabel||x.area||'')}</div></td>
+      <td>${fmtInt.format(Math.round(x.volume))}</td>
+      <td>${fmtInt.format(Math.round(x.hc))}</td>
+      <td>${x.source==='AUTO'?fmtInt.format(Math.round(x.esteirasHC||0)):(x.hours||0).toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
       <td>${fmtInt.format(Math.round(x.productivity))}</td>
       <td>${fmtInt.format(Math.round(x.capacity))}</td>
       <td>${fmtPct(loadPct)}</td>
@@ -990,9 +1045,9 @@ function renderForecastTable(){
       <td><strong>${fmtPct(x.projectedRate)}</strong></td>
       <td>${fmtInt.format(Math.round(x.projectedMiss))}</td>
       <td><span class="tag ${risk.cls}">${risk.label}</span></td>
-      <td><button class="ghost-dark" onclick="removeForecast('${x.id}')">Excluir</button></td>
+      <td>${x.source==='AUTO'?'<span class="calendar-auto-tag">OFICIAL</span>':`<button class="ghost-dark" onclick="removeForecast('${x.id}')">Excluir</button>`}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="14" class="empty">Nenhum dia futuro adicionado.</td></tr>';
+  }).join('')||'<tr><td colspan="14" class="empty">Nenhum planejamento futuro disponível.</td></tr>';
 }
 
 window.removeForecast=id=>{
@@ -1005,7 +1060,7 @@ function tabs(){
   document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
-    if(b.dataset.tab==='calendarizacao')renderProjection();
+    if(b.dataset.tab==='calendarizacao'){renderProjection();if(state.calendarMode==='auto')loadCalendarizationAuto({silent:true})}
     if(b.dataset.tab==='tratativas')renderTreatments();
   }));
 }
@@ -1182,6 +1237,7 @@ async function refreshLiveData({silent=false}={}){
 async function boot(){
   tabs();loadForecast();restorePeriodPreference();
   await refreshLiveData({silent:true});
+  await loadCalendarizationAuto({silent:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>refreshLiveData({silent:false}));
@@ -1216,6 +1272,10 @@ async function boot(){
   const sigCanvas=$('signatureCanvas');['pointerdown'].forEach(ev=>sigCanvas.addEventListener(ev,sigStart));['pointermove'].forEach(ev=>sigCanvas.addEventListener(ev,sigMove));['pointerup','pointercancel','pointerleave'].forEach(ev=>sigCanvas.addEventListener(ev,sigEnd));
   $('clearSignatureBtn').addEventListener('click',clearSignature);$('saveSignatureBtn').addEventListener('click',saveSignature);
 
+  $('calendarAutoBtn').addEventListener('click',()=>setCalendarMode('auto'));
+  $('calendarManualBtn').addEventListener('click',()=>setCalendarMode('manual'));
+  $('refreshCalendarBtn').addEventListener('click',()=>loadCalendarizationAuto({silent:false}));
+
   $('actualVolume').addEventListener('input',()=>{saveForecast();renderProjection()});
   $('targetRate').addEventListener('input',()=>{saveForecast();renderForecastTable();renderProjection()});
 
@@ -1243,7 +1303,8 @@ async function boot(){
   $('addForecastBtn').addEventListener('click',addForecast);
 
   $('clearForecastBtn').addEventListener('click',()=>{
-    if(confirm('Limpar toda a calendarização salva?')){
+    if(state.calendarMode==='auto')return;
+    if(confirm('Limpar toda a simulação manual?')){
       state.forecast=[];
       saveForecast();
       renderForecastTable();

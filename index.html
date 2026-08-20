@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas V6.1 • Calendarização</div>
+        <div class="subtitle">Produtividade • Tratativas V6.2 • Calendarização</div>
       </div>
     </div>
     <div class="header-actions">
@@ -159,7 +159,7 @@
     <section id="tratativas" class="view">
       <div class="treatment-hero">
         <div>
-          <span class="eyebrow">TRATATIVAS V6.1</span>
+          <span class="eyebrow">TRATATIVAS V6.2</span>
           <h1>Acompanhamento de colaboradores ofensores</h1>
           <p>Todo colaborador com indicador acima de <strong>0,88%</strong> entra automaticamente na fila de tratativas.</p>
         </div>
@@ -253,9 +253,25 @@
           <span class="eyebrow">CALENDARIZAÇÃO INTELIGENTE</span>
           <h1>Projeção operacional do Misscan</h1>
           <p>
-            Projeção ponderada por volume, com taxa histórica por turno, capacidade planejada,
-            carga operacional e cenários Otimista / Base / Conservador.
+            Projeção automática usando Forecast, Processar, HC Plano e produtividade do planejamento operacional,
+            com cenários Otimista / Base / Conservador.
           </p>
+        </div>
+      </div>
+
+      <div class="calendar-live-panel panel">
+        <div class="calendar-live-main">
+          <span class="calendar-live-dot" id="calendarLiveDot"></span>
+          <div>
+            <span>PLANEJAMENTO AUTOMÁTICO</span>
+            <strong id="calendarSource">Aguardando sincronização...</strong>
+            <small id="calendarUpdated">Fonte: Hc x Posto de Trabalho</small>
+          </div>
+        </div>
+        <div class="calendar-mode-buttons">
+          <button type="button" id="calendarAutoBtn" class="calendar-mode-btn active">Automático</button>
+          <button type="button" id="calendarManualBtn" class="calendar-mode-btn">Manual</button>
+          <button type="button" id="refreshCalendarBtn" class="ghost-dark">Atualizar</button>
         </div>
       </div>
 
@@ -350,7 +366,7 @@
           <div class="panel-head">
             <div>
               <h2>Taxa histórica base por turno</h2>
-              <p>Começa igual à meta. Depois substitua pelas taxas reais quando consolidarmos todo o histórico.</p>
+              <p>A taxa base continua configurável enquanto o denominador oficial por turno não estiver integrado.</p>
             </div>
           </div>
 
@@ -364,8 +380,9 @@
 
           <div class="model-note">
             <strong>Modelo V3:</strong><br>
-            Capacidade = HC × horas produtivas × produtividade/h.<br>
-            Carga = volume previsto ÷ capacidade.<br>
+            <b>Automático:</b> Capacidade = HC Plano × produtividade por HC/turno.<br>
+            Volume futuro = Processar distribuído por capacidade planejada dos turnos.<br>
+            Carga = volume alocado ÷ capacidade do turno.<br>
             Taxa projetada = taxa base do turno × fator de carga × cenário.
           </div>
         </article>
@@ -375,12 +392,12 @@
         <article class="panel">
           <div class="panel-head">
             <div>
-              <h2>Adicionar operação futura</h2>
-              <p>Informe a capacidade planejada. O dashboard calcula automaticamente o risco.</p>
+              <h2>Override manual</h2>
+              <p id="manualForecastHint">Use somente para simular um cenário diferente do planejamento oficial.</p>
             </div>
           </div>
 
-          <div class="smart-forecast-form">
+          <div id="manualForecastForm" class="smart-forecast-form calendar-manual-disabled">
             <label>Data
               <input id="futureDate" type="date" />
             </label>
@@ -458,9 +475,9 @@
         <div class="panel-head">
           <div>
             <h2>Calendário de projeção</h2>
-            <p>Verde = dentro da meta • amarelo = atenção • vermelho = alto risco.</p>
+            <p>Automático = planejamento oficial • verde = meta • amarelo = atenção • vermelho = risco.</p>
           </div>
-          <button id="clearForecastBtn" class="ghost-dark">Limpar calendário</button>
+          <button id="clearForecastBtn" class="ghost-dark">Limpar simulação manual</button>
         </div>
 
         <div class="table-wrap">
@@ -469,11 +486,11 @@
               <tr>
                 <th>Data</th>
                 <th>Turno</th>
-                <th>Área</th>
+                <th>Origem</th>
                 <th>Volume</th>
                 <th>HC</th>
-                <th>Horas</th>
-                <th>Prod./h</th>
+                <th>HC Esteira</th>
+                <th>Prod./HC</th>
                 <th>Capacidade</th>
                 <th>Carga</th>
                 <th>Taxa base</th>
