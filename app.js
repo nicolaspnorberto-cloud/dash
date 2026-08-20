@@ -9,6 +9,9 @@ const state = {
   forecastAuto: [],
   calendarMeta: null,
   calendarMode: 'auto',
+  rateWindowDays: 14,
+  autoRates: null,
+  autoRateMeta: null,
   treatmentSource: [],
   treatmentThreshold: 0.88,
   treatmentProgress: {},
@@ -750,11 +753,57 @@ const SCENARIOS={
   conservative:{label:'Conservador',factor:1.15}
 };
 
+function rateBlock(turno){
+  if(turno==='T4') return 'T2';
+  if(turno==='T5') return 'T3';
+  return turno;
+}
+
 function getTurnBaseRate(turno){
-  const el=$(`rate${turno}`);
+  const block=rateBlock(turno);
+  if(state.calendarMode==='auto' && state.autoRates?.[block] && Number.isFinite(state.autoRates[block].rate)){
+    return state.autoRates[block].rate;
+  }
+  const el=$(`rate${turno}`)||$(`rate${block}`);
   const target=Number($('targetRate').value)||0;
   return el ? (Number(el.value)||target) : target;
 }
+
+function updateRateWindowButtons(){
+  document.querySelectorAll('.rate-window-btn').forEach(b=>b.classList.toggle('active',Number(b.dataset.days)===Number(state.rateWindowDays)));
+}
+
+function renderAutoRates(){
+  ['T1','T2','T3'].forEach(t=>{
+    const r=state.autoRates?.[t];
+    const rateEl=$(`autoRate${t}`),detail=$(`autoRate${t}Detail`);
+    if(rateEl) rateEl.textContent=r&&Number.isFinite(r.rate)?fmtPct(r.rate):'—';
+    if(detail) detail.textContent=r?`${fmtInt.format(r.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(r.volumeReal||0))} reais`:'Aguardando produção real';
+  });
+  if($('autoRateMeta')){
+    const m=state.autoRateMeta||{};
+    $('autoRateMeta').textContent=m.periodLabel
+      ? `Base ${m.days} dias • ${m.periodLabel} • T4 → T2 • T5 → T3 • Fonte: ${m.source||'Oráculo MG4'}`
+      : 'Fonte: Histórico Misscan + Produção REAL do Oráculo MG4';
+  }
+  updateRateWindowButtons();
+}
+
+async function loadAutoRates({silent=true}={}){
+  try{
+    const res=await fetch(`/api/taxas?days=${encodeURIComponent(state.rateWindowDays)}&t=${Date.now()}`,{cache:'no-store'});
+    let data={};try{data=await res.json()}catch{}
+    if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
+    state.autoRates=data.rates||null;
+    state.autoRateMeta={days:data.days,periodLabel:data.periodLabel,source:data.productionMeta?.source||'Oráculo MG4',general:data.general};
+    renderAutoRates();updateFutureBaseRate();renderForecastTable();renderProjection();
+  }catch(err){
+    console.error('Taxa automática',err);state.autoRates=null;state.autoRateMeta=null;renderAutoRates();
+    if(!silent)alert(`Falha ao carregar taxa real automática:
+${err.message}`);
+  }
+}
+
 
 function loadFactor(load){
   if(!Number.isFinite(load)||load<=0) return 1;
@@ -774,7 +823,8 @@ function riskForRate(rate,target){
 function loadForecast(){
   try{state.forecast=JSON.parse(localStorage.getItem('misscanForecastV3')||'[]')}catch{state.forecast=[]}
   state.scenario=localStorage.getItem('misscanScenarioV3')||'base';
-  state.calendarMode=localStorage.getItem('misscanCalendarModeV62')||'auto';
+  state.calendarMode=localStorage.getItem('misscanCalendarModeV63')||'auto';
+  state.rateWindowDays=Number(localStorage.getItem('misscanRateWindowV63')||14);
 
   const av=localStorage.getItem('actualVolumeV3');
   if(av)$('actualVolume').value=av;
@@ -787,6 +837,8 @@ function loadForecast(){
     if(saved && $(`rate${t}`)) $(`rate${t}`).value=saved;
   });
 
+  updateRateWindowButtons();
+  renderAutoRates();
   updateScenarioButtons();
   updateCalendarModeUI();
   updateFutureBaseRate();
@@ -798,7 +850,8 @@ function saveForecast(){
   localStorage.setItem('actualVolumeV3',$('actualVolume').value);
   localStorage.setItem('targetRateV3',$('targetRate').value);
   localStorage.setItem('misscanScenarioV3',state.scenario||'base');
-  localStorage.setItem('misscanCalendarModeV62',state.calendarMode||'auto');
+  localStorage.setItem('misscanCalendarModeV63',state.calendarMode||'auto');
+  localStorage.setItem('misscanRateWindowV63',String(state.rateWindowDays||14));
   ['T1','T2','T3','T4','T5'].forEach(t=>{
     if($(`rate${t}`)) localStorage.setItem(`misscanRate${t}V3`,$(`rate${t}`).value);
   });
@@ -851,6 +904,7 @@ async function loadCalendarizationAuto({silent=true}={}){
     const updated=state.calendarMeta.receivedAt?new Date(state.calendarMeta.receivedAt).toLocaleString('pt-BR'):'—';
     const sheet=state.calendarMeta.weekSheet||'—';
     renderCalendarSourceStatus('ok',`${state.forecastAuto.length} turno(s) futuro(s) • ${sheet}`,`Hc x Posto de Trabalho • atualizado ${updated}`);
+    await loadAutoRates({silent:true});
     renderForecastTable();renderProjection();
   }catch(err){
     console.error(err);
@@ -1060,7 +1114,7 @@ function tabs(){
   document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
-    if(b.dataset.tab==='calendarizacao'){renderProjection();if(state.calendarMode==='auto')loadCalendarizationAuto({silent:true})}
+    if(b.dataset.tab==='calendarizacao'){renderProjection();if(state.calendarMode==='auto'){loadCalendarizationAuto({silent:true});loadAutoRates({silent:true})}}
     if(b.dataset.tab==='tratativas')renderTreatments();
   }));
 }
@@ -1275,6 +1329,7 @@ async function boot(){
   $('calendarAutoBtn').addEventListener('click',()=>setCalendarMode('auto'));
   $('calendarManualBtn').addEventListener('click',()=>setCalendarMode('manual'));
   $('refreshCalendarBtn').addEventListener('click',()=>loadCalendarizationAuto({silent:false}));
+  document.querySelectorAll('.rate-window-btn').forEach(b=>b.addEventListener('click',()=>{state.rateWindowDays=Number(b.dataset.days)||14;saveForecast();loadAutoRates({silent:false})}));
 
   $('actualVolume').addEventListener('input',()=>{saveForecast();renderProjection()});
   $('targetRate').addEventListener('input',()=>{saveForecast();renderForecastTable();renderProjection()});

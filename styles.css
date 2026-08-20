@@ -1069,3 +1069,20 @@ thead,
 .calendar-auto-tag{display:inline-flex;padding:4px 7px;border-radius:999px;background:#eef5fd;color:var(--blue);font-size:8px;font-weight:900}
 .calendar-source-note{font-size:8px;color:#7d8da2;margin-top:2px}
 @media(max-width:760px){.calendar-live-panel{align-items:flex-start;flex-direction:column}.calendar-mode-buttons{width:100%}}
+
+
+/* V6.3 — Taxa real automática */
+.rate-window-control{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rate-window-control>span{font-size:9px;font-weight:900;color:#6c8099;text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+.rate-window-btn{height:28px;padding:0 9px;border:1px solid #ccdae9;border-radius:7px;background:#fff;color:#294a70;font-size:9px;font-weight:900;cursor:pointer}
+.rate-window-btn.active{background:var(--navy);border-color:var(--navy);color:#fff}
+.auto-rate-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:4px}
+.auto-rate-card{border:1px solid #d7e2ee;border-radius:10px;padding:12px;background:#f8fbff}
+.auto-rate-card span{display:block;color:#71859e;font-size:9px;font-weight:900;letter-spacing:.06em}
+.auto-rate-card strong{display:block;margin-top:3px;color:var(--navy);font-size:22px;line-height:1}
+.auto-rate-card small{display:block;margin-top:6px;color:#6e8298;font-size:9px;line-height:1.35}
+.rate-auto-meta{margin-top:9px;padding:8px 10px;border-radius:8px;background:#eef5fd;color:#55718f;font-size:9px;font-weight:700}
+.manual-rate-details{margin-top:10px;border-top:1px solid #e0e8f1;padding-top:9px}
+.manual-rate-details summary{cursor:pointer;color:#536d89;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+.manual-rate-details .turn-rate-grid{margin-top:9px}
+@media(max-width:720px){.auto-rate-grid{grid-template-columns:1fr}.rate-window-control{margin-top:8px}}

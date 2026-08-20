@@ -362,28 +362,44 @@
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel rate-auto-panel">
           <div class="panel-head">
             <div>
-              <h2>Taxa histórica base por turno</h2>
-              <p>A taxa base continua configurável enquanto o denominador oficial por turno não estiver integrado.</p>
+              <h2>Taxa real automática por bloco operacional</h2>
+              <p>Misscan identificado ÷ Produção REAL. Média ponderada pelo volume.</p>
+            </div>
+            <div class="rate-window-control">
+              <span>Base histórica</span>
+              <button type="button" class="rate-window-btn" data-days="7">7 dias</button>
+              <button type="button" class="rate-window-btn active" data-days="14">14 dias</button>
+              <button type="button" class="rate-window-btn" data-days="30">30 dias</button>
             </div>
           </div>
 
-          <div class="turn-rate-grid">
-            <label>T1 (%)<input id="rateT1" type="number" min="0" step="0.001" value="0.94" /></label>
-            <label>T2 (%)<input id="rateT2" type="number" min="0" step="0.001" value="0.94" /></label>
-            <label>T3 (%)<input id="rateT3" type="number" min="0" step="0.001" value="0.94" /></label>
-            <label>T4 (%)<input id="rateT4" type="number" min="0" step="0.001" value="0.94" /></label>
-            <label>T5 (%)<input id="rateT5" type="number" min="0" step="0.001" value="0.94" /></label>
+          <div class="auto-rate-grid">
+            <div class="auto-rate-card"><span>T1</span><strong id="autoRateT1">—</strong><small id="autoRateT1Detail">Aguardando produção real</small></div>
+            <div class="auto-rate-card"><span>T2 + T4</span><strong id="autoRateT2">—</strong><small id="autoRateT2Detail">Aguardando produção real</small></div>
+            <div class="auto-rate-card"><span>T3 + T5</span><strong id="autoRateT3">—</strong><small id="autoRateT3Detail">Aguardando produção real</small></div>
           </div>
+          <div class="rate-auto-meta" id="autoRateMeta">Fonte: Histórico Misscan + Produção REAL do Oráculo MG4</div>
+
+          <details class="manual-rate-details">
+            <summary>Simular taxa manual</summary>
+            <div class="turn-rate-grid">
+              <label>T1 (%)<input id="rateT1" type="number" min="0" step="0.001" value="0.94" /></label>
+              <label>T2 (%)<input id="rateT2" type="number" min="0" step="0.001" value="0.94" /></label>
+              <label>T3 (%)<input id="rateT3" type="number" min="0" step="0.001" value="0.94" /></label>
+              <label>T4 (%)<input id="rateT4" type="number" min="0" step="0.001" value="0.94" /></label>
+              <label>T5 (%)<input id="rateT5" type="number" min="0" step="0.001" value="0.94" /></label>
+            </div>
+          </details>
 
           <div class="model-note">
-            <strong>Modelo V3:</strong><br>
-            <b>Automático:</b> Capacidade = HC Plano × produtividade por HC/turno.<br>
-            Volume futuro = Processar distribuído por capacidade planejada dos turnos.<br>
-            Carga = volume alocado ÷ capacidade do turno.<br>
-            Taxa projetada = taxa base do turno × fator de carga × cenário.
+            <strong>Modelo V6.3:</strong><br>
+            T1 = Misscan T1 ÷ Produção Real T1.<br>
+            T2 = (Misscan T2 + T4) ÷ Produção Real T2.<br>
+            T3 = (Misscan T3 + T5) ÷ Produção Real T3.<br>
+            Taxa projetada = taxa real ponderada × fator de carga × cenário.
           </div>
         </article>
       </div>
@@ -595,7 +611,7 @@
     </div>
   </main>
 
-  <footer>Mis-Scan Control Center • V6.1 • Histórico + Filtro de Data + Tratativas + E-mail</footer>
+  <footer>Mis-Scan Control Center • V6.3 • Taxa Real Automática + Calendarização + Tratativas</footer>
   <script src="app.js"></script>
 </body>
 </html>

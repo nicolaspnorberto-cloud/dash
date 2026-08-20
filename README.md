@@ -1,3 +1,12 @@
-MIS-SCAN CONTROL CENTER V6.2
+MIS-SCAN CONTROL CENTER V6.3
 
-Histórico + filtro de data + calendarização automática via Hc x Posto de Trabalho.
+Taxa real automática + Calendarização.
+
+Regra de blocos:
+- T1 -> T1
+- T2 + T4 -> T2
+- T3 + T5 -> T3
+
+A taxa base usa Misscan histórico / Produção REAL do Histórico Prod Esteiras, ponderada por volume.
+
+Leia V63_CONFIGURACAO.md.
