@@ -585,19 +585,20 @@ async function saveDialogue(){
       instructorEmail:d.instructorEmail,
       details:{date:d.date,notes:d.notes}
     });
-    d.emailSent=true;
-    d.emailSentAt=nowISO();
+    d.emailQueued=true;
+    d.emailSent=false;
+    d.emailQueuedAt=nowISO();
     d.emailRecipients=mail.recipients||[];
     addTreatmentHistory(
       row.id,
-      `E-mail enviado — ${c}º diálogo`,
+      `E-mail na fila — ${c}º diálogo`,
       (mail.recipients||[]).join(', ')||emailRecipientsDescription(row,d.instructorEmail)
     );
   }catch(err){
     d.emailSent=false;
     d.emailError=err.message;
     addTreatmentHistory(row.id,`Falha no e-mail — ${c}º diálogo`,err.message);
-    alert(`O diálogo foi salvo, mas o e-mail não pôde ser enviado:\n${err.message}`);
+    alert(`O diálogo foi salvo, mas não foi possível colocar o e-mail na fila:\n${err.message}`);
   }
 
   saveTreatmentProgress();
@@ -659,19 +660,20 @@ async function completeRecycle(){
         evidenceCount:Number(r.evidenceCount)||0
       }
     });
-    r.emailSent=true;
-    r.emailSentAt=nowISO();
+    r.emailQueued=true;
+    r.emailSent=false;
+    r.emailQueuedAt=nowISO();
     r.emailRecipients=mail.recipients||[];
     addTreatmentHistory(
       row.id,
-      `E-mail enviado — ${c}ª reciclagem`,
+      `E-mail na fila — ${c}ª reciclagem`,
       (mail.recipients||[]).join(', ')||emailRecipientsDescription(row,r.instructorEmail)
     );
   }catch(err){
     r.emailSent=false;
     r.emailError=err.message;
     addTreatmentHistory(row.id,`Falha no e-mail — ${c}ª reciclagem`,err.message);
-    alert(`A reciclagem foi concluída, mas o e-mail não pôde ser enviado:\n${err.message}`);
+    alert(`A reciclagem foi concluída, mas não foi possível colocar o e-mail na fila:\n${err.message}`);
   }
 
   saveTreatmentProgress();
@@ -1062,7 +1064,7 @@ async function refreshLiveData({silent=false}={}){
   setLiveStatus('loading','Atualizando...','Lendo Base HC + LM');
 
   try{
-    const response=await fetch(`/api/dados?days=35&t=${Date.now()}`,{
+    const response=await fetch(`/api/dados?t=${Date.now()}`,{
       headers:{'Accept':'application/json'},
       cache:'no-store'
     });
@@ -1104,7 +1106,7 @@ async function refreshLiveData({silent=false}={}){
 
     if($('dataNote')){
       $('dataNote').textContent=
-        `Fonte automática ativa. ${fmtInt.format(state.sourceRows)} registros recebidos; ${fmtInt.format(state.raw.length)} BR únicos após deduplicação.`;
+        `Fonte automática V6 ativa. ${fmtInt.format(state.sourceRows)} registros sincronizados; ${fmtInt.format(state.raw.length)} BR únicos após deduplicação.`;
     }
   }catch(err){
     console.error(err);
@@ -1126,7 +1128,7 @@ async function boot(){
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>refreshLiveData({silent:false}));
-  setInterval(()=>refreshLiveData({silent:true}),15*60*1000);
+  setInterval(()=>refreshLiveData({silent:true}),5*60*1000);
   document.querySelectorAll('.rank-pill').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.rank-pill').forEach(x=>x.classList.toggle('active',x===b));state.rankArea=b.dataset.rank;renderRanking()}));
 
 

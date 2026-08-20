@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas V5 • Calendarização</div>
+        <div class="subtitle">Produtividade • Tratativas V6 • Calendarização</div>
       </div>
     </div>
     <div class="header-actions">
@@ -20,7 +20,7 @@
         <span id="liveDot" class="live-dot loading"></span>
         <div>
           <strong id="liveStatus">Conectando...</strong>
-          <small id="liveUpdated">Google Sheets • automático</small>
+          <small id="liveUpdated">Apps Script privado • push automático</small>
         </div>
       </div>
       <button id="refreshDataBtn" class="ghost-btn">Atualizar agora</button>
@@ -53,7 +53,7 @@
         <div class="source-strip">
           <span><b>HC:</b> <span id="hcSourceInfo">aguardando...</span></span>
           <span><b>Misscan:</b> <span id="misscanSourceInfo">aguardando...</span></span>
-          <span><b>Janela:</b> <span id="dataWindowInfo">35 dias</span></span>
+          <span><b>Sincronização:</b> <span id="dataWindowInfo">a cada 30 min</span></span>
         </div>
       </div>
 
@@ -125,7 +125,7 @@
     <section id="tratativas" class="view">
       <div class="treatment-hero">
         <div>
-          <span class="eyebrow">TRATATIVAS V5</span>
+          <span class="eyebrow">TRATATIVAS V6</span>
           <h1>Acompanhamento de colaboradores ofensores</h1>
           <p>Todo colaborador com indicador acima de <strong>0,88%</strong> entra automaticamente na fila de tratativas.</p>
         </div>
@@ -161,7 +161,7 @@
           <button id="treatResetBtn" class="reset-btn">Limpar</button>
         </div>
         <div class="treatment-source-note">
-          <strong>Fonte automática:</strong> o ranking é recalculado com os Misscan identificados recebidos da aba <em>LM</em> e enriquecido pela aba <em>Base de HC 26</em>. O indicador atual é o <strong>Share dos Misscan identificados</strong>; ele não substitui a taxa individual por volume até que o denominador oficial seja integrado.
+          <strong>Fonte automática:</strong> o ranking é recalculado com os Misscan sincronizados pela rotina privada do Apps Script e enriquecido pela Base HC. O indicador atual é o <strong>Share dos Misscan identificados</strong>; ele não substitui a taxa individual por volume até que o denominador oficial seja integrado.
         </div>
       </div>
 
@@ -544,7 +544,7 @@
     </div>
   </main>
 
-  <footer>Mis-Scan Control Center • V5 • Dados automáticos + Tratativas + E-mail + Calendarização</footer>
+  <footer>Mis-Scan Control Center • V6 • Push privado + Tratativas + E-mail + Calendarização</footer>
   <script src="app.js"></script>
 </body>
 </html>
