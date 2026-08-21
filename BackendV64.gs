@@ -1,5 +1,5 @@
 /**
- * MIS-SCAN CONTROL CENTER V6.1
+ * MIS-SCAN CONTROL CENTER V6.4
  *
  * ARQUITETURA:
  * Google Sheets privado -> Apps Script privado -> Vercel /api/sync -> Vercel Blob privado -> Dashboard
@@ -1265,3 +1265,541 @@ function parseProducaoV63_(text,fallbackDate){
   return dedupeProducaoV63_(out);
 }
 function dedupeProducaoV63_(rows){const map={};rows.forEach(function(r){if(r.date&&r.turno&&r.real>=0)map[r.date+'|'+r.turno]=r;});return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return a.date.localeCompare(b.date)||a.turno.localeCompare(b.turno);});}
+
+
+/* =========================================================
+   V6.4 — HISTÓRICO LM DINÂMICO
+   - LM é a fonte oficial e crescente do histórico de Misscan.
+   - Backfill completo é retomável e não depende de ordenação por data.
+   - Sincronização de HC + LM é independente de Calendarização/Oráculo.
+========================================================= */
+
+const V64_INCREMENTAL_DAYS = 45;
+const V64_SCAN_CHUNK_SIZE = 5000;
+const V64_BACKFILL_ROWS_PER_RUN = 15000;
+
+function testarConexaoV64() {
+  const base = vercelBaseUrlV6_();
+  const response = UrlFetchApp.fetch(base + '/api/ping', {
+    method: 'get',
+    muteHttpExceptions: true
+  });
+
+  Logger.log('HTTP ' + response.getResponseCode());
+  Logger.log(response.getContentText());
+  return response.getContentText();
+}
+
+/**
+ * Instala somente gatilhos independentes.
+ * Falha de Calendarização ou Oráculo NÃO bloqueia HC + LM.
+ *
+ * Produção do Oráculo não é instalada automaticamente porque a fonte atual
+ * exige sessão autenticada. As funções V6.3 continuam disponíveis para teste
+ * futuro quando existir uma fonte máquina-a-máquina.
+ */
+function instalarAutomacoesV64() {
+  validarConfiguracaoV6_();
+
+  const handlers = [
+    'sincronizarDadosV6',
+    'processarFilaEmailsV6',
+    'sincronizarDadosV61',
+    'processarFilaEmailsV61',
+    'sincronizarTudoV62',
+    'processarFilaEmailsV62',
+    'sincronizarTudoV63',
+    'processarFilaEmailsV63',
+    'sincronizarHCeMisscanV64',
+    'sincronizarCalendarizacaoV64',
+    'processarFilaEmailsV64',
+    'continuarHistoricoCompletoLMV64'
+  ];
+
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (handlers.indexOf(trigger.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('sincronizarHCeMisscanV64')
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+
+  ScriptApp.newTrigger('sincronizarCalendarizacaoV64')
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+
+  ScriptApp.newTrigger('processarFilaEmailsV64')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+
+  // HC + LM é o fluxo principal e roda isoladamente.
+  sincronizarHCeMisscanV64();
+
+  // Calendarização é tentada separadamente; erro não impede a instalação.
+  try {
+    sincronizarCalendarizacaoV64();
+  } catch (error) {
+    Logger.log('V6.4 Calendarização: ' + String(error.message || error));
+  }
+
+  Logger.log(
+    'V6.4 instalada: HC+LM 30 min | Calendarização 30 min | E-mails 5 min. ' +
+    'Oráculo não está no gatilho automático.'
+  );
+}
+
+function removerAutomacoesV64() {
+  const handlers = [
+    'sincronizarHCeMisscanV64',
+    'sincronizarCalendarizacaoV64',
+    'processarFilaEmailsV64',
+    'continuarHistoricoCompletoLMV64'
+  ];
+
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (handlers.indexOf(trigger.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  Logger.log('Gatilhos V6.4 removidos.');
+}
+
+function sincronizarCalendarizacaoV64() {
+  return sincronizarCalendarizacaoV62();
+}
+
+function processarFilaEmailsV64() {
+  return processarFilaEmailsV61();
+}
+
+/**
+ * Sincronização recorrente.
+ *
+ * Diferente das versões anteriores, NÃO presume que as datas mais recentes
+ * estejam nas últimas linhas da LM. Varre a coluna útil em blocos e mantém
+ * apenas a janela recente antes de enviar para a Vercel.
+ */
+function sincronizarHCeMisscanV64() {
+  validarConfiguracaoV6_();
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    Logger.log('V6.4 HC+LM: outra execução está em andamento.');
+    return;
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(spreadsheetIdV6_());
+    const hc = lerHCV6_(ss);
+    const misscanResult = lerMisscanPeriodoSeguroV64_(ss, V64_INCREMENTAL_DAYS);
+
+    const payload = {
+      hc: hc,
+      misscan: misscanResult.rows,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        spreadsheetId: spreadsheetIdV6_(),
+        hcSheet: V6_HC_SHEET,
+        misscanSheet: V6_MISSCAN_SHEET,
+        hcRecords: hc.length,
+        misscanRecords: misscanResult.rows.length,
+        misscanSourceLastRow: misscanResult.lastRow,
+        sourceRowsScanned: misscanResult.sourceRowsScanned,
+        days: V64_INCREMENTAL_DAYS,
+        periodStart: misscanResult.periodStart,
+        periodEnd: misscanResult.periodEnd,
+        periodLabel: misscanResult.periodLabel,
+        source: 'Apps Script Push V6.4 • LM dinâmica',
+        syncMode: 'INCREMENTAL',
+        sourceStrategy: 'SAFE_FULL_SCAN_RECENT_FILTER',
+        updateHC: true
+      }
+    };
+
+    const data = enviarHistoricoV64_(payload);
+
+    PropertiesService.getScriptProperties()
+      .setProperty('V64_LAST_LM_SYNC', new Date().toISOString());
+
+    Logger.log(
+      'V6.4 HC+LM OK: ' +
+      data.hcRecords + ' HC | ' +
+      data.incomingMisscanRecords + ' Misscan recentes | histórico ' +
+      (data.historyStart || '—') + ' → ' + (data.historyEnd || '—') +
+      ' | ' + (data.historyActiveDays || 0) + ' dias com Misscan.'
+    );
+
+    return data;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * INÍCIO DO BACKFILL COMPLETO.
+ *
+ * Execute UMA VEZ depois de publicar a V6.4.
+ * O processo limpa o índice histórico antigo e reconstrói o histórico a
+ * partir de TODAS as linhas atualmente existentes na aba LM.
+ *
+ * Se a LM for grande, o Apps Script continua automaticamente em execuções
+ * de até V64_BACKFILL_ROWS_PER_RUN linhas.
+ */
+function sincronizarHistoricoCompletoLMV64() {
+  validarConfiguracaoV6_();
+
+  const props = PropertiesService.getScriptProperties();
+
+  // Remove uma continuação antiga, se existir.
+  removerGatilhosPorHandlerV64_('continuarHistoricoCompletoLMV64');
+
+  const ss = SpreadsheetApp.openById(spreadsheetIdV6_());
+  const sh = ss.getSheetByName(V6_MISSCAN_SHEET);
+  if (!sh) throw new Error('Aba "' + V6_MISSCAN_SHEET + '" não encontrada.');
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) throw new Error('A aba LM não possui linhas de dados.');
+
+  const reset = v6Fetch_('/api/history-reset', {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      reason: 'V6.4_FULL_LM_REBUILD',
+      startedAt: new Date().toISOString(),
+      sourceLastRow: lastRow
+    }),
+    muteHttpExceptions: true
+  });
+
+  const resetCode = reset.getResponseCode();
+  const resetText = reset.getContentText();
+
+  if (resetCode < 200 || resetCode >= 300) {
+    throw new Error(
+      'Não foi possível reiniciar o histórico V6.4: ' +
+      resetCode + ' ' + resetText
+    );
+  }
+
+  props.setProperties({
+    V64_BACKFILL_STATUS: 'RUNNING',
+    V64_BACKFILL_CURSOR: '2',
+    V64_BACKFILL_LAST_ROW: String(lastRow),
+    V64_BACKFILL_STARTED_AT: new Date().toISOString()
+  });
+
+  Logger.log(
+    'V6.4 backfill iniciado. LM: linhas 2 até ' + lastRow + '.'
+  );
+
+  return continuarHistoricoCompletoLMV64();
+}
+
+function continuarHistoricoCompletoLMV64() {
+  validarConfiguracaoV6_();
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    Logger.log('V6.4 backfill: outra execução está em andamento. Nova tentativa será agendada.');
+    agendarContinuacaoHistoricoV64_();
+    return;
+  }
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+
+    if (props.getProperty('V64_BACKFILL_STATUS') !== 'RUNNING') {
+      Logger.log('V6.4 backfill não está marcado como RUNNING.');
+      return;
+    }
+
+    const ss = SpreadsheetApp.openById(spreadsheetIdV6_());
+    const sh = ss.getSheetByName(V6_MISSCAN_SHEET);
+    if (!sh) throw new Error('Aba "' + V6_MISSCAN_SHEET + '" não encontrada.');
+
+    const lastRow = sh.getLastRow();
+    let cursor = Number(props.getProperty('V64_BACKFILL_CURSOR') || 2);
+
+    if (cursor < 2) cursor = 2;
+
+    if (cursor > lastRow) {
+      finalizarHistoricoCompletoLMV64_(lastRow);
+      return;
+    }
+
+    const endRow = Math.min(
+      lastRow,
+      cursor + V64_BACKFILL_ROWS_PER_RUN - 1
+    );
+
+    const rows = lerMisscanFaixaLinhasV64_(sh, cursor, endRow);
+    const dedup = dedupeMisscanV6_(rows);
+
+    const hc = cursor === 2 ? lerHCV6_(ss) : null;
+    const willFinish = endRow >= lastRow;
+
+    const payload = {
+      misscan: dedup,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        spreadsheetId: spreadsheetIdV6_(),
+        hcSheet: V6_HC_SHEET,
+        misscanSheet: V6_MISSCAN_SHEET,
+        misscanSourceLastRow: lastRow,
+        sourceRowsScanned: endRow - cursor + 1,
+        source: 'Apps Script Push V6.4 • Backfill LM completo',
+        syncMode: 'FULL_BACKFILL',
+        sourceStrategy: 'ROW_CHUNK_RESUMABLE',
+        updateHC: Boolean(hc),
+        backfill: {
+          status: willFinish ? 'DONE' : 'RUNNING',
+          cursorStart: cursor,
+          cursorEnd: endRow,
+          sourceLastRow: lastRow,
+          progressPct: Math.min(
+            100,
+            Math.round(((endRow - 1) / Math.max(1, lastRow - 1)) * 1000) / 10
+          )
+        }
+      }
+    };
+
+    if (hc) payload.hc = hc;
+
+    const data = enviarHistoricoV64_(payload);
+
+    const nextCursor = endRow + 1;
+    props.setProperty('V64_BACKFILL_CURSOR', String(nextCursor));
+    props.setProperty('V64_BACKFILL_LAST_ROW', String(lastRow));
+
+    Logger.log(
+      'V6.4 backfill: linhas ' + cursor + '-' + endRow +
+      ' | ' + dedup.length + ' Misscan enviados' +
+      ' | progresso ' + payload.meta.backfill.progressPct + '%.'
+    );
+
+    if (willFinish) {
+      finalizarHistoricoCompletoLMV64_(lastRow, data);
+      return data;
+    }
+
+    agendarContinuacaoHistoricoV64_();
+    return data;
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function finalizarHistoricoCompletoLMV64_(lastRow, lastResult) {
+  const props = PropertiesService.getScriptProperties();
+
+  props.setProperties({
+    V64_BACKFILL_STATUS: 'DONE',
+    V64_BACKFILL_LAST_ROW: String(lastRow || ''),
+    V64_BACKFILL_FINISHED_AT: new Date().toISOString()
+  });
+
+  props.deleteProperty('V64_BACKFILL_CURSOR');
+  removerGatilhosPorHandlerV64_('continuarHistoricoCompletoLMV64');
+
+  Logger.log(
+    'V6.4 BACKFILL COMPLETO. Histórico LM reconstruído até a linha ' +
+    lastRow + '.'
+  );
+
+  if (lastResult) {
+    Logger.log(
+      'Histórico disponível: ' +
+      (lastResult.historyStart || '—') + ' → ' +
+      (lastResult.historyEnd || '—') + ' | ' +
+      (lastResult.historyActiveDays || 0) + ' dias com Misscan.'
+    );
+  }
+}
+
+function cancelarHistoricoCompletoLMV64() {
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('V64_BACKFILL_STATUS', 'CANCELLED');
+  props.deleteProperty('V64_BACKFILL_CURSOR');
+  removerGatilhosPorHandlerV64_('continuarHistoricoCompletoLMV64');
+  Logger.log('Backfill V6.4 cancelado.');
+}
+
+function statusHistoricoLMV64() {
+  const props = PropertiesService.getScriptProperties();
+
+  const status = {
+    status: props.getProperty('V64_BACKFILL_STATUS') || 'NÃO INICIADO',
+    cursor: props.getProperty('V64_BACKFILL_CURSOR') || '',
+    lastRow: props.getProperty('V64_BACKFILL_LAST_ROW') || '',
+    startedAt: props.getProperty('V64_BACKFILL_STARTED_AT') || '',
+    finishedAt: props.getProperty('V64_BACKFILL_FINISHED_AT') || '',
+    lastLMSync: props.getProperty('V64_LAST_LM_SYNC') || ''
+  };
+
+  Logger.log(JSON.stringify(status, null, 2));
+  return status;
+}
+
+/**
+ * Leitura segura da janela recente.
+ * Varre todas as linhas úteis da LM para não depender da ordenação criada
+ * por QUERY/IMPORTRANGE.
+ */
+function lerMisscanPeriodoSeguroV64_(ss, days) {
+  const sh = ss.getSheetByName(V6_MISSCAN_SHEET);
+  if (!sh) throw new Error('Aba "' + V6_MISSCAN_SHEET + '" não encontrada.');
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) {
+    return {
+      rows: [],
+      lastRow: lastRow,
+      sourceRowsScanned: 0,
+      periodStart: '',
+      periodEnd: '',
+      periodLabel: 'Sem dados'
+    };
+  }
+
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - (Math.max(1, days) - 1));
+
+  const raw = [];
+
+  for (let start = 2; start <= lastRow; start += V64_SCAN_CHUNK_SIZE) {
+    const count = Math.min(V64_SCAN_CHUNK_SIZE, lastRow - start + 1);
+    const values = sh.getRange(start, 1, count, 14).getDisplayValues();
+
+    values.forEach(function(r) {
+      const dt = parseDataV6_(r[1]);
+      if (!dt || dt < cutoff) return;
+      if (normalizarSimNaoV6_(r[12]) !== 'SIM') return;
+
+      raw.push(montarMisscanV64_(r, dt));
+    });
+  }
+
+  const dedup = dedupeMisscanV6_(raw);
+  dedup.sort(function(a, b) {
+    return String(a.lmreceived_date).localeCompare(String(b.lmreceived_date));
+  });
+
+  const dates = dedup
+    .map(function(r) { return parseDataV6_(r.lmreceived_date); })
+    .filter(Boolean)
+    .sort(function(a, b) { return a - b; });
+
+  const periodStart = dates.length
+    ? formatDiaV6_(dates[0])
+    : formatDiaV6_(cutoff);
+
+  const periodEnd = dates.length
+    ? formatDiaV6_(dates[dates.length - 1])
+    : formatDiaV6_(new Date());
+
+  return {
+    rows: dedup,
+    lastRow: lastRow,
+    sourceRowsScanned: Math.max(0, lastRow - 1),
+    periodStart: periodStart,
+    periodEnd: periodEnd,
+    periodLabel: periodStart + ' a ' + periodEnd
+  };
+}
+
+function lerMisscanFaixaLinhasV64_(sh, startRow, endRow) {
+  const out = [];
+
+  for (
+    let start = startRow;
+    start <= endRow;
+    start += V64_SCAN_CHUNK_SIZE
+  ) {
+    const count = Math.min(
+      V64_SCAN_CHUNK_SIZE,
+      endRow - start + 1
+    );
+
+    const values = sh
+      .getRange(start, 1, count, 14)
+      .getDisplayValues();
+
+    values.forEach(function(r) {
+      const dt = parseDataV6_(r[1]);
+      if (!dt) return;
+      if (normalizarSimNaoV6_(r[12]) !== 'SIM') return;
+
+      out.push(montarMisscanV64_(r, dt));
+    });
+  }
+
+  return out;
+}
+
+function montarMisscanV64_(r, dt) {
+  return {
+    shipment_id: String(r[0] || '').trim(),
+    lmreceived_date: formatDataV6_(dt, r[1]),
+    lmreceived_station: String(r[2] || '').trim(),
+    last_status: String(r[4] || '').trim(),
+    socpacked_tonumber: String(r[7] || '').trim(),
+    process_fail: String(r[9] || '').trim(),
+    operator_fail: String(r[10] || '').trim(),
+    to_mis_status: String(r[11] || '').trim(),
+    is_misscan: String(r[12] || '').trim()
+  };
+}
+
+function enviarHistoricoV64_(payload) {
+  const response = v6Fetch_('/api/sync', {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  const code = response.getResponseCode();
+  const text = response.getContentText();
+
+  if (code < 200 || code >= 300) {
+    throw new Error(
+      'Vercel /api/sync retornou ' + code + ': ' + text
+    );
+  }
+
+  const data = JSON.parse(text);
+
+  if (!data.ok) {
+    throw new Error(data.error || 'Falha ao sincronizar histórico V6.4.');
+  }
+
+  return data;
+}
+
+function agendarContinuacaoHistoricoV64_() {
+  removerGatilhosPorHandlerV64_('continuarHistoricoCompletoLMV64');
+
+  ScriptApp.newTrigger('continuarHistoricoCompletoLMV64')
+    .timeBased()
+    .after(60 * 1000)
+    .create();
+
+  Logger.log('Próximo lote do backfill V6.4 agendado para aproximadamente 1 minuto.');
+}
+
+function removerGatilhosPorHandlerV64_(handler) {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === handler) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}

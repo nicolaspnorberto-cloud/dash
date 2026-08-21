@@ -1141,7 +1141,16 @@ function syncPeriodControlsFromMeta(){
   if($('dateTo')) $('dateTo').value=state.dateTo||'';
 
   if($('periodSummary')) $('periodSummary').textContent=meta.periodLabel||'Período não definido';
-  if($('historyBounds')) $('historyBounds').textContent=`Histórico disponível: ${meta.historyLabel||'—'}`;
+  if($('historyBounds')){
+    const active=Number(meta.historyActiveDays||0);
+    const calendar=Number(meta.historyCalendarDays||0);
+    const backfill=meta.backfill||{};
+    const progress=backfill.status==='RUNNING' && Number.isFinite(Number(backfill.progressPct))
+      ? ` • carga ${Number(backfill.progressPct).toLocaleString('pt-BR')}%`
+      : '';
+    $('historyBounds').textContent=
+      `Histórico LM: ${meta.historyLabel||'—'}${active?` • ${fmtInt.format(active)} dias com Misscan`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${progress}`;
+  }
 }
 
 function applyPeriodFromControls(){
@@ -1226,7 +1235,7 @@ async function refreshLiveData({silent=false}={}){
 
   const btn=$('refreshDataBtn');
   if(btn)btn.disabled=true;
-  setLiveStatus('loading','Atualizando...','Consultando histórico da Matinal');
+  setLiveStatus('loading','Atualizando...','Consultando histórico dinâmico da LM');
 
   try{
     const response=await fetch(`/api/dados?${periodQuery()}&t=${Date.now()}`,{
@@ -1249,8 +1258,12 @@ async function refreshLiveData({silent=false}={}){
     loadMisscanRows(data.misscan||[]);
     loadTreatmentRows(liveTreatmentRows());
 
-    const generated=state.liveMeta.generatedAt
-      ?new Date(state.liveMeta.generatedAt).toLocaleString('pt-BR')
+    const syncStamp=
+      state.liveMeta.receivedAt||
+      state.liveMeta.updatedAt||
+      state.liveMeta.generatedAt;
+    const generated=syncStamp
+      ?new Date(syncStamp).toLocaleString('pt-BR')
       :new Date().toLocaleString('pt-BR');
 
     setLiveStatus('ok','Dados online',`Atualizado ${generated}`);
@@ -1270,9 +1283,23 @@ async function refreshLiveData({silent=false}={}){
         state.liveMeta.periodLabel||'período selecionado';
     }
 
+    if($('historySourceInfo')){
+      const active=Number(state.liveMeta.historyActiveDays||0);
+      const totalRows=Number(state.liveMeta.historyRows||0);
+      $('historySourceInfo').textContent=
+        `${state.liveMeta.historyLabel||'—'}${active?` • ${fmtInt.format(active)} dias`:''}${totalRows?` • ${fmtInt.format(totalRows)} BR históricos`:''}`;
+    }
+
     if($('dataNote')){
+      const active=Number(state.liveMeta.historyActiveDays||0);
+      const calendar=Number(state.liveMeta.historyCalendarDays||0);
+      const months=Number(state.liveMeta.historyMonths||state.liveMeta.months?.length||0);
+      const backfill=state.liveMeta.backfill||{};
+      const backfillText=backfill.status==='RUNNING'
+        ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
+        : '';
       $('dataNote').textContent=
-        `Histórico V6.1 ativo. ${fmtInt.format(state.raw.length)} BR únicos no período ${state.liveMeta?.periodLabel||'selecionado'}.`;
+        `Histórico LM dinâmico V6.4. ${fmtInt.format(state.raw.length)} BR únicos no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
   }catch(err){
     console.error(err);
