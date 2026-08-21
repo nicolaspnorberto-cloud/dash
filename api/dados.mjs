@@ -35,7 +35,10 @@ function resolvePeriod(url, meta) {
   const availableStart = meta?.historyStart || today;
   const availableEnd = meta?.historyEnd || today;
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(customFrom) && /^\d{4}-\d{2}-\d{2}$/.test(customTo)) {
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(customFrom) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(customTo)
+  ) {
     return {
       preset: 'CUSTOM',
       from: customFrom <= customTo ? customFrom : customTo,
@@ -46,12 +49,15 @@ function resolvePeriod(url, meta) {
   switch (preset) {
     case 'TODAY':
       return { preset, from: today, to: today };
+
     case 'YESTERDAY': {
       const y = addDays(today, -1);
       return { preset, from: y, to: y };
     }
+
     case 'CURRENT_WEEK':
       return { preset, from: mondayOf(today), to: today };
+
     case 'PREVIOUS_WEEK': {
       const currentMonday = mondayOf(today);
       return {
@@ -60,13 +66,24 @@ function resolvePeriod(url, meta) {
         to: addDays(currentMonday, -1)
       };
     }
+
     case 'LAST_30':
       return { preset, from: addDays(today, -29), to: today };
+
     case 'ALL':
-      return { preset, from: availableStart, to: availableEnd };
+      return {
+        preset,
+        from: availableStart,
+        to: availableEnd
+      };
+
     case 'LAST_7':
     default:
-      return { preset: 'LAST_7', from: addDays(today, -6), to: today };
+      return {
+        preset: 'LAST_7',
+        from: addDays(today, -6),
+        to: today
+      };
   }
 }
 
@@ -85,36 +102,67 @@ export async function GET(request) {
     if (!meta) {
       return json({
         ok: false,
-        error: 'Ainda não existe histórico sincronizado. Execute sincronizarDadosV61() no Apps Script.'
+        error: 'Ainda não existe histórico sincronizado. Execute sincronizarHistoricoCompletoLMV64() no Apps Script.'
+      }, 503);
+    }
+
+    if (!meta.historyStart || !meta.historyEnd) {
+      return json({
+        ok: false,
+        error: meta?.backfill?.status === 'RUNNING'
+          ? 'Backfill completo da LM em andamento. Aguarde a primeira etapa.'
+          : 'O índice histórico da LM está vazio.'
       }, 503);
     }
 
     const period = resolvePeriod(url, meta);
-    const months = monthsBetween(period.from, period.to);
+    const requestedMonths = monthsBetween(period.from, period.to);
 
-    if (months.length > 36) {
-      return json({
-        ok: false,
-        error: 'Período muito amplo. Selecione no máximo 36 meses por consulta.'
-      }, 400);
-    }
+    const indexed = new Set(
+      Array.isArray(meta?.months) ? meta.months : []
+    );
+
+    const months = requestedMonths.filter(
+      month => indexed.size === 0 || indexed.has(month)
+    );
 
     const rows = [];
 
     for (const month of months) {
-      const file = await readJson(`misscan/history/${month}.json`, { rows: [] });
+      const file = await readJson(
+        `misscan/history/${month}.json`,
+        { rows: [] }
+      );
+
       for (const row of (file?.rows || [])) {
         const dateKey = rowDateKey(row);
-        if (dateKey && dateKey >= period.from && dateKey <= period.to) rows.push(row);
+
+        if (
+          dateKey &&
+          dateKey >= period.from &&
+          dateKey <= period.to
+        ) {
+          rows.push(row);
+        }
       }
     }
 
-    const last = new Date(meta?.receivedAt || meta?.updatedAt || 0);
+    const last = new Date(
+      meta?.receivedAt ||
+      meta?.updatedAt ||
+      meta?.generatedAt ||
+      0
+    );
+
     const ageMinutes = Number.isFinite(last.getTime())
       ? Math.round((Date.now() - last.getTime()) / 60000)
       : null;
 
-    rows.sort((a, b) => String(a.lmreceived_date || '').localeCompare(String(b.lmreceived_date || '')));
+    rows.sort((a, b) =>
+      String(a.lmreceived_date || '').localeCompare(
+        String(b.lmreceived_date || '')
+      )
+    );
 
     return json({
       ok: true,
@@ -129,14 +177,17 @@ export async function GET(request) {
         periodEnd: period.to,
         periodLabel: `${formatBr(period.from)} a ${formatBr(period.to)}`,
         historyLabel: `${formatBr(meta.historyStart)} a ${formatBr(meta.historyEnd)}`,
-        returnedMisscanRecords: rows.length
+        returnedMisscanRecords: rows.length,
+        historyMonths: Array.isArray(meta.months) ? meta.months.length : 0
       }
     });
+
   } catch (error) {
-    console.error('MISSCAN_DATA_V61_ERROR', error);
+    console.error('MISSCAN_DATA_V64_ERROR', error);
+
     return json({
       ok: false,
-      error: error?.message || 'Falha ao ler o histórico.'
+      error: error?.message || 'Falha ao ler o histórico dinâmico da LM.'
     }, 500);
   }
 }

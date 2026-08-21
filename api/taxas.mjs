@@ -44,7 +44,8 @@ export async function GET(request){
 
     const missBy={T1:0,T2:0,T3:0};
     let unidentified=0,withoutHC=0;
-    const months=monthsBetween(start,end);
+    const indexedMonths=new Set(Array.isArray(histMeta.months)?histMeta.months:[]);
+    const months=monthsBetween(start,end).filter(month=>indexedMonths.size===0||indexedMonths.has(month));
     for(const month of months){
       const f=await readJson(`misscan/history/${month}.json`,{rows:[]});
       for(const row of (f.rows||[])){
@@ -93,7 +94,7 @@ export async function GET(request){
       daily
     });
   }catch(error){
-    console.error('TAXAS_V63_ERROR',error);
+    console.error('TAXAS_V64_ERROR',error);
     return json({ok:false,error:error?.message||'Falha ao calcular taxas automáticas.'},500);
   }
 }

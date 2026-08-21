@@ -42,28 +42,60 @@ function mergeRows(existingRows, incomingRows) {
     const dt = Date.parse(String(r?.lmreceived_date || '').replace(' ', 'T')) || 0;
     const current = map.get(key);
 
-    if (!current || score > current.__score || (score === current.__score && dt > current.__dt)) {
+    if (
+      !current ||
+      score > current.__score ||
+      (score === current.__score && dt > current.__dt)
+    ) {
       map.set(key, { ...r, __score: score, __dt: dt });
     }
   });
 
   return [...map.values()]
     .map(({ __score, __dt, ...r }) => r)
-    .sort((a, b) => String(a.lmreceived_date || '').localeCompare(String(b.lmreceived_date || '')));
+    .sort((a, b) =>
+      String(a.lmreceived_date || '').localeCompare(
+        String(b.lmreceived_date || '')
+      )
+    );
 }
 
-function bounds(rows) {
-  const dates = (rows || []).map(rowDateKey).filter(Boolean).sort();
-  return { start: dates[0] || '', end: dates.at(-1) || '' };
+function statsForRows(rows = []) {
+  const dateSet = new Set();
+  const dates = [];
+
+  for (const row of rows) {
+    const key = rowDateKey(row);
+    if (!key) continue;
+    dateSet.add(key);
+    dates.push(key);
+  }
+
+  dates.sort();
+
+  return {
+    rows: rows.length,
+    activeDays: dateSet.size,
+    start: dates[0] || '',
+    end: dates.at(-1) || ''
+  };
+}
+
+function daysInclusive(start, end) {
+  if (!start || !end) return 0;
+  const a = new Date(`${start}T12:00:00Z`);
+  const b = new Date(`${end}T12:00:00Z`);
+  if (!Number.isFinite(a.getTime()) || !Number.isFinite(b.getTime())) return 0;
+  return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
 }
 
 export async function GET() {
   return json({
     ok: true,
     route: '/api/sync',
-    version: '6.1',
+    version: '6.4',
     method: 'POST',
-    message: 'Sincronização incremental do histórico mensal.'
+    message: 'Sincronização incremental + histórico LM dinâmico.'
   });
 }
 
@@ -72,30 +104,57 @@ export async function POST(request) {
     assertSyncToken(request);
     const payload = await request.json();
 
-    if (!payload || !Array.isArray(payload.hc) || !Array.isArray(payload.misscan)) {
-      return json({ ok: false, error: 'Payload inválido: hc e misscan precisam ser arrays.' }, 400);
+    const hasHC = Array.isArray(payload?.hc);
+    const misscan = Array.isArray(payload?.misscan) ? payload.misscan : null;
+
+    if (!misscan) {
+      return json({
+        ok: false,
+        error: 'Payload inválido: misscan precisa ser um array.'
+      }, 400);
     }
 
-    if (payload.hc.length > 30000 || payload.misscan.length > 100000) {
-      return json({ ok: false, error: 'Payload acima do limite operacional esperado.' }, 413);
+    if ((hasHC && payload.hc.length > 30000) || misscan.length > 100000) {
+      return json({
+        ok: false,
+        error: 'Payload acima do limite operacional esperado.'
+      }, 413);
     }
 
     const now = new Date().toISOString();
 
-    await writeJson(HC_PATH, {
-      rows: payload.hc,
-      updatedAt: now,
-      source: payload?.meta?.hcSheet || 'Base de HC 26'
+    if (hasHC && payload?.meta?.updateHC !== false) {
+      await writeJson(HC_PATH, {
+        rows: payload.hc,
+        updatedAt: now,
+        source: payload?.meta?.hcSheet || 'Base de HC 26'
+      });
+    }
+
+    const previousMeta = await readJson(META_PATH, {
+      version: '6.4',
+      months: [],
+      monthStats: {},
+      historyStart: '',
+      historyEnd: '',
+      historyRows: 0,
+      historyActiveDays: 0,
+      historyCalendarDays: 0
     });
 
     const groups = new Map();
-    for (const row of payload.misscan) {
+
+    for (const row of misscan) {
       const dateKey = rowDateKey(row);
       const month = monthKeyFromDateKey(dateKey);
       if (!month) continue;
       if (!groups.has(month)) groups.set(month, []);
       groups.get(month).push(row);
     }
+
+    const monthStats = {
+      ...(previousMeta?.monthStats || {})
+    };
 
     const savedMonths = [];
     let totalMergedRows = 0;
@@ -104,37 +163,86 @@ export async function POST(request) {
       const path = `misscan/history/${month}.json`;
       const existing = await readJson(path, { rows: [] });
       const merged = mergeRows(existing?.rows || [], rows);
+      const stats = statsForRows(merged);
 
-      await writeJson(path, { month, rows: merged, updatedAt: now });
+      await writeJson(path, {
+        month,
+        rows: merged,
+        updatedAt: now,
+        stats
+      });
+
+      monthStats[month] = stats;
       savedMonths.push(month);
       totalMergedRows += merged.length;
     }
 
-    const previousMeta = await readJson(META_PATH, {
-      months: [],
-      historyStart: '',
-      historyEnd: ''
-    });
+    const legacyMonths = Array.isArray(previousMeta?.months)
+      ? previousMeta.months
+      : [];
 
-    const allMonths = [...new Set([...(previousMeta?.months || []), ...savedMonths])].sort();
-    const incomingBounds = bounds(payload.misscan);
+    const allMonths = [...new Set([
+      ...legacyMonths,
+      ...Object.keys(monthStats),
+      ...savedMonths
+    ])].sort();
 
-    const historyStart = [previousMeta?.historyStart, incomingBounds.start]
-      .filter(Boolean).sort()[0] || '';
+    const trackedStats = Object.values(monthStats)
+      .filter(x => x && typeof x === 'object');
 
-    const historyEnd = [previousMeta?.historyEnd, incomingBounds.end]
-      .filter(Boolean).sort().at(-1) || '';
+    const trackedStarts = trackedStats.map(x => x.start).filter(Boolean).sort();
+    const trackedEnds = trackedStats.map(x => x.end).filter(Boolean).sort();
+
+    const historyStart = [
+      previousMeta?.historyStart,
+      trackedStarts[0]
+    ].filter(Boolean).sort()[0] || '';
+
+    const historyEnd = [
+      previousMeta?.historyEnd,
+      trackedEnds.at(-1)
+    ].filter(Boolean).sort().at(-1) || '';
+
+    const statsRows = trackedStats.reduce(
+      (sum, x) => sum + Number(x.rows || 0),
+      0
+    );
+
+    const statsActiveDays = trackedStats.reduce(
+      (sum, x) => sum + Number(x.activeDays || 0),
+      0
+    );
+
+    const historyRows = Math.max(
+      Number(previousMeta?.historyRows || 0),
+      statsRows
+    );
+
+    const historyActiveDays = Math.max(
+      Number(previousMeta?.historyActiveDays || 0),
+      statsActiveDays
+    );
+
+    const historyCalendarDays = daysInclusive(historyStart, historyEnd);
 
     const meta = {
+      ...previousMeta,
       ...(payload.meta || {}),
-      architecture: 'PUSH_PRIVADO_V6_1_HISTORY',
+      version: '6.4',
+      architecture: 'PUSH_PRIVADO_V6_4_DYNAMIC_LM_HISTORY',
       receivedAt: now,
       updatedAt: now,
       historyStart,
       historyEnd,
+      historyRows,
+      historyActiveDays,
+      historyCalendarDays,
       months: allMonths,
-      hcRecords: payload.hc.length,
-      incomingMisscanRecords: payload.misscan.length
+      monthStats,
+      hcRecords: hasHC
+        ? payload.hc.length
+        : Number(previousMeta?.hcRecords || 0),
+      incomingMisscanRecords: misscan.length
     };
 
     await writeJson(META_PATH, meta);
@@ -142,21 +250,26 @@ export async function POST(request) {
     return json({
       ok: true,
       stored: true,
-      version: '6.1',
-      hcRecords: payload.hc.length,
-      incomingMisscanRecords: payload.misscan.length,
-      misscanRecords: payload.misscan.length,
+      version: '6.4',
+      hcRecords: meta.hcRecords,
+      incomingMisscanRecords: misscan.length,
+      misscanRecords: misscan.length,
       monthsUpdated: savedMonths,
       mergedRowsAcrossUpdatedMonths: totalMergedRows,
       historyStart,
       historyEnd,
-      receivedAt: now
+      historyRows,
+      historyActiveDays,
+      historyCalendarDays,
+      receivedAt: now,
+      backfill: meta.backfill || null
     });
+
   } catch (error) {
-    console.error('MISSCAN_SYNC_V61_ERROR', error);
+    console.error('MISSCAN_SYNC_V64_ERROR', error);
     return json({
       ok: false,
-      error: error?.message || 'Falha ao sincronizar histórico.'
+      error: error?.message || 'Falha ao sincronizar histórico V6.4.'
     }, error?.status || 500);
   }
 }

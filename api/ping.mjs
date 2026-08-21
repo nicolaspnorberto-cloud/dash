@@ -1,6 +1,21 @@
 import { json } from '../lib/blob-store.mjs';
-export async function GET(){return json({
-  ok:true,service:'misscan-v6.3',architecture:'apps-script-push + private-history + real-rate-engine',
-  features:['historico','filtro-data','calendarizacao-automatica','taxa-real-automatica','T4->T2','T5->T3','email-queue'],
-  route:'/api/ping',timestamp:new Date().toISOString()
-});}
+
+export async function GET() {
+  return json({
+    ok: true,
+    service: 'misscan-v6.4',
+    architecture: 'apps-script-push + dynamic-lm-history + isolated-syncs',
+    features: [
+      'historico-lm-completo',
+      'backfill-retomavel',
+      'incremental-sem-depender-da-ordem-da-LM',
+      'filtro-data',
+      'calendarizacao-independente',
+      'tratativas',
+      'email-queue',
+      'taxa-real-preparada'
+    ],
+    route: '/api/ping',
+    timestamp: new Date().toISOString()
+  });
+}
