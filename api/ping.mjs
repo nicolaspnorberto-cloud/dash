@@ -3,20 +3,17 @@ import { json } from '../lib/blob-store.mjs';
 export async function GET() {
   return json({
     ok: true,
-    service: 'misscan-v6.6',
-    version: '6.6',
-    architecture: 'apps-script-push + dynamic-lm-history + gerot + real-refresh-button',
+    service: 'misscan-v6.7',
+    version: '6.7',
+    architecture: 'vercel-private-queue + apps-script-polling',
     features: [
-      'historico-lm-dinamico',
-      'atualizar-agora-real',
-      'refresh-matinal-e-gerot',
-      'taxa-geral-forecast-inter-soc-total-f',
-      'blocos-historicos-packed-inter-soc',
+      'atualizar-agora-fila-privada',
+      'sem-apps-script-publico',
+      'matinal-lm',
+      'gerot',
       'target-0.88',
-      'tratativas',
       'email-queue'
     ],
-    route: '/api/ping',
     timestamp: new Date().toISOString()
   });
 }

@@ -1,40 +1,79 @@
-import { json } from '../lib/blob-store.mjs';
+import {
+  json,
+  readJson,
+  writeJson
+} from '../lib/blob-store.mjs';
 
-export async function GET() {
-  return json({
-    ok: true,
-    route: '/api/refresh-source',
-    version: '6.6',
-    configured: Boolean(
-      String(process.env.APPS_SCRIPT_REFRESH_URL || '').trim() &&
-      String(process.env.EMAIL_WEBHOOK_TOKEN || '').trim()
+const QUEUE_PATH = 'misscan/refresh-queue.json';
+const MAX_ITEMS = 80;
+const ACTIVE_TTL_MS = 8 * 60 * 1000;
+const COOLDOWN_MS = 20 * 1000;
+
+function uid() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function clean(items = []) {
+  return items
+    .sort((a, b) =>
+      String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
     )
-  });
+    .slice(-MAX_ITEMS);
+}
+
+export async function GET(request) {
+  try {
+    const url = new URL(request.url);
+    const requestId = String(
+      url.searchParams.get('requestId') || ''
+    ).trim();
+
+    if (!requestId) {
+      return json({
+        ok: true,
+        route: '/api/refresh-source',
+        version: '6.7',
+        mode: 'private-queue',
+        configured: Boolean(
+          String(process.env.EMAIL_WEBHOOK_TOKEN || '').trim()
+        ),
+        appsScriptPublicWebAppRequired: false,
+        pollInterval: '1 minute'
+      });
+    }
+
+    const queue = await readJson(
+      QUEUE_PATH,
+      { items: [] }
+    );
+
+    const item = (queue?.items || []).find(
+      x => String(x.id || '') === requestId
+    );
+
+    if (!item) {
+      return json({
+        ok: false,
+        requestId,
+        error: 'Pedido não encontrado.'
+      }, 404);
+    }
+
+    return json({
+      ok: true,
+      request: item
+    });
+
+  } catch (error) {
+    return json({
+      ok: false,
+      error: error?.message || 'Falha ao consultar pedido.'
+    }, 500);
+  }
 }
 
 export async function POST(request) {
   try {
-    const appsScriptUrl = String(
-      process.env.APPS_SCRIPT_REFRESH_URL || ''
-    ).trim();
-    const token = String(
-      process.env.EMAIL_WEBHOOK_TOKEN || ''
-    ).trim();
-
-    if (!appsScriptUrl) {
-      return json({
-        ok: false,
-        error: 'APPS_SCRIPT_REFRESH_URL não configurado na Vercel.'
-      }, 500);
-    }
-
-    if (!token) {
-      return json({
-        ok: false,
-        error: 'EMAIL_WEBHOOK_TOKEN não configurado na Vercel.'
-      }, 500);
-    }
-
     let body = {};
     try {
       body = await request.json();
@@ -46,69 +85,109 @@ export async function POST(request) {
       ? String(body.action || 'all').toLowerCase()
       : 'all';
 
-    const response = await fetch(appsScriptUrl, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'accept': 'application/json'
-      },
-      body: JSON.stringify({
-        token,
-        action,
-        source: 'dash-b52u'
-      })
+    const now = new Date();
+    const nowMs = now.getTime();
+
+    const queue = await readJson(
+      QUEUE_PATH,
+      { items: [] }
+    );
+
+    let items = clean(
+      Array.isArray(queue?.items)
+        ? queue.items
+        : []
+    );
+
+    const active = [...items].reverse().find(item => {
+      const status = String(
+        item.status || ''
+      ).toUpperCase();
+
+      const createdMs = Date.parse(
+        item.createdAt || 0
+      );
+
+      return (
+        ['PENDING', 'RUNNING'].includes(status) &&
+        Number.isFinite(createdMs) &&
+        nowMs - createdMs < ACTIVE_TTL_MS
+      );
     });
 
-    const text = await response.text();
-
-    let data = null;
-    try {
-      data = JSON.parse(text);
-    } catch {}
-
-    if (!response.ok) {
+    if (active) {
       return json({
-        ok: false,
-        error: `Apps Script Web App retornou HTTP ${response.status}.`,
-        preview: text.slice(0, 300)
-      }, 502);
+        ok: true,
+        accepted: true,
+        alreadyRunning: true,
+        requestId: active.id,
+        requestedAt: active.createdAt,
+        status: active.status,
+        mode: 'private-queue'
+      });
     }
 
-    if (!data) {
-      const looksLikeLogin = /<!doctype|<html|login|accounts\.google/i.test(text);
+    const latest = items.at(-1);
+    const latestMs = Date.parse(
+      latest?.createdAt || 0
+    );
+
+    if (
+      latest &&
+      Number.isFinite(latestMs) &&
+      nowMs - latestMs < COOLDOWN_MS
+    ) {
       return json({
-        ok: false,
-        error: looksLikeLogin
-          ? 'O Web App do Apps Script não está acessível anonimamente pela Vercel. Revise a implantação.'
-          : 'Resposta inesperada do Apps Script.',
-        preview: text.slice(0, 300)
-      }, 502);
+        ok: true,
+        accepted: true,
+        alreadyRunning: true,
+        requestId: latest.id,
+        requestedAt: latest.createdAt,
+        status: latest.status,
+        mode: 'private-queue'
+      });
     }
 
-    if (!data.ok) {
-      return json({
-        ok: false,
-        error: data.error || 'Apps Script recusou a atualização.'
-      }, 502);
-    }
+    const item = {
+      id: uid(),
+      action,
+      status: 'PENDING',
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      startedAt: '',
+      finishedAt: '',
+      result: null,
+      error: '',
+      source: 'dashboard'
+    };
+
+    items.push(item);
+    items = items.slice(-MAX_ITEMS);
+
+    await writeJson(QUEUE_PATH, {
+      updatedAt: now.toISOString(),
+      items
+    });
 
     return json({
       ok: true,
       accepted: true,
-      version: '6.6',
-      requestId: data.requestId || '',
-      requestedAt: data.requestedAt || new Date().toISOString(),
-      alreadyRunning: Boolean(data.alreadyRunning),
-      status: data.status || 'REQUESTED',
-      action
+      alreadyRunning: false,
+      requestId: item.id,
+      requestedAt: item.createdAt,
+      status: item.status,
+      mode: 'private-queue'
     });
 
   } catch (error) {
-    console.error('REFRESH_SOURCE_V66_ERROR', error);
+    console.error(
+      'REFRESH_SOURCE_V67_ERROR',
+      error
+    );
+
     return json({
       ok: false,
-      error: error?.message || 'Falha ao solicitar atualização real.'
+      error: error?.message || 'Falha ao criar pedido.'
     }, 500);
   }
 }
