@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.6 — atualizar agora real
+// MIS-SCAN CONTROL CENTER V6.7 — fila privada
 const state = {
   sourceRows: 0,
   raw: [],
@@ -1111,29 +1111,11 @@ function liveTreatmentRows(){
 }
 
 
-function sleepV66(ms){
+function sleepV67(ms){
   return new Promise(resolve=>setTimeout(resolve,ms));
 }
 
-async function readRefreshMetaV66(){
-  const [lmRes,gerotRes]=await Promise.all([
-    fetch(`/api/dados?${periodQuery()}&t=${Date.now()}`,{cache:'no-store'}),
-    fetch(`/api/calendarizacao?days=21&t=${Date.now()}`,{cache:'no-store'})
-  ]);
-
-  let lm={},gerot={};
-  try{lm=await lmRes.json()}catch{}
-  try{gerot=await gerotRes.json()}catch{}
-
-  return {
-    lmOk:lmRes.ok&&lm.ok,
-    lmReceivedAt:lm?.meta?.receivedAt||lm?.meta?.updatedAt||'',
-    gerotOk:gerotRes.ok&&gerot.ok,
-    gerotReceivedAt:gerot?.meta?.receivedAt||''
-  };
-}
-
-async function forceRefreshSourcesV66({silent=false}={}){
+async function forceRefreshSourcesV67({silent=false}={}){
   if(state.forceRefreshing)return;
   state.forceRefreshing=true;
 
@@ -1144,22 +1126,17 @@ async function forceRefreshSourcesV66({silent=false}={}){
 
   if(btn){
     btn.disabled=true;
-    btn.textContent='Sincronizando...';
+    btn.textContent='Solicitando...';
   }
   if(calBtn){
     calBtn.disabled=true;
-    calBtn.textContent='Sincronizando...';
+    calBtn.textContent='Solicitando...';
   }
 
   setLiveStatus(
     'loading',
-    'Sincronizando fontes...',
-    'Lendo Matinal/LM + GEROT nos servidores do Google'
-  );
-  renderCalendarSourceStatus(
-    'loading',
-    'Sincronizando GEROT...',
-    'Solicitação real enviada à fonte'
+    'Solicitando atualização...',
+    'Criando pedido na fila privada'
   );
 
   try{
@@ -1174,74 +1151,154 @@ async function forceRefreshSourcesV66({silent=false}={}){
     try{data=await res.json()}catch{}
 
     if(!res.ok||!data.ok){
-      throw new Error(data.error||`Falha ao solicitar atualização (${res.status}).`);
+      throw new Error(
+        data.error||
+        `Falha ao solicitar atualização (${res.status}).`
+      );
     }
 
-    const requestedMs=Date.parse(data.requestedAt||new Date().toISOString());
-    let lmReady=false;
-    let gerotReady=false;
+    const requestId=data.requestId;
+    if(!requestId){
+      throw new Error(
+        'Pedido criado sem requestId.'
+      );
+    }
 
-    // A execução ocorre no Apps Script. O dashboard espera até 2 minutos
-    // e detecta a chegada do novo receivedAt no Blob.
-    for(let attempt=1;attempt<=40;attempt++){
-      await sleepV66(3000);
+    if(btn)btn.textContent='Na fila...';
+    if(calBtn)calBtn.textContent='Na fila...';
 
-      const meta=await readRefreshMetaV66();
-      const lmMs=Date.parse(meta.lmReceivedAt||0);
-      const gerotMs=Date.parse(meta.gerotReceivedAt||0);
+    let finalRequest=null;
 
-      lmReady=meta.lmOk&&Number.isFinite(lmMs)&&lmMs>=requestedMs-2000;
-      gerotReady=meta.gerotOk&&Number.isFinite(gerotMs)&&gerotMs>=requestedMs-2000;
+    for(let attempt=1;attempt<=100;attempt++){
+      await sleepV67(3000);
 
-      const done=[];
-      if(lmReady)done.push('Matinal');
-      if(gerotReady)done.push('GEROT');
-
-      setLiveStatus(
-        'loading',
-        'Sincronizando fontes...',
-        done.length
-          ? `${done.join(' + ')} atualizado(s) • aguardando conclusão`
-          : `Processando Matinal + GEROT • ${attempt*3}s`
+      const statusRes=await fetch(
+        `/api/refresh-source?requestId=${encodeURIComponent(requestId)}&t=${Date.now()}`,
+        {cache:'no-store'}
       );
 
-      if(lmReady&&gerotReady)break;
+      let statusData={};
+      try{statusData=await statusRes.json()}catch{}
+
+      if(!statusRes.ok||!statusData.ok){
+        continue;
+      }
+
+      const req=statusData.request||{};
+      finalRequest=req;
+      const status=String(
+        req.status||'PENDING'
+      ).toUpperCase();
+
+      if(status==='PENDING'){
+        setLiveStatus(
+          'loading',
+          'Atualização na fila...',
+          'Apps Script consulta a fila a cada 1 minuto'
+        );
+        if(btn)btn.textContent='Na fila...';
+        if(calBtn)calBtn.textContent='Na fila...';
+      }
+
+      if(status==='RUNNING'){
+        setLiveStatus(
+          'loading',
+          'Sincronizando fontes...',
+          'Lendo Matinal/LM + GEROT'
+        );
+        if(btn)btn.textContent='Sincronizando...';
+        if(calBtn)calBtn.textContent='Sincronizando...';
+      }
+
+      if(
+        ['DONE','PARTIAL','ERROR'].includes(status)
+      ){
+        break;
+      }
     }
 
-    // Recarrega tudo que acabou de chegar ao Blob.
-    await refreshLiveData({silent:true});
-    await refreshCalendarizationV65({silent:true});
+    const finalStatus=String(
+      finalRequest?.status||''
+    ).toUpperCase();
 
-    if(lmReady&&gerotReady){
-      setLiveStatus(
-        'ok',
-        'Dados online',
-        `Sincronização real concluída ${new Date().toLocaleString('pt-BR')}`
+    if(
+      ['DONE','PARTIAL'].includes(finalStatus)
+    ){
+      await refreshLiveData({silent:true});
+      await refreshCalendarizationV65({silent:true});
+
+      const result=finalRequest?.result||{};
+      const lm=result.lm||'';
+      const gerot=result.gerot||'';
+
+      if(finalStatus==='DONE'){
+        setLiveStatus(
+          'ok',
+          'Dados online',
+          `Matinal + GEROT sincronizados ${new Date().toLocaleString('pt-BR')}`
+        );
+      }else{
+        setLiveStatus(
+          'loading',
+          'Atualização parcial',
+          `Matinal: ${lm} • GEROT: ${gerot}`
+        );
+
+        if(!silent){
+          alert(
+            'A atualização terminou parcialmente.\n'+
+            `Matinal: ${lm}\n`+
+            `GEROT: ${gerot}\n`+
+            (finalRequest?.error||'')
+          );
+        }
+      }
+
+    }else if(finalStatus==='ERROR'){
+      throw new Error(
+        finalRequest?.error||
+        'Apps Script não conseguiu atualizar.'
       );
     }else{
       setLiveStatus(
         'loading',
-        'Atualização em processamento',
-        'A solicitação foi enviada; a fonte ainda está concluindo.'
+        'Atualização ainda na fila',
+        'O pedido continua ativo.'
       );
+
       if(!silent){
         alert(
-          'A atualização foi solicitada, mas ainda está processando no Apps Script. '+
-          'A tela continuará recebendo os dados quando a sincronização terminar.'
+          'O pedido foi criado e continua na fila. '+
+          'O Apps Script processa automaticamente.'
         );
       }
     }
 
   }catch(err){
-    console.error('Atualizar agora V6.6',err);
-    setLiveStatus('error','Falha ao sincronizar fontes',err.message);
-    if(!silent)alert(`Falha no Atualizar agora:\n${err.message}`);
+    console.error(
+      'Atualizar agora V6.7',
+      err
+    );
+
+    setLiveStatus(
+      'error',
+      'Falha ao atualizar',
+      err.message
+    );
+
+    if(!silent){
+      alert(
+        `Falha no Atualizar agora:\n${err.message}`
+      );
+    }
   }finally{
     state.forceRefreshing=false;
+
     if(btn){
       btn.disabled=false;
       btn.textContent=oldBtnText;
     }
+
     if(calBtn){
       calBtn.disabled=false;
       calBtn.textContent=oldCalText;
@@ -1341,7 +1398,7 @@ async function boot(){
   await refreshCalendarizationV65({silent:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
-  $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV66({silent:false}));
+  $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV67({silent:false}));
   $('applyPeriodBtn').addEventListener('click',applyPeriodFromControls);
   $('datePreset').addEventListener('change',()=>{
     state.datePreset=$('datePreset').value;
@@ -1373,7 +1430,7 @@ async function boot(){
   const sigCanvas=$('signatureCanvas');['pointerdown'].forEach(ev=>sigCanvas.addEventListener(ev,sigStart));['pointermove'].forEach(ev=>sigCanvas.addEventListener(ev,sigMove));['pointerup','pointercancel','pointerleave'].forEach(ev=>sigCanvas.addEventListener(ev,sigEnd));
   $('clearSignatureBtn').addEventListener('click',clearSignature);$('saveSignatureBtn').addEventListener('click',saveSignature);
 
-  $('refreshCalendarBtn').addEventListener('click',()=>forceRefreshSourcesV66({silent:false}));
+  $('refreshCalendarBtn').addEventListener('click',()=>forceRefreshSourcesV67({silent:false}));
   document.querySelectorAll('.rate-window-btn').forEach(b=>b.addEventListener('click',()=>{
     state.rateWindowDays=Number(b.dataset.days)||14;
     saveCalendarPreferences();

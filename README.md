@@ -66,3 +66,10 @@ V6.6
 - Requer Apps Script Web App e `APPS_SCRIPT_REFRESH_URL` na Vercel.
 - Taxa geral diária passa a usar `db_volume_forecast`, `INTER-SOC`, `Total (F)`.
 - O clique faz sync rápido dos últimos 3 dias da LM para trazer hoje/ontem.
+
+
+V6.7
+- Atualizar agora via fila privada.
+- Sem Apps Script Web App público.
+- Apps Script consulta pedidos a cada 1 minuto.
+- Nova rota protegida /api/refresh-queue.
