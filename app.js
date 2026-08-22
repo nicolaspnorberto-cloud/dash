@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.7 — fila privada
+// MIS-SCAN CONTROL CENTER V6.8 — LM exata por data
 const state = {
   sourceRows: 0,
   raw: [],
@@ -166,7 +166,9 @@ function enrich(r){
 function dedupeBR(rows){
   const map=new Map();
   rows.forEach(r=>{
-    const key=String(r.shipment_id||'').trim()||`ROW_${map.size}`;
+    const dateKey=String(r.lmreceived_date||'').slice(0,10);
+    const shipment=String(r.shipment_id||'').trim();
+    const key=shipment?`${dateKey}|${shipment}`:`${dateKey}|ROW_${map.size}`;
     const score=(r.responsabilidade!=='NA'?10:0)+(r.identificacao==='IDENTIFICADO'?4:0)+(r.process_fail?2:0)+(r.to_mis_status?1:0);
     const dt=Date.parse(r.lmreceived_date||'')||0;
     const current=map.get(key);
@@ -1144,7 +1146,7 @@ async function forceRefreshSourcesV67({silent=false}={}){
       method:'POST',
       cache:'no-store',
       headers:{'content-type':'application/json'},
-      body:JSON.stringify({action:'all'})
+      body:JSON.stringify({action:'all',from:state.dateFrom||'',to:state.dateTo||''})
     });
 
     let data={};
@@ -1232,10 +1234,11 @@ async function forceRefreshSourcesV67({silent=false}={}){
       const gerot=result.gerot||'';
 
       if(finalStatus==='DONE'){
+        const uniqueLm=Number(result?.lmStats?.uniqueRows||0);
         setLiveStatus(
           'ok',
           'Dados online',
-          `Matinal + GEROT sincronizados ${new Date().toLocaleString('pt-BR')}`
+          `${uniqueLm?`${fmtInt.format(uniqueLm)} BR únicos • `:''}Matinal + GEROT sincronizados ${new Date().toLocaleString('pt-BR')}`
         );
       }else{
         setLiveStatus(

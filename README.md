@@ -73,3 +73,10 @@ V6.7
 - Sem Apps Script Web App público.
 - Apps Script consulta pedidos a cada 1 minuto.
 - Nova rota protegida /api/refresh-queue.
+
+
+V6.8
+- LM por snapshot integral da data.
+- Deduplicação data + shipment_id.
+- Atualizar agora envia o período selecionado.
+- Substitui snapshots parciais no Blob.
