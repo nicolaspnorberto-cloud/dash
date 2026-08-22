@@ -45,3 +45,10 @@ Detalhes: `V65_CONFIGURACAO.md`.
 HOTFIX V6.5.1
 - Corrige erro de frontend `Cannot set properties of null (setting textContent)`.
 - Apps Script V6.5 permanece válido; não precisa reinstalar gatilhos.
+
+
+HOTFIX V6.5.2
+- Forecast da Calendarização passa a usar somente `origin_type = INTER-SOC`.
+- Volume diário = `Total` da coluna F da linha INTER-SOC.
+- Não soma FMH, FULL, PUDO SVP, BIG SELLER ou demais origens.
+- Exemplo de validação: 13/08/2026 = 205.541.
