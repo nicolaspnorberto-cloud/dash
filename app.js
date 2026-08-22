@@ -1,3 +1,4 @@
+// MIS-SCAN CONTROL CENTER V6.5.1 — hotfix frontend
 const state = {
   sourceRows: 0,
   raw: [],
@@ -273,8 +274,10 @@ function hcPendingRows(){
 }
 
 function renderPending(){
+  const body=$('pendingBody');
+  if(!body)return;
   const rows=hcPendingRows();
-  $('pendingBody').innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td>${fmtInt.format(x.br.size)}</td><td><span class="tag ${x.status==='Ambíguo'?'tag-ambiguous':'tag-pending'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.turno)}</td><td>${escapeHtml(x.setor)}</td><td>${escapeHtml(x.lider)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Nenhuma pendência de HC nos filtros atuais.</td></tr>';
+  body.innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td>${fmtInt.format(x.br.size)}</td><td><span class="tag ${x.status==='Ambíguo'?'tag-ambiguous':'tag-pending'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.turno)}</td><td>${escapeHtml(x.setor)}</td><td>${escapeHtml(x.lider)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Nenhuma pendência de HC nos filtros atuais.</td></tr>';
 }
 
 function leaderSummary(){
@@ -289,8 +292,10 @@ function leaderSummary(){
 }
 
 function renderLeaders(){
+  const body=$('leaderBody');
+  if(!body)return;
   const rows=leaderSummary();
-  $('leaderBody').innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.leader)}</strong></td><td>${fmtInt.format(x.br.size)}</td><td>${fmtInt.format(x.to.size)}</td><td>${fmtInt.format(x.ops.size)}</td><td>${fmtInt.format(x.esteira.size)}</td><td>${fmtInt.format(x.exp.size)}</td><td>${escapeHtml([...x.turnos].sort().join(', '))}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Sem liderança para exibir.</td></tr>';
+  body.innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.leader)}</strong></td><td>${fmtInt.format(x.br.size)}</td><td>${fmtInt.format(x.to.size)}</td><td>${fmtInt.format(x.ops.size)}</td><td>${fmtInt.format(x.esteira.size)}</td><td>${fmtInt.format(x.exp.size)}</td><td>${escapeHtml([...x.turnos].sort().join(', '))}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Sem liderança para exibir.</td></tr>';
 }
 
 function renderKPIs(){
@@ -305,7 +310,6 @@ function renderKPIs(){
   $('pEsteira').textContent=total?fmtPct(est/total*100):'—';$('pExpedicao').textContent=total?fmtPct(exp/total*100):'—';$('pUnidentified').textContent=total?fmtPct(unidentified/total*100):'—';
   const dates=state.filtered.map(r=>String(r.lmreceived_date||'').slice(0,10)).filter(Boolean).sort();
   $('kDate').textContent=dates.length?`${dates[0].split('-').reverse().join('/')} ${dates.at(-1)!==dates[0]?'→ '+dates.at(-1).split('-').reverse().join('/'):''}`:'sem data';
-  $('projMisscan').textContent=fmtInt.format(total);
 }
 
 function renderAll(){

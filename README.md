@@ -40,3 +40,8 @@ Target Misscan fixo: **0,88%**.
 8. Executar `instalarAutomacoesV65`.
 
 Detalhes: `V65_CONFIGURACAO.md`.
+
+
+HOTFIX V6.5.1
+- Corrige erro de frontend `Cannot set properties of null (setting textContent)`.
+- Apps Script V6.5 permanece válido; não precisa reinstalar gatilhos.
