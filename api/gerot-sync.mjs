@@ -48,7 +48,7 @@ export async function GET() {
   return json({
     ok: true,
     route: '/api/gerot-sync',
-    version: '6.5.2',
+    version: '6.5.3',
     method: 'POST',
     targetMisscan: TARGET
   });
@@ -70,14 +70,14 @@ export async function POST(request) {
 
     const stored = {
       ok: true,
-      version: '6.5.2',
+      version: '6.5.3',
       targetMisscan: TARGET,
       processed,
       forecast,
       meta: {
         ...(payload.meta || {}),
         source: 'GEROT - MG4',
-        processedSource: 'db_volume_overall • SOC_Packed',
+        processedSource: 'db_volume_overall • Inter-SOC • SOC_Packed',
         forecastSource: 'db_volume_forecast • INTER-SOC • Total (F)',
         processedStart: processedBounds.start,
         processedEnd: processedBounds.end,
@@ -94,7 +94,7 @@ export async function POST(request) {
     return json({
       ok: true,
       stored: true,
-      version: '6.5.2',
+      version: '6.5.3',
       processedRows: processed.length,
       forecastRows: forecast.length,
       processedStart: processedBounds.start,

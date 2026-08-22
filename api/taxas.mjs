@@ -186,7 +186,7 @@ export async function GET(request) {
 
     return json({
       ok: true,
-      version: '6.5',
+      version: '6.5.3',
       days,
       start,
       end,
@@ -204,7 +204,7 @@ export async function GET(request) {
         pendingMisscanNoProcessed
       },
       mapping: { T1: 'T1', T2: 'T2 + T4', T3: 'T3 + T5', T4: 'T2', T5: 'T3' },
-      source: 'GEROT - MG4 • db_volume_overall • SOC_Packed',
+      source: 'GEROT - MG4 • db_volume_overall • Inter-SOC • SOC_Packed',
       productionMeta: gerot.meta || {},
       misscanMeta: { historyStart: histMeta.historyStart, historyEnd: histMeta.historyEnd },
       daily,

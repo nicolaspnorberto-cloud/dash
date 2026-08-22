@@ -3,7 +3,7 @@ import { json } from '../lib/blob-store.mjs';
 export async function GET() {
   return json({
     ok: true,
-    service: 'misscan-v6.5.2.2',
+    service: 'misscan-v6.5.3.2',
     architecture: 'lm-history + gerot-packed + gerot-forecast + isolated-syncs',
     features: [
       'historico-lm-dinamico',
