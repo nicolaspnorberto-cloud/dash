@@ -30,6 +30,7 @@ function cleanForecast(rows = []) {
       date,
       week: String(row?.week || ''),
       destination: String(row?.destination || 'SOC-MG4'),
+      originType: String(row?.originType || 'INTER-SOC'),
       total: Math.max(0, Number(row?.total || 0)),
       direct: Math.max(0, Number(row?.direct || 0)),
       transhipment: Math.max(0, Number(row?.transhipment || 0))
@@ -47,7 +48,7 @@ export async function GET() {
   return json({
     ok: true,
     route: '/api/gerot-sync',
-    version: '6.5',
+    version: '6.5.2',
     method: 'POST',
     targetMisscan: TARGET
   });
@@ -69,7 +70,7 @@ export async function POST(request) {
 
     const stored = {
       ok: true,
-      version: '6.5',
+      version: '6.5.2',
       targetMisscan: TARGET,
       processed,
       forecast,
@@ -77,7 +78,7 @@ export async function POST(request) {
         ...(payload.meta || {}),
         source: 'GEROT - MG4',
         processedSource: 'db_volume_overall • SOC_Packed',
-        forecastSource: 'db_volume_forecast • Total',
+        forecastSource: 'db_volume_forecast • INTER-SOC • Total (F)',
         processedStart: processedBounds.start,
         processedEnd: processedBounds.end,
         forecastStart: forecastBounds.start,
@@ -93,7 +94,7 @@ export async function POST(request) {
     return json({
       ok: true,
       stored: true,
-      version: '6.5',
+      version: '6.5.2',
       processedRows: processed.length,
       forecastRows: forecast.length,
       processedStart: processedBounds.start,

@@ -39,10 +39,11 @@ export async function GET(request) {
       .map(r => ({
         id: `GEROT_${r.date}`,
         source: 'GEROT',
-        sourceLabel: 'GEROT • db_volume_forecast • Total',
+        sourceLabel: 'GEROT • db_volume_forecast • INTER-SOC • Total',
         date: r.date,
         week: r.week || '',
         volume: Number(r.total || 0),
+        originType: String(r.originType || 'INTER-SOC'),
         total: Number(r.total || 0),
         direct: Number(r.direct || 0),
         transhipment: Number(r.transhipment || 0)
@@ -50,7 +51,7 @@ export async function GET(request) {
 
     return json({
       ok: true,
-      version: '6.5',
+      version: '6.5.2',
       targetMisscan: TARGET,
       rows,
       meta: {
@@ -61,6 +62,7 @@ export async function GET(request) {
         source: 'GEROT - MG4',
         sourceSheet: 'db_volume_forecast',
         sourceColumn: 'Total (F)',
+        sourceOriginType: 'INTER-SOC',
         daysRequested: days
       }
     });
