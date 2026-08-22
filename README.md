@@ -52,3 +52,9 @@ HOTFIX V6.5.2
 - Volume diário = `Total` da coluna F da linha INTER-SOC.
 - Não soma FMH, FULL, PUDO SVP, BIG SELLER ou demais origens.
 - Exemplo de validação: 13/08/2026 = 205.541.
+
+
+HOTFIX V6.5.3
+- Corrige o histórico REAL: SOC_Packed agora usa somente previous_station_type = Inter-SOC.
+- Forecast continua usando somente origin_type = INTER-SOC e Total da coluna F.
+- Exemplo 13/08/2026: REAL = 205.809; Forecast = 205.541.
