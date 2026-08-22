@@ -3,16 +3,16 @@ import { json } from '../lib/blob-store.mjs';
 export async function GET() {
   return json({
     ok: true,
-    service: 'misscan-v6.5.3.2',
-    architecture: 'lm-history + gerot-packed + gerot-forecast + isolated-syncs',
+    service: 'misscan-v6.6',
+    version: '6.6',
+    architecture: 'apps-script-push + dynamic-lm-history + gerot + real-refresh-button',
     features: [
       'historico-lm-dinamico',
-      'soc-packed-diario-por-turno',
-      'taxa-historica-dia-com-dia',
-      'forecast-diario-gerot-total-coluna-f',
-      'target-fixo-0.88',
-      'blocos-somente-historico',
-      'calendarizacao-diaria',
+      'atualizar-agora-real',
+      'refresh-matinal-e-gerot',
+      'taxa-geral-forecast-inter-soc-total-f',
+      'blocos-historicos-packed-inter-soc',
+      'target-0.88',
       'tratativas',
       'email-queue'
     ],

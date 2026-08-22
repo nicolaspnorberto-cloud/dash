@@ -48,7 +48,7 @@ export async function GET() {
   return json({
     ok: true,
     route: '/api/gerot-sync',
-    version: '6.5.3',
+    version: '6.6',
     method: 'POST',
     targetMisscan: TARGET
   });
@@ -70,7 +70,7 @@ export async function POST(request) {
 
     const stored = {
       ok: true,
-      version: '6.5.3',
+      version: '6.6',
       targetMisscan: TARGET,
       processed,
       forecast,
@@ -94,7 +94,7 @@ export async function POST(request) {
     return json({
       ok: true,
       stored: true,
-      version: '6.5.3',
+      version: '6.6',
       processedRows: processed.length,
       forecastRows: forecast.length,
       processedStart: processedBounds.start,

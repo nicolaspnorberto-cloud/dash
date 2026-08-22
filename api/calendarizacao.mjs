@@ -51,7 +51,7 @@ export async function GET(request) {
 
     return json({
       ok: true,
-      version: '6.5.3',
+      version: '6.6',
       targetMisscan: TARGET,
       rows,
       meta: {
