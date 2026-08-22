@@ -58,3 +58,11 @@ HOTFIX V6.5.3
 - Corrige o histórico REAL: SOC_Packed agora usa somente previous_station_type = Inter-SOC.
 - Forecast continua usando somente origin_type = INTER-SOC e Total da coluna F.
 - Exemplo 13/08/2026: REAL = 205.809; Forecast = 205.541.
+
+
+V6.6
+- `Atualizar agora` passa a sincronizar Matinal/LM + GEROT de verdade.
+- Nova API `/api/refresh-source`.
+- Requer Apps Script Web App e `APPS_SCRIPT_REFRESH_URL` na Vercel.
+- Taxa geral diária passa a usar `db_volume_forecast`, `INTER-SOC`, `Total (F)`.
+- O clique faz sync rápido dos últimos 3 dias da LM para trazer hoje/ontem.

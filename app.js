@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.5.1 — hotfix frontend
+// MIS-SCAN CONTROL CENTER V6.6 — atualizar agora real
 const state = {
   sourceRows: 0,
   raw: [],
@@ -22,6 +22,7 @@ const state = {
   treatmentFiltered: [],
   liveMeta: null,
   liveRefreshing: false,
+  forceRefreshing: false,
   datePreset: 'LAST_7',
   dateFrom: '',
   dateTo: ''
@@ -808,7 +809,7 @@ function renderAutoRates(){
   if($('autoRateGeneral')) $('autoRateGeneral').textContent=g&&Number.isFinite(g.rate)?fmtPct(g.rate):'—';
   if($('autoRateGeneralDetail')){
     $('autoRateGeneralDetail').textContent=g
-      ?`${fmtInt.format(g.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(g.volumeReal||0))} SOC_Packed`
+      ?`${fmtInt.format(g.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(g.volumeReal||0))} Forecast INTER-SOC`
       :'Aguardando histórico';
   }
 
@@ -816,8 +817,8 @@ function renderAutoRates(){
     const m=state.autoRateMeta||{};
     const pending=Number(m.general?.pendingMisscanNoProcessed||0);
     $('autoRateMeta').textContent=m.periodLabel
-      ?`Base ${m.days} dias • ${m.periodLabel} • GEROT SOC_Packed + Matinal/LM${pending?` • ${fmtInt.format(pending)} Misscan aguardando processado`:''}`
-      :'Fonte: Matinal/LM + GEROT db_volume_overall • SOC_Packed';
+      ?`Base ${m.days} dias • ${m.periodLabel} • Matinal/LM ÷ Forecast INTER-SOC Total (F)${pending?` • ${fmtInt.format(pending)} Misscan sem volume do dia`:''}`
+      :'Fonte: Matinal/LM + GEROT db_volume_forecast • INTER-SOC • Total (F)';
   }
 
   updateRateWindowButtons();
@@ -887,7 +888,7 @@ function renderCalendarHistory(){
       <td>${fmtInt.format(Math.round(t3))}</td>
       <td><span class="tag ${risk.cls}">${risk.label}</span></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="9" class="empty">Ainda não há casamento diário entre Matinal e SOC_Packed.</td></tr>';
+  }).join('')||'<tr><td colspan="9" class="empty">Ainda não há casamento diário entre Matinal e Forecast INTER-SOC.</td></tr>';
 }
 
 function renderCalendarWeeks(){
@@ -969,7 +970,7 @@ async function loadCalendarizationAuto({silent=true}={}){
     renderCalendarSourceStatus(
       'ok',
       `${state.forecastAuto.length} dia(s) planejado(s) • GEROT`,
-      `db_volume_forecast • Total (F) • atualizado ${updated}`
+      `db_volume_forecast • INTER-SOC • Total (F) • atualizado ${updated}`
     );
     renderForecastTable();
     renderProjection();
@@ -1109,6 +1110,145 @@ function liveTreatmentRows(){
   });
 }
 
+
+function sleepV66(ms){
+  return new Promise(resolve=>setTimeout(resolve,ms));
+}
+
+async function readRefreshMetaV66(){
+  const [lmRes,gerotRes]=await Promise.all([
+    fetch(`/api/dados?${periodQuery()}&t=${Date.now()}`,{cache:'no-store'}),
+    fetch(`/api/calendarizacao?days=21&t=${Date.now()}`,{cache:'no-store'})
+  ]);
+
+  let lm={},gerot={};
+  try{lm=await lmRes.json()}catch{}
+  try{gerot=await gerotRes.json()}catch{}
+
+  return {
+    lmOk:lmRes.ok&&lm.ok,
+    lmReceivedAt:lm?.meta?.receivedAt||lm?.meta?.updatedAt||'',
+    gerotOk:gerotRes.ok&&gerot.ok,
+    gerotReceivedAt:gerot?.meta?.receivedAt||''
+  };
+}
+
+async function forceRefreshSourcesV66({silent=false}={}){
+  if(state.forceRefreshing)return;
+  state.forceRefreshing=true;
+
+  const btn=$('refreshDataBtn');
+  const calBtn=$('refreshCalendarBtn');
+  const oldBtnText=btn?.textContent||'Atualizar agora';
+  const oldCalText=calBtn?.textContent||'Atualizar Calendarização';
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Sincronizando...';
+  }
+  if(calBtn){
+    calBtn.disabled=true;
+    calBtn.textContent='Sincronizando...';
+  }
+
+  setLiveStatus(
+    'loading',
+    'Sincronizando fontes...',
+    'Lendo Matinal/LM + GEROT nos servidores do Google'
+  );
+  renderCalendarSourceStatus(
+    'loading',
+    'Sincronizando GEROT...',
+    'Solicitação real enviada à fonte'
+  );
+
+  try{
+    const res=await fetch('/api/refresh-source',{
+      method:'POST',
+      cache:'no-store',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({action:'all'})
+    });
+
+    let data={};
+    try{data=await res.json()}catch{}
+
+    if(!res.ok||!data.ok){
+      throw new Error(data.error||`Falha ao solicitar atualização (${res.status}).`);
+    }
+
+    const requestedMs=Date.parse(data.requestedAt||new Date().toISOString());
+    let lmReady=false;
+    let gerotReady=false;
+
+    // A execução ocorre no Apps Script. O dashboard espera até 2 minutos
+    // e detecta a chegada do novo receivedAt no Blob.
+    for(let attempt=1;attempt<=40;attempt++){
+      await sleepV66(3000);
+
+      const meta=await readRefreshMetaV66();
+      const lmMs=Date.parse(meta.lmReceivedAt||0);
+      const gerotMs=Date.parse(meta.gerotReceivedAt||0);
+
+      lmReady=meta.lmOk&&Number.isFinite(lmMs)&&lmMs>=requestedMs-2000;
+      gerotReady=meta.gerotOk&&Number.isFinite(gerotMs)&&gerotMs>=requestedMs-2000;
+
+      const done=[];
+      if(lmReady)done.push('Matinal');
+      if(gerotReady)done.push('GEROT');
+
+      setLiveStatus(
+        'loading',
+        'Sincronizando fontes...',
+        done.length
+          ? `${done.join(' + ')} atualizado(s) • aguardando conclusão`
+          : `Processando Matinal + GEROT • ${attempt*3}s`
+      );
+
+      if(lmReady&&gerotReady)break;
+    }
+
+    // Recarrega tudo que acabou de chegar ao Blob.
+    await refreshLiveData({silent:true});
+    await refreshCalendarizationV65({silent:true});
+
+    if(lmReady&&gerotReady){
+      setLiveStatus(
+        'ok',
+        'Dados online',
+        `Sincronização real concluída ${new Date().toLocaleString('pt-BR')}`
+      );
+    }else{
+      setLiveStatus(
+        'loading',
+        'Atualização em processamento',
+        'A solicitação foi enviada; a fonte ainda está concluindo.'
+      );
+      if(!silent){
+        alert(
+          'A atualização foi solicitada, mas ainda está processando no Apps Script. '+
+          'A tela continuará recebendo os dados quando a sincronização terminar.'
+        );
+      }
+    }
+
+  }catch(err){
+    console.error('Atualizar agora V6.6',err);
+    setLiveStatus('error','Falha ao sincronizar fontes',err.message);
+    if(!silent)alert(`Falha no Atualizar agora:\n${err.message}`);
+  }finally{
+    state.forceRefreshing=false;
+    if(btn){
+      btn.disabled=false;
+      btn.textContent=oldBtnText;
+    }
+    if(calBtn){
+      calBtn.disabled=false;
+      calBtn.textContent=oldCalText;
+    }
+  }
+}
+
 async function refreshLiveData({silent=false}={}){
   if(state.liveRefreshing)return;
   state.liveRefreshing=true;
@@ -1201,7 +1341,7 @@ async function boot(){
   await refreshCalendarizationV65({silent:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
-  $('refreshDataBtn').addEventListener('click',()=>refreshLiveData({silent:false}));
+  $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV66({silent:false}));
   $('applyPeriodBtn').addEventListener('click',applyPeriodFromControls);
   $('datePreset').addEventListener('change',()=>{
     state.datePreset=$('datePreset').value;
@@ -1233,7 +1373,7 @@ async function boot(){
   const sigCanvas=$('signatureCanvas');['pointerdown'].forEach(ev=>sigCanvas.addEventListener(ev,sigStart));['pointermove'].forEach(ev=>sigCanvas.addEventListener(ev,sigMove));['pointerup','pointercancel','pointerleave'].forEach(ev=>sigCanvas.addEventListener(ev,sigEnd));
   $('clearSignatureBtn').addEventListener('click',clearSignature);$('saveSignatureBtn').addEventListener('click',saveSignature);
 
-  $('refreshCalendarBtn').addEventListener('click',()=>refreshCalendarizationV65({silent:false}));
+  $('refreshCalendarBtn').addEventListener('click',()=>forceRefreshSourcesV66({silent:false}));
   document.querySelectorAll('.rate-window-btn').forEach(b=>b.addEventListener('click',()=>{
     state.rateWindowDays=Number(b.dataset.days)||14;
     saveCalendarPreferences();

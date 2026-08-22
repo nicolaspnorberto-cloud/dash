@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas • Calendarização GEROT V6.5.3.2</div>
+        <div class="subtitle">Produtividade • Tratativas • Calendarização GEROT V6.6.2</div>
       </div>
     </div>
     <div class="header-actions">
@@ -251,10 +251,10 @@
     <section id="calendarizacao" class="view">
       <div class="projection-hero">
         <div>
-          <span class="eyebrow">CALENDARIZAÇÃO V6.5</span>
+          <span class="eyebrow">CALENDARIZAÇÃO V6.6</span>
           <h1>Forecast diário × histórico real de Misscan</h1>
           <p>
-            O histórico casa <strong>dia com dia</strong> a Matinal/LM com o <strong>SOC_Packed</strong> da GEROT.
+            O histórico casa <strong>dia com dia</strong> a Matinal/LM com o <strong>Total INTER-SOC (coluna F)</strong> da db_volume_forecast.
             A semana serve apenas como agrupador. Para o futuro, o volume planejado vem do
             <strong>db_volume_forecast • Total (coluna F)</strong> e é comparado ao target fixo de <strong>0,88%</strong>.
           </p>
@@ -295,7 +295,7 @@
 
       <div class="kpi-grid calendar-kpis calendar-kpis-v65">
         <article class="kpi kpi-purple"><span>Target</span><strong id="calTarget">0,88%</strong><small>referência fixa</small></article>
-        <article class="kpi"><span>Taxa histórica geral</span><strong id="calHistoricalRate">—</strong><small>Misscan ÷ SOC_Packed</small></article>
+        <article class="kpi"><span>Taxa histórica geral</span><strong id="calHistoricalRate">—</strong><small>Misscan ÷ Forecast INTER-SOC</small></article>
         <article class="kpi"><span>Volume planejado</span><strong id="calFutureVolume">—</strong><small>Forecast Total diário</small></article>
         <article class="kpi kpi-yellow"><span>Misscan projetado</span><strong id="calProjectedMiss">—</strong><small>taxa histórica × forecast</small></article>
         <article class="kpi"><span>Limite a 0,88%</span><strong id="calAllowedMiss">—</strong><small>máximo para target</small></article>
@@ -317,11 +317,11 @@
             <div class="auto-rate-card"><span>T3 + T5</span><strong id="autoRateT3">—</strong><small id="autoRateT3Detail">Aguardando</small></div>
             <div class="auto-rate-card auto-rate-general"><span>GERAL</span><strong id="autoRateGeneral">—</strong><small id="autoRateGeneralDetail">Todos os Misscans</small></div>
           </div>
-          <div class="rate-auto-meta" id="autoRateMeta">Fonte: Matinal/LM + GEROT db_volume_overall</div>
+          <div class="rate-auto-meta" id="autoRateMeta">Fonte: Matinal/LM + GEROT db_volume_forecast INTER-SOC</div>
           <div class="model-note">
             <strong>Regra V6.5:</strong><br>
-            cada data da Matinal é confrontada com o SOC_Packed da mesma data.<br>
-            A taxa consolidada é ponderada: Σ Misscan ÷ Σ SOC_Packed.<br>
+            cada data da Matinal é confrontada com o Total INTER-SOC (F) da mesma data.<br>
+            A taxa consolidada é ponderada: Σ Misscan ÷ Σ Forecast INTER-SOC.<br>
             A taxa geral inclui os Misscans do dia; os blocos usam somente casos identificados com turno no HC.
           </div>
         </article>
@@ -335,7 +335,7 @@
           </div>
           <div class="table-wrap compact-table-wrap">
             <table class="calendar-compact-table">
-              <thead><tr><th>Semana</th><th>Misscan</th><th>SOC_Packed</th><th>Taxa</th><th>Meta</th></tr></thead>
+              <thead><tr><th>Semana</th><th>Misscan</th><th>Volume INTER-SOC (F)</th><th>Taxa</th><th>Meta</th></tr></thead>
               <tbody id="calendarWeekBody"></tbody>
             </table>
           </div>
@@ -346,14 +346,14 @@
         <div class="panel-head">
           <div>
             <h2>Casamento diário do histórico</h2>
-            <p>Matinal/LM e Packed sempre pela mesma data. Dias sem processado não entram na taxa.</p>
+            <p>Matinal/LM e Forecast INTER-SOC sempre pela mesma data. Dias sem volume não entram na taxa.</p>
           </div>
         </div>
         <div class="table-wrap">
           <table class="calendar-table-v65 history-calendar-table">
             <thead>
               <tr>
-                <th>Data</th><th>Semana</th><th>Misscan LM</th><th>SOC_Packed</th><th>Taxa diária</th>
+                <th>Data</th><th>Semana</th><th>Misscan LM</th><th>Volume INTER-SOC (F)</th><th>Taxa diária</th>
                 <th>Packed T1</th><th>Packed T2+T4</th><th>Packed T3+T5</th><th>Status</th>
               </tr>
             </thead>
