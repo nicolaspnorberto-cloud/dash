@@ -1,29 +1,42 @@
-MIS-SCAN CONTROL CENTER V6.4
+# MIS-SCAN CONTROL CENTER V6.5
 
-OBJETIVO PRINCIPAL
-A aba LM da Matinal passa a ser a fonte oficial e crescente do histórico de Misscan.
+Versão focada na nova Calendarização automática usando GEROT.
 
-MUDANÇAS DA V6.4
-- Backfill completo da LM, sem limite fixo de 180 dias.
-- Backfill retomável para bases grandes.
-- Sincronização incremental não depende de a LM estar ordenada por data.
-- Histórico mensal no Blob continua acumulando dias novos.
-- HC + LM possuem gatilho independente.
-- Calendarização possui gatilho independente.
-- Falha do Oráculo/Calendarização não bloqueia a atualização da LM.
-- Dashboard mostra início/fim do histórico, dias com Misscan e intervalo em dias.
+## Fontes
 
-ARQUIVO DO APPS SCRIPT
-BackendV64.gs
+- Matinal / LM → Misscan diário.
+- GEROT `db_volume_overall` → processado real via `SOC_Packed`.
+- GEROT `db_volume_forecast` → planejado diário via `Total` da coluna F.
+- Base HC → turno do colaborador para os blocos históricos.
 
-PRIMEIRA EXECUÇÃO APÓS PUBLICAR
-1. testarConexaoV64()
-2. sincronizarHistoricoCompletoLMV64()
-3. acompanhar com statusHistoricoLMV64()
-4. quando terminar, instalarAutomacoesV64()
+## Regra principal
 
-ROTINA AUTOMÁTICA
-- HC + LM: a cada 30 minutos
-- Calendarização: a cada 30 minutos, separada
-- E-mails: a cada 5 minutos
-- Oráculo: não é instalado automaticamente enquanto a fonte exigir login
+O histórico é calculado **dia com dia**.
+
+A semana é somente agrupador.
+
+Blocos históricos:
+- T1.
+- T2 + T4.
+- T3 + T5.
+
+O forecast futuro é diário e não é dividido entre blocos.
+
+Target Misscan fixo: **0,88%**.
+
+## Arquivo principal do Apps Script
+
+`BackendV65.gs`
+
+## Primeira validação
+
+1. Publicar os arquivos no GitHub/Vercel.
+2. Confirmar `/api/ping` com `misscan-v6.5`.
+3. Colar `BackendV65.gs` no Apps Script.
+4. Executar `testarGerotV65`.
+5. Executar `sincronizarGerotV65`.
+6. Validar `/api/taxas?days=14`.
+7. Validar `/api/calendarizacao?days=21`.
+8. Executar `instalarAutomacoesV65`.
+
+Detalhes: `V65_CONFIGURACAO.md`.

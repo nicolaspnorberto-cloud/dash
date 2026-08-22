@@ -12,7 +12,7 @@
       <div class="brand-mark">MS</div>
       <div>
         <div class="brand">MIS-SCAN CONTROL CENTER</div>
-        <div class="subtitle">Produtividade • Tratativas V6.4 • Histórico LM Dinâmico</div>
+        <div class="subtitle">Produtividade • Tratativas • Calendarização GEROT V6.5</div>
       </div>
     </div>
     <div class="header-actions">
@@ -99,7 +99,7 @@
         <article class="kpi kpi-purple"><span>Expedição</span><strong id="kExpedicao">—</strong><small id="pExpedicao">—</small></article>
         <article class="kpi kpi-gray"><span>Operador não identificado</span><strong id="kUnidentified">—</strong><small id="pUnidentified">—</small></article>
         <article class="kpi"><span>Colaboradores</span><strong id="kOperators">—</strong><small>identificados</small></article>
-        <article class="kpi kpi-alert"><span>Pendências HC</span><strong id="kHCPending">—</strong><small>cadastro/ambiguidade</small></article>
+        <article class="kpi kpi-alert"><span>Pendências HC</span><strong id="kHCPending">—</strong><small>cadastro incompleto</small></article>
       </div>
 
       <div class="dashboard-grid">
@@ -160,7 +160,7 @@
     <section id="tratativas" class="view">
       <div class="treatment-hero">
         <div>
-          <span class="eyebrow">TRATATIVAS V6.2</span>
+          <span class="eyebrow">TRATATIVAS V6.5</span>
           <h1>Acompanhamento de colaboradores ofensores</h1>
           <p>Todo colaborador com indicador acima de <strong>0,88%</strong> entra automaticamente na fila de tratativas.</p>
         </div>
@@ -251,12 +251,18 @@
     <section id="calendarizacao" class="view">
       <div class="projection-hero">
         <div>
-          <span class="eyebrow">CALENDARIZAÇÃO INTELIGENTE</span>
-          <h1>Projeção operacional do Misscan</h1>
+          <span class="eyebrow">CALENDARIZAÇÃO V6.5</span>
+          <h1>Forecast diário × histórico real de Misscan</h1>
           <p>
-            Projeção automática usando Forecast, Processar, HC Plano e produtividade do planejamento operacional,
-            com cenários Otimista / Base / Conservador.
+            O histórico casa <strong>dia com dia</strong> a Matinal/LM com o <strong>SOC_Packed</strong> da GEROT.
+            A semana serve apenas como agrupador. Para o futuro, o volume planejado vem do
+            <strong>db_volume_forecast • Total (coluna F)</strong> e é comparado ao target fixo de <strong>0,88%</strong>.
           </p>
+        </div>
+        <div class="target-badge">
+          <span>TARGET MISSCAN</span>
+          <strong>0,88%</strong>
+          <small>fixo</small>
         </div>
       </div>
 
@@ -264,257 +270,111 @@
         <div class="calendar-live-main">
           <span class="calendar-live-dot" id="calendarLiveDot"></span>
           <div>
-            <span>PLANEJAMENTO AUTOMÁTICO</span>
-            <strong id="calendarSource">Aguardando sincronização...</strong>
-            <small id="calendarUpdated">Fonte: Hc x Posto de Trabalho</small>
+            <span>FONTE AUTOMÁTICA</span>
+            <strong id="calendarSource">Aguardando GEROT...</strong>
+            <small id="calendarUpdated">Packed + Forecast diário</small>
           </div>
         </div>
         <div class="calendar-mode-buttons">
-          <button type="button" id="calendarAutoBtn" class="calendar-mode-btn active">Automático</button>
-          <button type="button" id="calendarManualBtn" class="calendar-mode-btn">Manual</button>
-          <button type="button" id="refreshCalendarBtn" class="ghost-dark">Atualizar</button>
+          <button type="button" id="refreshCalendarBtn" class="ghost-dark">Atualizar Calendarização</button>
         </div>
       </div>
 
-      <div class="projection-controls panel">
-        <div class="panel-head">
-          <div>
-            <h2>Parâmetros do realizado</h2>
-            <p>Use o volume correspondente à mesma janela da base de Misscan analisada.</p>
-          </div>
+      <div class="projection-controls panel calendar-v65-controls">
+        <div>
+          <span class="eyebrow">BASE HISTÓRICA</span>
+          <strong id="calendarSummaryText">Carregando histórico...</strong>
         </div>
-
-        <div class="calendar-params">
-          <label>Volume realizado
-            <input id="actualVolume" type="number" min="0" step="1" placeholder="Ex.: 2496400" />
-          </label>
-
-          <label>Meta Misscan (%)
-            <input id="targetRate" type="number" min="0" step="0.001" value="0.94" />
-          </label>
-
-          <div class="scenario-box">
-            <span>Cenário</span>
-            <div class="scenario-buttons">
-              <button type="button" class="scenario-btn" data-scenario="optimistic">Otimista</button>
-              <button type="button" class="scenario-btn active" data-scenario="base">Base</button>
-              <button type="button" class="scenario-btn" data-scenario="conservative">Conservador</button>
-            </div>
-            <small id="scenarioLabel">Base • fator 1,00x</small>
-          </div>
+        <div class="rate-window-control">
+          <span>Janela</span>
+          <button type="button" class="rate-window-btn" data-days="7">7 dias</button>
+          <button type="button" class="rate-window-btn active" data-days="14">14 dias</button>
+          <button type="button" class="rate-window-btn" data-days="30">30 dias</button>
         </div>
       </div>
 
-      <div class="kpi-grid calendar-kpis">
-        <article class="kpi">
-          <span>Misscan realizado</span>
-          <strong id="projMisscan">—</strong>
-          <small>BR únicos da base filtrada</small>
-        </article>
-
-        <article class="kpi">
-          <span>Indicador atual</span>
-          <strong id="currentRate">—</strong>
-          <small>Misscan / volume realizado</small>
-        </article>
-
-        <article class="kpi kpi-purple">
-          <span>Meta</span>
-          <strong id="targetCard">—</strong>
-          <small>referência operacional</small>
-        </article>
-
-        <article class="kpi kpi-yellow">
-          <span>Projeção fechamento</span>
-          <strong id="forecastRate">—</strong>
-          <small id="forecastGap">—</small>
-        </article>
-
-        <article class="kpi">
-          <span>Volume futuro</span>
-          <strong id="futureVolumeCard">—</strong>
-          <small>calendarizado</small>
-        </article>
-
-        <article class="kpi kpi-alert">
-          <span>Dias de risco</span>
-          <strong id="riskDaysCard">—</strong>
-          <small>projeção acima da faixa</small>
-        </article>
+      <div class="kpi-grid calendar-kpis calendar-kpis-v65">
+        <article class="kpi kpi-purple"><span>Target</span><strong id="calTarget">0,88%</strong><small>referência fixa</small></article>
+        <article class="kpi"><span>Taxa histórica geral</span><strong id="calHistoricalRate">—</strong><small>Misscan ÷ SOC_Packed</small></article>
+        <article class="kpi"><span>Volume planejado</span><strong id="calFutureVolume">—</strong><small>Forecast Total diário</small></article>
+        <article class="kpi kpi-yellow"><span>Misscan projetado</span><strong id="calProjectedMiss">—</strong><small>taxa histórica × forecast</small></article>
+        <article class="kpi"><span>Limite a 0,88%</span><strong id="calAllowedMiss">—</strong><small>máximo para target</small></article>
+        <article class="kpi kpi-alert"><span>Gap projetado</span><strong id="calGap">—</strong><small id="calGapDetail">vs limite</small></article>
+        <article class="kpi"><span>Dias acima da meta</span><strong id="calRiskDays">—</strong><small>no forecast carregado</small></article>
       </div>
 
       <div class="dashboard-grid calendar-reference-grid">
-        <article class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Referência histórica de produtividade</h2>
-              <p>Período de referência: 27/07/2026 a 18/08/2026.</p>
-            </div>
-          </div>
-
-          <div class="prod-reference">
-            <div class="prod-ref-row prod-ref-head">
-              <span>Turno</span><span>Real</span><span>Meta operação</span><span>Aderência</span>
-            </div>
-            <div class="prod-ref-row"><strong>GERAL</strong><span>2.496,4 mil</span><span>3.005,8 mil</span><b>83,1%</b></div>
-            <div class="prod-ref-row"><strong>T1</strong><span>737,7 mil</span><span>991,8 mil</span><b>74,4%</b></div>
-            <div class="prod-ref-row"><strong>T2</strong><span>745,2 mil</span><span>924,6 mil</span><b>80,6%</b></div>
-            <div class="prod-ref-row"><strong>T3</strong><span>1.013,5 mil</span><span>1.089,5 mil</span><b>93,0%</b></div>
-          </div>
-        </article>
-
         <article class="panel rate-auto-panel">
           <div class="panel-head">
             <div>
-              <h2>Taxa real automática por bloco operacional</h2>
-              <p>Misscan identificado ÷ Produção REAL. Média ponderada pelo volume.</p>
-            </div>
-            <div class="rate-window-control">
-              <span>Base histórica</span>
-              <button type="button" class="rate-window-btn" data-days="7">7 dias</button>
-              <button type="button" class="rate-window-btn active" data-days="14">14 dias</button>
-              <button type="button" class="rate-window-btn" data-days="30">30 dias</button>
+              <h2>Taxa real histórica por bloco</h2>
+              <p>Os blocos existem somente no histórico. T1 • T2+T4 • T3+T5.</p>
             </div>
           </div>
-
-          <div class="auto-rate-grid">
-            <div class="auto-rate-card"><span>T1</span><strong id="autoRateT1">—</strong><small id="autoRateT1Detail">Aguardando produção real</small></div>
-            <div class="auto-rate-card"><span>T2 + T4</span><strong id="autoRateT2">—</strong><small id="autoRateT2Detail">Aguardando produção real</small></div>
-            <div class="auto-rate-card"><span>T3 + T5</span><strong id="autoRateT3">—</strong><small id="autoRateT3Detail">Aguardando produção real</small></div>
+          <div class="auto-rate-grid auto-rate-grid-v65">
+            <div class="auto-rate-card"><span>T1</span><strong id="autoRateT1">—</strong><small id="autoRateT1Detail">Aguardando</small></div>
+            <div class="auto-rate-card"><span>T2 + T4</span><strong id="autoRateT2">—</strong><small id="autoRateT2Detail">Aguardando</small></div>
+            <div class="auto-rate-card"><span>T3 + T5</span><strong id="autoRateT3">—</strong><small id="autoRateT3Detail">Aguardando</small></div>
+            <div class="auto-rate-card auto-rate-general"><span>GERAL</span><strong id="autoRateGeneral">—</strong><small id="autoRateGeneralDetail">Todos os Misscans</small></div>
           </div>
-          <div class="rate-auto-meta" id="autoRateMeta">Fonte: Histórico Misscan + Produção REAL do Oráculo MG4</div>
-
-          <details class="manual-rate-details">
-            <summary>Simular taxa manual</summary>
-            <div class="turn-rate-grid">
-              <label>T1 (%)<input id="rateT1" type="number" min="0" step="0.001" value="0.94" /></label>
-              <label>T2 (%)<input id="rateT2" type="number" min="0" step="0.001" value="0.94" /></label>
-              <label>T3 (%)<input id="rateT3" type="number" min="0" step="0.001" value="0.94" /></label>
-              <label>T4 (%)<input id="rateT4" type="number" min="0" step="0.001" value="0.94" /></label>
-              <label>T5 (%)<input id="rateT5" type="number" min="0" step="0.001" value="0.94" /></label>
-            </div>
-          </details>
-
+          <div class="rate-auto-meta" id="autoRateMeta">Fonte: Matinal/LM + GEROT db_volume_overall</div>
           <div class="model-note">
-            <strong>Modelo V6.3:</strong><br>
-            T1 = Misscan T1 ÷ Produção Real T1.<br>
-            T2 = (Misscan T2 + T4) ÷ Produção Real T2.<br>
-            T3 = (Misscan T3 + T5) ÷ Produção Real T3.<br>
-            Taxa projetada = taxa real ponderada × fator de carga × cenário.
-          </div>
-        </article>
-      </div>
-
-      <div class="dashboard-grid calendar-grid">
-        <article class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Override manual</h2>
-              <p id="manualForecastHint">Use somente para simular um cenário diferente do planejamento oficial.</p>
-            </div>
-          </div>
-
-          <div id="manualForecastForm" class="smart-forecast-form calendar-manual-disabled">
-            <label>Data
-              <input id="futureDate" type="date" />
-            </label>
-
-            <label>Turno
-              <select id="futureTurno">
-                <option value="T1">T1</option>
-                <option value="T2">T2</option>
-                <option value="T3">T3</option>
-                <option value="T4">T4</option>
-                <option value="T5">T5</option>
-              </select>
-            </label>
-
-            <label>Responsabilidade
-              <select id="futureArea">
-                <option value="ESTEIRA">Esteira</option>
-                <option value="EXPEDIÇÃO">Expedição</option>
-              </select>
-            </label>
-
-            <label>Volume previsto
-              <input id="futureVolume" type="number" min="0" step="1" placeholder="Ex.: 350000" />
-            </label>
-
-            <label>HC planejado
-              <input id="futureHC" type="number" min="1" step="1" placeholder="Ex.: 45" />
-            </label>
-
-            <label>Horas produtivas
-              <input id="futureHours" type="number" min="0.1" step="0.1" value="8" />
-            </label>
-
-            <label>Produtividade / HC / h
-              <input id="futureProd" type="number" min="0.1" step="0.1" placeholder="Ex.: 950" />
-            </label>
-
-            <label>Taxa base do turno (%)
-              <input id="futureBaseRate" type="number" min="0" step="0.001" readonly />
-            </label>
-
-            <button id="addForecastBtn" class="primary-btn">Adicionar à projeção</button>
+            <strong>Regra V6.5:</strong><br>
+            cada data da Matinal é confrontada com o SOC_Packed da mesma data.<br>
+            A taxa consolidada é ponderada: Σ Misscan ÷ Σ SOC_Packed.<br>
+            A taxa geral inclui os Misscans do dia; os blocos usam somente casos identificados com turno no HC.
           </div>
         </article>
 
         <article class="panel">
           <div class="panel-head">
             <div>
-              <h2>Resumo da projeção</h2>
-              <p>Resultado ponderado entre realizado e calendário futuro.</p>
+              <h2>Resumo por semana</h2>
+              <p>A semana apenas agrupa os dias; nenhum volume semanal é dividido artificialmente.</p>
             </div>
           </div>
-          <div id="projectionGauge" class="gauge"></div>
-          <div id="forecastSummaryText" class="forecast-summary"></div>
-        </article>
-      </div>
-
-      <div class="dashboard-grid">
-        <article class="panel">
-          <div class="panel-head">
-            <div><h2>Projeção por turno</h2><p>Misscan futuro estimado por turno.</p></div>
+          <div class="table-wrap compact-table-wrap">
+            <table class="calendar-compact-table">
+              <thead><tr><th>Semana</th><th>Misscan</th><th>SOC_Packed</th><th>Taxa</th><th>Meta</th></tr></thead>
+              <tbody id="calendarWeekBody"></tbody>
+            </table>
           </div>
-          <div id="forecastTurnBars" class="bar-list compact"></div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-head">
-            <div><h2>Projeção por responsabilidade</h2><p>Esteira x Expedição no calendário futuro.</p></div>
-          </div>
-          <div id="forecastAreaBars" class="bar-list compact"></div>
         </article>
       </div>
 
       <article class="panel table-panel">
         <div class="panel-head">
           <div>
-            <h2>Calendário de projeção</h2>
-            <p>Automático = planejamento oficial • verde = meta • amarelo = atenção • vermelho = risco.</p>
+            <h2>Casamento diário do histórico</h2>
+            <p>Matinal/LM e Packed sempre pela mesma data. Dias sem processado não entram na taxa.</p>
           </div>
-          <button id="clearForecastBtn" class="ghost-dark">Limpar simulação manual</button>
         </div>
-
         <div class="table-wrap">
-          <table class="calendar-table">
+          <table class="calendar-table-v65 history-calendar-table">
             <thead>
               <tr>
-                <th>Data</th>
-                <th>Turno</th>
-                <th>Origem</th>
-                <th>Volume</th>
-                <th>HC</th>
-                <th>HC Esteira</th>
-                <th>Prod./HC</th>
-                <th>Capacidade</th>
-                <th>Carga</th>
-                <th>Taxa base</th>
-                <th>Taxa projetada</th>
-                <th>Misscan proj.</th>
-                <th>Risco</th>
-                <th></th>
+                <th>Data</th><th>Semana</th><th>Misscan LM</th><th>SOC_Packed</th><th>Taxa diária</th>
+                <th>Packed T1</th><th>Packed T2+T4</th><th>Packed T3+T5</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="calendarHistoryBody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel table-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Calendarização diária</h2>
+            <p>Forecast GEROT • Total da coluna F. Projeção futura sem divisão artificial por turno.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="calendar-table-v65">
+            <thead>
+              <tr>
+                <th>Data</th><th>Semana</th><th>Planejado</th><th>Taxa histórica</th>
+                <th>Misscan projetado</th><th>Limite 0,88%</th><th>Gap</th><th>Status</th>
               </tr>
             </thead>
             <tbody id="forecastBody"></tbody>
@@ -612,7 +472,7 @@
     </div>
   </main>
 
-  <footer>Mis-Scan Control Center • V6.3 • Taxa Real Automática + Calendarização + Tratativas</footer>
+  <footer>Mis-Scan Control Center • V6.5 • LM + GEROT + Calendarização diária + Tratativas</footer>
   <script src="app.js"></script>
 </body>
 </html>

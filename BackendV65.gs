@@ -1914,3 +1914,329 @@ function listarGatilhosV642() {
   Logger.log(JSON.stringify(rows, null, 2));
   return rows;
 }
+
+
+/* =========================================================
+   V6.5 — CALENDARIZAÇÃO GEROT
+   - Histórico: Matinal/LM + GEROT db_volume_overall / SOC_Packed
+   - Planejado: GEROT db_volume_forecast / Total (coluna F)
+   - Target fixo: 0,88%
+   - Blocos T1 / T2+T4 / T3+T5 somente para histórico
+========================================================= */
+const V65_GEROT_SPREADSHEET_ID = '1eqUi2AobaaBhhg29UfWLuFcKpZmkDEE0r8_kmUs9n74';
+const V65_GEROT_PACKED_SHEET = 'db_volume_overall';
+const V65_GEROT_FORECAST_SHEET = 'db_volume_forecast';
+const V65_GEROT_SITE = 'SOC-MG4';
+const V65_TARGET_MISSCAN = 0.88;
+
+function instalarAutomacoesV65() {
+  validarConfiguracaoV6_();
+
+  const props = PropertiesService.getScriptProperties();
+  const backfill = props.getProperty('V64_BACKFILL_STATUS') || '';
+  if (backfill && backfill !== 'DONE') {
+    throw new Error('O histórico LM ainda não terminou. Status atual: ' + backfill + '.');
+  }
+
+  const handlers = [
+    'sincronizarDadosV6',
+    'processarFilaEmailsV6',
+    'sincronizarDadosV61',
+    'processarFilaEmailsV61',
+    'sincronizarTudoV62',
+    'processarFilaEmailsV62',
+    'sincronizarTudoV63',
+    'processarFilaEmailsV63',
+    'sincronizarHCeMisscanV64',
+    'sincronizarCalendarizacaoV64',
+    'sincronizarCalendarizacaoV65',
+    'sincronizarGerotV65',
+    'processarFilaEmailsV64',
+    'processarFilaEmailsV65',
+    'continuarHistoricoCompletoLMV64'
+  ];
+
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (handlers.indexOf(trigger.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('sincronizarHCeMisscanV64')
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+
+  ScriptApp.newTrigger('sincronizarGerotV65')
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+
+  ScriptApp.newTrigger('processarFilaEmailsV65')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+
+  // As duas fontes são independentes: uma falha não bloqueia a outra.
+  try {
+    sincronizarHCeMisscanV64();
+  } catch (error) {
+    Logger.log('V6.5 HC + LM: ' + String(error.message || error));
+  }
+
+  try {
+    sincronizarGerotV65();
+  } catch (error) {
+    Logger.log('V6.5 GEROT: ' + String(error.message || error));
+  }
+
+  Logger.log(
+    'V6.5 instalada: HC+LM 30 min | GEROT Packed+Forecast 30 min | E-mails 5 min. ' +
+    'Target Misscan fixo: 0,88%.'
+  );
+}
+
+function removerAutomacoesV65() {
+  const handlers = [
+    'sincronizarHCeMisscanV64',
+    'sincronizarCalendarizacaoV64',
+    'sincronizarCalendarizacaoV65',
+    'sincronizarGerotV65',
+    'processarFilaEmailsV64',
+    'processarFilaEmailsV65'
+  ];
+
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (handlers.indexOf(trigger.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  Logger.log('Gatilhos V6.5 removidos.');
+}
+
+function processarFilaEmailsV65() {
+  return processarFilaEmailsV64();
+}
+
+function testarGerotV65() {
+  const result = lerGerotV65_();
+  Logger.log('GEROT processed: ' + result.processed.length);
+  Logger.log('GEROT forecast diário: ' + result.forecast.length);
+  Logger.log('Packed amostra:\n' + JSON.stringify(result.processed.slice(-9), null, 2));
+  Logger.log('Forecast amostra:\n' + JSON.stringify(result.forecast.slice(-10), null, 2));
+  return result;
+}
+
+function sincronizarGerotV65() {
+  validarConfiguracaoV6_();
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    Logger.log('V6.5 GEROT: outra execução está em andamento.');
+    return;
+  }
+
+  try {
+    const result = lerGerotV65_();
+    const props = PropertiesService.getScriptProperties();
+    const spreadsheetId = String(
+      props.getProperty('GEROT_SPREADSHEET_ID') || V65_GEROT_SPREADSHEET_ID
+    ).trim();
+
+    const payload = {
+      processed: result.processed,
+      forecast: result.forecast,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        spreadsheetId: spreadsheetId,
+        source: 'GEROT - MG4',
+        packedSheet: V65_GEROT_PACKED_SHEET,
+        packedField: 'SOC_Packed',
+        forecastSheet: V65_GEROT_FORECAST_SHEET,
+        forecastField: 'Total (coluna F)',
+        site: V65_GEROT_SITE,
+        targetMisscan: V65_TARGET_MISSCAN,
+        mapping: {
+          T1: 'T1',
+          T2: 'T2 + T4',
+          T3: 'T3 + T5'
+        },
+        logic: 'Histórico casa Matinal e SOC_Packed pela mesma data; semana apenas agrupa os dias.'
+      }
+    };
+
+    const response = v6Fetch_('/api/gerot-sync', {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    const code = response.getResponseCode();
+    const text = response.getContentText();
+    if (code < 200 || code >= 300) {
+      throw new Error('GEROT sync retornou ' + code + ': ' + text);
+    }
+
+    const data = JSON.parse(text);
+    if (!data.ok) throw new Error(data.error || 'Falha ao sincronizar GEROT V6.5.');
+
+    props.setProperty('V65_LAST_GEROT_SYNC', new Date().toISOString());
+    Logger.log(
+      'V6.5 GEROT OK: ' + data.processedRows + ' linhas Packed agregadas | ' +
+      data.forecastRows + ' dias de Forecast | ' +
+      data.processedStart + ' → ' + data.processedEnd + '.'
+    );
+    return data;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function sincronizarCalendarizacaoV65() {
+  return sincronizarGerotV65();
+}
+
+// Compatibilidade com qualquer chamada antiga: a Calendarização V6.4 agora usa GEROT.
+function sincronizarCalendarizacaoV64() {
+  return sincronizarGerotV65();
+}
+
+function lerGerotV65_() {
+  const props = PropertiesService.getScriptProperties();
+  const spreadsheetId = String(
+    props.getProperty('GEROT_SPREADSHEET_ID') || V65_GEROT_SPREADSHEET_ID
+  ).trim();
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  const processed = lerPackedGerotV65_(ss);
+  const forecast = lerForecastGerotV65_(ss);
+
+  return { processed: processed, forecast: forecast };
+}
+
+function lerPackedGerotV65_(ss) {
+  const sh = ss.getSheetByName(V65_GEROT_PACKED_SHEET);
+  if (!sh) throw new Error('Aba GEROT "' + V65_GEROT_PACKED_SHEET + '" não encontrada.');
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+
+  // A:N
+  // A date | B turno | H SOC_Packed | L last_update | M Semana
+  const values = sh.getRange(2, 1, lastRow - 1, 14).getDisplayValues();
+  const map = new Map();
+
+  values.forEach(function(row) {
+    const date = dateKeyV65_(row[0]);
+    const turno = String(row[1] || '').trim().toUpperCase();
+    if (!date || !/^T[1-5]$/.test(turno)) return;
+
+    const packed = numV65_(row[7]);
+    const week = String(row[12] || '').trim();
+    const lastUpdate = String(row[11] || '').trim();
+    const key = date + '|' + turno;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        date: date,
+        turno: turno,
+        week: week,
+        socPacked: 0,
+        lastUpdate: lastUpdate
+      });
+    }
+
+    const item = map.get(key);
+    item.socPacked += Math.max(0, packed);
+    if (!item.week && week) item.week = week;
+    if (lastUpdate) item.lastUpdate = lastUpdate;
+  });
+
+  return Array.from(map.values()).sort(function(a, b) {
+    return a.date.localeCompare(b.date) || a.turno.localeCompare(b.turno);
+  });
+}
+
+function lerForecastGerotV65_(ss) {
+  const sh = ss.getSheetByName(V65_GEROT_FORECAST_SHEET);
+  if (!sh) throw new Error('Aba GEROT "' + V65_GEROT_FORECAST_SHEET + '" não encontrada.');
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+
+  // A:H
+  // A date | B destination | D direct | E transhipment | F Total | H week
+  const values = sh.getRange(2, 1, lastRow - 1, 8).getDisplayValues();
+  const map = new Map();
+
+  values.forEach(function(row) {
+    const date = dateKeyV65_(row[0]);
+    const destination = String(row[1] || '').trim().toUpperCase();
+    if (!date || destination !== V65_GEROT_SITE) return;
+
+    const direct = Math.max(0, numV65_(row[3]));
+    const transhipment = Math.max(0, numV65_(row[4]));
+    const total = Math.max(0, numV65_(row[5]));
+    const week = String(row[7] || '').trim();
+
+    if (!map.has(date)) {
+      map.set(date, {
+        date: date,
+        destination: V65_GEROT_SITE,
+        week: week,
+        total: 0,
+        direct: 0,
+        transhipment: 0
+      });
+    }
+
+    const item = map.get(date);
+    item.total += total;
+    item.direct += direct;
+    item.transhipment += transhipment;
+    if (!item.week && week) item.week = week;
+  });
+
+  return Array.from(map.values())
+    .filter(function(row) { return row.total > 0; })
+    .sort(function(a, b) { return a.date.localeCompare(b.date); });
+}
+
+function dateKeyV65_(value) {
+  const s = String(value == null ? '' : value).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) {
+    return m[3] + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+  }
+  return '';
+}
+
+function numV65_(value) {
+  const s = String(value == null ? '' : value).trim();
+  if (!s || s === '-' || /#DIV\/0!/i.test(s)) return 0;
+  const cleaned = s
+    .replace(/\./g, '')
+    .replace(/%/g, '')
+    .replace(',', '.')
+    .replace(/[^0-9.-]/g, '');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function statusGerotV65() {
+  const props = PropertiesService.getScriptProperties();
+  const status = {
+    lastGerotSync: props.getProperty('V65_LAST_GEROT_SYNC') || '',
+    gerotSpreadsheetId: props.getProperty('GEROT_SPREADSHEET_ID') || V65_GEROT_SPREADSHEET_ID,
+    packedSheet: V65_GEROT_PACKED_SHEET,
+    forecastSheet: V65_GEROT_FORECAST_SHEET,
+    targetMisscan: V65_TARGET_MISSCAN
+  };
+  Logger.log(JSON.stringify(status, null, 2));
+  return status;
+}

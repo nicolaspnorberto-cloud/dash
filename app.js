@@ -747,11 +747,7 @@ function openFirstPendingEvidence(){
   const row=state.treatmentFiltered.find(x=>{const p=progressFor(x.id),c=p.requiredCycle;return p[`dialogue${c}`]?.done&&!p[`recycle${c}`]?.done})||state.treatmentFiltered[0];if(!row)return alert('Nenhum colaborador em tratativa.');const p=progressFor(row.id),c=p.requiredCycle;if(!p[`dialogue${c}`]?.done)return openDialogue(row.id,c);openRecycle(row.id,c);
 }
 
-const SCENARIOS={
-  optimistic:{label:'Otimista',factor:.90},
-  base:{label:'Base',factor:1.00},
-  conservative:{label:'Conservador',factor:1.15}
-};
+const TARGET_MISSCAN = 0.88;
 
 function rateBlock(turno){
   if(turno==='T4') return 'T2';
@@ -759,18 +755,37 @@ function rateBlock(turno){
   return turno;
 }
 
-function getTurnBaseRate(turno){
-  const block=rateBlock(turno);
-  if(state.calendarMode==='auto' && state.autoRates?.[block] && Number.isFinite(state.autoRates[block].rate)){
-    return state.autoRates[block].rate;
-  }
-  const el=$(`rate${turno}`)||$(`rate${block}`);
-  const target=Number($('targetRate').value)||0;
-  return el ? (Number(el.value)||target) : target;
+function updateRateWindowButtons(){
+  document.querySelectorAll('.rate-window-btn').forEach(b=>{
+    b.classList.toggle('active',Number(b.dataset.days)===Number(state.rateWindowDays));
+  });
 }
 
-function updateRateWindowButtons(){
-  document.querySelectorAll('.rate-window-btn').forEach(b=>b.classList.toggle('active',Number(b.dataset.days)===Number(state.rateWindowDays)));
+function loadCalendarPreferences(){
+  state.rateWindowDays=Number(localStorage.getItem('misscanRateWindowV65')||14);
+  if(![7,14,30].includes(state.rateWindowDays)) state.rateWindowDays=14;
+  updateRateWindowButtons();
+}
+
+function saveCalendarPreferences(){
+  localStorage.setItem('misscanRateWindowV65',String(state.rateWindowDays||14));
+}
+
+function riskForRate(rate,target=TARGET_MISSCAN){
+  if(!Number.isFinite(rate)) return {key:'na',label:'Sem cálculo',cls:'tag-na'};
+  if(rate<=target) return {key:'good',label:'Dentro da meta',cls:'tag-good'};
+  return {key:'bad',label:'Acima da meta',cls:'tag-bad'};
+}
+
+function renderCalendarSourceStatus(mode='ok',message='',detail=''){
+  const dot=$('calendarLiveDot');
+  if(dot){
+    dot.classList.remove('loading','error');
+    if(mode==='loading')dot.classList.add('loading');
+    if(mode==='error')dot.classList.add('error');
+  }
+  if($('calendarSource'))$('calendarSource').textContent=message||'GEROT automática';
+  if($('calendarUpdated'))$('calendarUpdated').textContent=detail||'db_volume_overall + db_volume_forecast';
 }
 
 function renderAutoRates(){
@@ -778,15 +793,32 @@ function renderAutoRates(){
     const r=state.autoRates?.[t];
     const rateEl=$(`autoRate${t}`),detail=$(`autoRate${t}Detail`);
     if(rateEl) rateEl.textContent=r&&Number.isFinite(r.rate)?fmtPct(r.rate):'—';
-    if(detail) detail.textContent=r?`${fmtInt.format(r.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(r.volumeReal||0))} reais`:'Aguardando produção real';
+    if(detail){
+      detail.textContent=r
+        ?`${fmtInt.format(r.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(r.volumeReal||0))} SOC_Packed`
+        :'Aguardando histórico';
+    }
   });
+
+  const g=state.autoRateMeta?.general;
+  if($('autoRateGeneral')) $('autoRateGeneral').textContent=g&&Number.isFinite(g.rate)?fmtPct(g.rate):'—';
+  if($('autoRateGeneralDetail')){
+    $('autoRateGeneralDetail').textContent=g
+      ?`${fmtInt.format(g.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(g.volumeReal||0))} SOC_Packed`
+      :'Aguardando histórico';
+  }
+
   if($('autoRateMeta')){
     const m=state.autoRateMeta||{};
+    const pending=Number(m.general?.pendingMisscanNoProcessed||0);
     $('autoRateMeta').textContent=m.periodLabel
-      ? `Base ${m.days} dias • ${m.periodLabel} • T4 → T2 • T5 → T3 • Fonte: ${m.source||'Oráculo MG4'}`
-      : 'Fonte: Histórico Misscan + Produção REAL do Oráculo MG4';
+      ?`Base ${m.days} dias • ${m.periodLabel} • GEROT SOC_Packed + Matinal/LM${pending?` • ${fmtInt.format(pending)} Misscan aguardando processado`:''}`
+      :'Fonte: Matinal/LM + GEROT db_volume_overall • SOC_Packed';
   }
+
   updateRateWindowButtons();
+  renderCalendarHistory();
+  renderCalendarWeeks();
 }
 
 async function loadAutoRates({silent=true}={}){
@@ -795,326 +827,170 @@ async function loadAutoRates({silent=true}={}){
     let data={};try{data=await res.json()}catch{}
     if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
     state.autoRates=data.rates||null;
-    state.autoRateMeta={days:data.days,periodLabel:data.periodLabel,source:data.productionMeta?.source||'Oráculo MG4',general:data.general};
-    renderAutoRates();updateFutureBaseRate();renderForecastTable();renderProjection();
+    state.autoRateMeta={
+      days:data.days,
+      start:data.start,
+      end:data.end,
+      periodLabel:data.periodLabel,
+      target:Number(data.target??TARGET_MISSCAN),
+      source:data.source||'GEROT - MG4',
+      general:data.general||null,
+      daily:data.daily||[],
+      weekly:data.weekly||[],
+      productionMeta:data.productionMeta||{},
+      mapping:data.mapping||{}
+    };
+    renderAutoRates();
+    renderForecastTable();
+    renderProjection();
   }catch(err){
-    console.error('Taxa automática',err);state.autoRates=null;state.autoRateMeta=null;renderAutoRates();
+    console.error('Taxa automática V6.5',err);
+    state.autoRates=null;
+    state.autoRateMeta=null;
+    renderAutoRates();
+    renderForecastTable();
+    renderProjection();
     if(!silent)alert(`Falha ao carregar taxa real automática:
 ${err.message}`);
   }
 }
 
-
-function loadFactor(load){
-  if(!Number.isFinite(load)||load<=0) return 1;
-  if(load<=.90) return .95;
-  if(load<=1.00) return 1.00;
-  if(load<=1.10) return 1.10;
-  return 1.25;
+function calcForecastDay(x){
+  const baseRate=Number(state.autoRateMeta?.general?.rate);
+  const volume=Number(x?.volume||x?.total||0);
+  const projectedMiss=Number.isFinite(baseRate)?volume*baseRate/100:NaN;
+  const allowedMiss=volume*TARGET_MISSCAN/100;
+  const gap=Number.isFinite(projectedMiss)?projectedMiss-allowedMiss:NaN;
+  return {...x,volume,baseRate,projectedMiss,allowedMiss,gap};
 }
 
-function riskForRate(rate,target){
-  if(!Number.isFinite(rate)) return {key:'na',label:'Sem cálculo',cls:'tag-na'};
-  if(rate<=target) return {key:'good',label:'Dentro da meta',cls:'tag-good'};
-  if(rate<=target*1.10) return {key:'watch',label:'Atenção',cls:'tag-watch'};
-  return {key:'bad',label:'Alto risco',cls:'tag-bad'};
+function renderCalendarHistory(){
+  if(!$('calendarHistoryBody'))return;
+  const rows=[...(state.autoRateMeta?.daily||[])].reverse();
+  $('calendarHistoryBody').innerHTML=rows.map(d=>{
+    const risk=riskForRate(Number(d.rate),TARGET_MISSCAN);
+    const t1=Number(d.blocks?.T1?.volumeReal||0);
+    const t2=Number(d.blocks?.T2?.volumeReal||0);
+    const t3=Number(d.blocks?.T3?.volumeReal||0);
+    return `<tr>
+      <td><strong>${escapeHtml(String(d.date||'').split('-').reverse().join('/'))}</strong></td>
+      <td>${escapeHtml(d.week||'—')}</td>
+      <td>${fmtInt.format(Number(d.misscan||0))}</td>
+      <td>${fmtInt.format(Math.round(Number(d.volumeReal||0)))}</td>
+      <td><strong>${fmtPct(Number(d.rate))}</strong></td>
+      <td>${fmtInt.format(Math.round(t1))}</td>
+      <td>${fmtInt.format(Math.round(t2))}</td>
+      <td>${fmtInt.format(Math.round(t3))}</td>
+      <td><span class="tag ${risk.cls}">${risk.label}</span></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9" class="empty">Ainda não há casamento diário entre Matinal e SOC_Packed.</td></tr>';
 }
 
-function loadForecast(){
-  try{state.forecast=JSON.parse(localStorage.getItem('misscanForecastV3')||'[]')}catch{state.forecast=[]}
-  state.scenario=localStorage.getItem('misscanScenarioV3')||'base';
-  state.calendarMode=localStorage.getItem('misscanCalendarModeV63')||'auto';
-  state.rateWindowDays=Number(localStorage.getItem('misscanRateWindowV63')||14);
-
-  const av=localStorage.getItem('actualVolumeV3');
-  if(av)$('actualVolume').value=av;
-
-  const tr=localStorage.getItem('targetRateV3');
-  if(tr)$('targetRate').value=tr;
-
-  ['T1','T2','T3','T4','T5'].forEach(t=>{
-    const saved=localStorage.getItem(`misscanRate${t}V3`);
-    if(saved && $(`rate${t}`)) $(`rate${t}`).value=saved;
-  });
-
-  updateRateWindowButtons();
-  renderAutoRates();
-  updateScenarioButtons();
-  updateCalendarModeUI();
-  updateFutureBaseRate();
-  renderForecastTable();
+function renderCalendarWeeks(){
+  if(!$('calendarWeekBody'))return;
+  const rows=[...(state.autoRateMeta?.weekly||[])].reverse();
+  $('calendarWeekBody').innerHTML=rows.map(w=>{
+    const risk=riskForRate(Number(w.rate),TARGET_MISSCAN);
+    return `<tr>
+      <td><strong>${escapeHtml(w.week||'—')}</strong></td>
+      <td>${fmtInt.format(Number(w.misscan||0))}</td>
+      <td>${fmtInt.format(Math.round(Number(w.volumeReal||0)))}</td>
+      <td><span class="tag ${risk.cls}">${fmtPct(Number(w.rate))}</span></td>
+      <td>${fmtPct(TARGET_MISSCAN)}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5" class="empty">Sem semanas consolidadas.</td></tr>';
 }
 
-function saveForecast(){
-  localStorage.setItem('misscanForecastV3',JSON.stringify(state.forecast));
-  localStorage.setItem('actualVolumeV3',$('actualVolume').value);
-  localStorage.setItem('targetRateV3',$('targetRate').value);
-  localStorage.setItem('misscanScenarioV3',state.scenario||'base');
-  localStorage.setItem('misscanCalendarModeV63',state.calendarMode||'auto');
-  localStorage.setItem('misscanRateWindowV63',String(state.rateWindowDays||14));
-  ['T1','T2','T3','T4','T5'].forEach(t=>{
-    if($(`rate${t}`)) localStorage.setItem(`misscanRate${t}V3`,$(`rate${t}`).value);
-  });
+function renderForecastTable(){
+  if(!$('forecastBody'))return;
+  const rows=(state.forecastAuto||[]).map(calcForecastDay);
+  $('forecastBody').innerHTML=rows.map(x=>{
+    const risk=riskForRate(x.baseRate,TARGET_MISSCAN);
+    const gapText=Number.isFinite(x.gap)
+      ?`${x.gap>=0?'+':''}${fmtInt.format(Math.round(x.gap))}`
+      :'—';
+    return `<tr>
+      <td><strong>${escapeHtml(String(x.date||'').split('-').reverse().join('/'))}</strong></td>
+      <td>${escapeHtml(x.week||'—')}</td>
+      <td>${fmtInt.format(Math.round(x.volume||0))}</td>
+      <td><strong>${fmtPct(x.baseRate)}</strong></td>
+      <td>${Number.isFinite(x.projectedMiss)?fmtInt.format(Math.round(x.projectedMiss)):'—'}</td>
+      <td>${fmtInt.format(Math.round(x.allowedMiss||0))}</td>
+      <td><strong class="${Number.isFinite(x.gap)?(x.gap>0?'gap-positive':'gap-negative'):''}">${gapText}</strong></td>
+      <td><span class="tag ${risk.cls}">${risk.label}</span></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="8" class="empty">Nenhum Forecast futuro disponível na GEROT.</td></tr>';
 }
 
-function updateScenarioButtons(){
-  document.querySelectorAll('.scenario-btn').forEach(b=>{
-    b.classList.toggle('active',b.dataset.scenario===(state.scenario||'base'));
-  });
-  const s=SCENARIOS[state.scenario||'base'];
-  if($('scenarioLabel')){
-    $('scenarioLabel').textContent=`${s.label} • fator ${s.factor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}x`;
+function renderProjection(){
+  const rows=(state.forecastAuto||[]).map(calcForecastDay);
+  const historicalRate=Number(state.autoRateMeta?.general?.rate);
+  const futureVolume=rows.reduce((sum,x)=>sum+Number(x.volume||0),0);
+  const projected=rows.reduce((sum,x)=>sum+(Number.isFinite(x.projectedMiss)?x.projectedMiss:0),0);
+  const allowed=rows.reduce((sum,x)=>sum+Number(x.allowedMiss||0),0);
+  const gap=Number.isFinite(historicalRate)?projected-allowed:NaN;
+  const riskDays=Number.isFinite(historicalRate)?(historicalRate>TARGET_MISSCAN?rows.length:0):null;
+
+  if($('calTarget'))$('calTarget').textContent=fmtPct(TARGET_MISSCAN);
+  if($('calHistoricalRate'))$('calHistoricalRate').textContent=fmtPct(historicalRate);
+  if($('calFutureVolume'))$('calFutureVolume').textContent=fmtInt.format(Math.round(futureVolume));
+  if($('calProjectedMiss'))$('calProjectedMiss').textContent=Number.isFinite(historicalRate)?fmtInt.format(Math.round(projected)):'—';
+  if($('calAllowedMiss'))$('calAllowedMiss').textContent=fmtInt.format(Math.round(allowed));
+  if($('calGap')){
+    $('calGap').textContent=Number.isFinite(gap)?`${gap>=0?'+':''}${fmtInt.format(Math.round(gap))}`:'—';
+    $('calGap').classList.toggle('gap-positive',Number.isFinite(gap)&&gap>0);
+    $('calGap').classList.toggle('gap-negative',Number.isFinite(gap)&&gap<=0);
+  }
+  if($('calGapDetail'))$('calGapDetail').textContent=Number.isFinite(gap)?(gap>0?'Misscans acima do limite':'folga vs limite'):'aguardando histórico';
+  if($('calRiskDays'))$('calRiskDays').textContent=riskDays===null?'—':fmtInt.format(riskDays);
+
+  if($('calendarSummaryText')){
+    const hist=state.autoRateMeta?.periodLabel||'histórico ainda indisponível';
+    const future=state.calendarMeta?.periodStart&&state.calendarMeta?.periodEnd
+      ?`${state.calendarMeta.periodStart.split('-').reverse().join('/')} a ${state.calendarMeta.periodEnd.split('-').reverse().join('/')}`
+      :'forecast futuro';
+    $('calendarSummaryText').textContent=`Histórico ${hist} • Forecast ${future} • Meta fixa ${fmtPct(TARGET_MISSCAN)}`;
   }
 }
 
-function updateFutureBaseRate(){
-  if(!$('futureTurno')||!$('futureBaseRate')) return;
-  $('futureBaseRate').value=getTurnBaseRate($('futureTurno').value).toFixed(3);
-}
-
-function updateCalendarModeUI(){
-  const auto=state.calendarMode==='auto';
-  if($('calendarAutoBtn'))$('calendarAutoBtn').classList.toggle('active',auto);
-  if($('calendarManualBtn'))$('calendarManualBtn').classList.toggle('active',!auto);
-  if($('manualForecastForm'))$('manualForecastForm').classList.toggle('calendar-manual-disabled',auto);
-  if($('clearForecastBtn'))$('clearForecastBtn').disabled=auto;
-}
-
-function forecastRowsSource(){
-  if(state.calendarMode==='auto'&&state.forecastAuto.length)return state.forecastAuto;
-  return state.forecast;
-}
-
-function renderCalendarSourceStatus(mode='ok',message='',detail=''){
-  const dot=$('calendarLiveDot');
-  if(dot){dot.classList.remove('loading','error');if(mode==='loading')dot.classList.add('loading');if(mode==='error')dot.classList.add('error')}
-  if($('calendarSource'))$('calendarSource').textContent=message||'Planejamento automático';
-  if($('calendarUpdated'))$('calendarUpdated').textContent=detail||'Fonte: Hc x Posto de Trabalho';
-}
-
 async function loadCalendarizationAuto({silent=true}={}){
-  renderCalendarSourceStatus('loading','Atualizando planejamento...','Lendo snapshot privado da Vercel');
+  renderCalendarSourceStatus('loading','Atualizando GEROT...','Lendo Forecast Total diário');
   try{
-    const res=await fetch(`/api/calendarizacao?t=${Date.now()}`,{cache:'no-store'});
+    const res=await fetch(`/api/calendarizacao?days=21&t=${Date.now()}`,{cache:'no-store'});
     let data={};try{data=await res.json()}catch{}
     if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
-    const today=new Date().toISOString().slice(0,10);
-    state.forecastAuto=(data.rows||[]).filter(x=>String(x.date||'')>=today);
+    state.forecastAuto=data.rows||[];
     state.calendarMeta=data.meta||{};
     const updated=state.calendarMeta.receivedAt?new Date(state.calendarMeta.receivedAt).toLocaleString('pt-BR'):'—';
-    const sheet=state.calendarMeta.weekSheet||'—';
-    renderCalendarSourceStatus('ok',`${state.forecastAuto.length} turno(s) futuro(s) • ${sheet}`,`Hc x Posto de Trabalho • atualizado ${updated}`);
-    await loadAutoRates({silent:true});
-    renderForecastTable();renderProjection();
+    renderCalendarSourceStatus(
+      'ok',
+      `${state.forecastAuto.length} dia(s) planejado(s) • GEROT`,
+      `db_volume_forecast • Total (F) • atualizado ${updated}`
+    );
+    renderForecastTable();
+    renderProjection();
   }catch(err){
-    console.error(err);
-    renderCalendarSourceStatus('error','Planejamento automático indisponível',err.message);
-    if(!silent)alert(`Falha na calendarização automática:
+    console.error('Calendarização V6.5',err);
+    state.forecastAuto=[];
+    renderCalendarSourceStatus('error','GEROT indisponível',err.message);
+    renderForecastTable();
+    renderProjection();
+    if(!silent)alert(`Falha na Calendarização V6.5:
 ${err.message}`);
   }
 }
 
-function setCalendarMode(mode){
-  state.calendarMode=mode==='manual'?'manual':'auto';
-  saveForecast();updateCalendarModeUI();renderForecastTable();renderProjection();
+async function refreshCalendarizationV65({silent=true}={}){
+  await loadCalendarizationAuto({silent});
+  await loadAutoRates({silent});
 }
 
-function calcForecastRow(x){
-  const scenario=SCENARIOS[state.scenario||'base'];
-  const capacity=x.productivityUnit==='POR_TURNO'?x.hc*x.productivity:x.hc*x.hours*x.productivity;
-  const load=capacity>0?x.volume/capacity:NaN;
-  const loadFactorValue=loadFactor(load);
-  const baseRate=x.source==='AUTO'?getTurnBaseRate(x.turno):x.baseRate;
-  const projectedRate=baseRate*loadFactorValue*scenario.factor;
-  const projectedMiss=x.volume*projectedRate/100;
 
-  return {
-    ...x,
-    capacity,
-    baseRate,
-    load,
-    loadFactor:loadFactorValue,
-    scenarioFactor:scenario.factor,
-    projectedRate,
-    projectedMiss
-  };
-}
-
-function aggregateForecast(rows,field){
-  const map=new Map();
-
-  rows.forEach(r=>{
-    const key=r[field]||'NA';
-    if(!map.has(key)) map.set(key,{volume:0,miss:0});
-    const item=map.get(key);
-    item.volume+=r.volume;
-    item.miss+=r.projectedMiss;
-  });
-
-  return [...map.entries()]
-    .map(([key,v])=>[
-      `${key} • ${v.volume?fmtPct(v.miss/v.volume*100):'—'}`,
-      Math.round(v.miss)
-    ])
-    .sort((a,b)=>b[1]-a[1]);
-}
-
-function renderForecastBreakdowns(rows){
-  renderBars('forecastTurnBars',aggregateForecast(rows,'turno'),8);
-  renderBars('forecastAreaBars',aggregateForecast(rows,'area'),8);
-}
-
-function renderProjection(){
-  if(!$('actualVolume')) return;
-
-  const actualVol=Number($('actualVolume').value)||0;
-  const target=Number($('targetRate').value)||0;
-  const actualMiss=state.filtered.length;
-  const current=actualVol?actualMiss/actualVol*100:NaN;
-
-  const rows=forecastRowsSource().map(calcForecastRow);
-  const futureVol=rows.reduce((sum,x)=>sum+x.volume,0);
-  const futureMiss=rows.reduce((sum,x)=>sum+x.projectedMiss,0);
-  const forecast=(actualVol+futureVol)
-    ?(actualMiss+futureMiss)/(actualVol+futureVol)*100
-    :NaN;
-
-  $('projMisscan').textContent=fmtInt.format(actualMiss);
-  $('currentRate').textContent=fmtPct(current);
-  $('targetCard').textContent=fmtPct(target);
-  $('forecastRate').textContent=fmtPct(forecast);
-  $('futureVolumeCard').textContent=fmtInt.format(Math.round(futureVol));
-
-  const riskyDates=new Set(
-    rows
-      .filter(x=>riskForRate(x.projectedRate,target).key==='bad')
-      .map(x=>x.date)
-  );
-  $('riskDaysCard').textContent=fmtInt.format(riskyDates.size);
-
-  $('forecastGap').textContent=Number.isFinite(forecast)
-    ?`${forecast-target>=0?'+':''}${(forecast-target).toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})} p.p. vs meta`
-    :'Informe o volume realizado';
-
-  const gauge=$('projectionGauge');
-  const value=Number.isFinite(forecast)?forecast:0;
-  const max=Math.max(target*1.7,value*1.2,1);
-  const angle=Math.min(360,value/max*360);
-  const risk=riskForRate(forecast,target);
-  const gaugeColor=risk.key==='good'?'#00a66a':risk.key==='watch'?'#f0a500':'#dc294b';
-
-  gauge.innerHTML=`
-    <div class="gauge-ring" style="background:conic-gradient(${gaugeColor} ${angle}deg,#e5edf5 ${angle}deg)">
-      <div class="gauge-text">
-        <strong>${fmtPct(forecast)}</strong>
-        <span>${Number.isFinite(forecast)?risk.label:'Aguardando volume'}</span>
-      </div>
-    </div>`;
-
-  const avgFuture=futureVol?futureMiss/futureVol*100:NaN;
-
-  const turnMap=new Map();
-  rows.forEach(r=>{
-    if(!turnMap.has(r.turno)) turnMap.set(r.turno,{volume:0,miss:0});
-    const x=turnMap.get(r.turno);
-    x.volume+=r.volume;
-    x.miss+=r.projectedMiss;
-  });
-
-  const highTurn=[...turnMap.entries()]
-    .map(([turno,x])=>({turno,rate:x.volume?x.miss/x.volume*100:0}))
-    .sort((a,b)=>b.rate-a.rate)[0];
-
-  $('forecastSummaryText').innerHTML=`
-    <strong>${state.calendarMode==='auto'?'Planejamento automático':'Simulação manual'} • Cenário ${escapeHtml(SCENARIOS[state.scenario||'base'].label)}:</strong>
-    taxa futura ponderada <b>${fmtPct(avgFuture)}</b> •
-    Misscan futuro estimado <b>${fmtInt.format(Math.round(futureMiss))}</b> •
-    ${highTurn
-      ?`turno de maior risco <b>${escapeHtml(highTurn.turno)} (${fmtPct(highTurn.rate)})</b>`
-      :'adicione dias para identificar o turno de maior risco'}.
-  `;
-
-  renderForecastBreakdowns(rows);
-}
-
-function addForecast(){
-  if(state.calendarMode==='auto')return alert('Troque para o modo Manual para criar uma simulação.');
-  const date=$('futureDate').value;
-  const turno=$('futureTurno').value;
-  const area=$('futureArea').value;
-  const volume=Number($('futureVolume').value);
-  const hc=Number($('futureHC').value);
-  const hours=Number($('futureHours').value);
-  const productivity=Number($('futureProd').value);
-  const baseRate=getTurnBaseRate(turno);
-
-  if(!date||!volume||!hc||!hours||!productivity||baseRate<0){
-    return alert('Preencha data, turno, volume, HC, horas e produtividade.');
-  }
-
-  state.forecast.push({
-    id:crypto.randomUUID(),
-    date,
-    turno,
-    area,
-    volume,
-    hc,
-    hours,
-    productivity,
-    baseRate
-  });
-
-  state.forecast.sort((a,b)=>a.date.localeCompare(b.date)||a.turno.localeCompare(b.turno));
-
-  saveForecast();
-  renderForecastTable();
-  renderProjection();
-
-  $('futureVolume').value='';
-  $('futureHC').value='';
-  $('futureProd').value='';
-}
-
-function renderForecastTable(){
-  if(!$('forecastBody')) return;
-
-  const target=Number($('targetRate').value)||0;
-  const rows=forecastRowsSource().map(calcForecastRow);
-
-  $('forecastBody').innerHTML=rows.map(x=>{
-    const risk=riskForRate(x.projectedRate,target);
-    const loadPct=Number.isFinite(x.load)?x.load*100:NaN;
-
-    return `<tr>
-      <td>${x.date.split('-').reverse().join('/')}</td>
-      <td><strong>${escapeHtml(x.turno)}</strong></td>
-      <td>${x.source==='AUTO'?'<span class="calendar-auto-tag">AUTO</span>':`<span class="tag ${x.area==='ESTEIRA'?'tag-esteira':x.area==='EXPEDIÇÃO'?'tag-expedicao':'tag-na'}">MANUAL</span>`}<div class="calendar-source-note">${escapeHtml(x.sourceLabel||x.area||'')}</div></td>
-      <td>${fmtInt.format(Math.round(x.volume))}</td>
-      <td>${fmtInt.format(Math.round(x.hc))}</td>
-      <td>${x.source==='AUTO'?fmtInt.format(Math.round(x.esteirasHC||0)):(x.hours||0).toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
-      <td>${fmtInt.format(Math.round(x.productivity))}</td>
-      <td>${fmtInt.format(Math.round(x.capacity))}</td>
-      <td>${fmtPct(loadPct)}</td>
-      <td>${fmtPct(x.baseRate)}</td>
-      <td><strong>${fmtPct(x.projectedRate)}</strong></td>
-      <td>${fmtInt.format(Math.round(x.projectedMiss))}</td>
-      <td><span class="tag ${risk.cls}">${risk.label}</span></td>
-      <td>${x.source==='AUTO'?'<span class="calendar-auto-tag">OFICIAL</span>':`<button class="ghost-dark" onclick="removeForecast('${x.id}')">Excluir</button>`}</td>
-    </tr>`;
-  }).join('')||'<tr><td colspan="14" class="empty">Nenhum planejamento futuro disponível.</td></tr>';
-}
-
-window.removeForecast=id=>{
-  state.forecast=state.forecast.filter(x=>x.id!==id);
-  saveForecast();
-  renderForecastTable();
-  renderProjection();
-};
 function tabs(){
   document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
-    if(b.dataset.tab==='calendarizacao'){renderProjection();if(state.calendarMode==='auto'){loadCalendarizationAuto({silent:true});loadAutoRates({silent:true})}}
+    if(b.dataset.tab==='calendarizacao'){refreshCalendarizationV65({silent:true})}
     if(b.dataset.tab==='tratativas')renderTreatments();
   }));
 }
@@ -1299,7 +1175,7 @@ async function refreshLiveData({silent=false}={}){
         ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
         : '';
       $('dataNote').textContent=
-        `Histórico LM dinâmico V6.4. ${fmtInt.format(state.raw.length)} BR únicos no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
+        `Histórico LM dinâmico V6.5. ${fmtInt.format(state.raw.length)} BR únicos no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
   }catch(err){
     console.error(err);
@@ -1316,9 +1192,9 @@ async function refreshLiveData({silent=false}={}){
 }
 
 async function boot(){
-  tabs();loadForecast();restorePeriodPreference();
+  tabs();loadCalendarPreferences();restorePeriodPreference();
   await refreshLiveData({silent:true});
-  await loadCalendarizationAuto({silent:true});
+  await refreshCalendarizationV65({silent:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>refreshLiveData({silent:false}));
@@ -1353,45 +1229,12 @@ async function boot(){
   const sigCanvas=$('signatureCanvas');['pointerdown'].forEach(ev=>sigCanvas.addEventListener(ev,sigStart));['pointermove'].forEach(ev=>sigCanvas.addEventListener(ev,sigMove));['pointerup','pointercancel','pointerleave'].forEach(ev=>sigCanvas.addEventListener(ev,sigEnd));
   $('clearSignatureBtn').addEventListener('click',clearSignature);$('saveSignatureBtn').addEventListener('click',saveSignature);
 
-  $('calendarAutoBtn').addEventListener('click',()=>setCalendarMode('auto'));
-  $('calendarManualBtn').addEventListener('click',()=>setCalendarMode('manual'));
-  $('refreshCalendarBtn').addEventListener('click',()=>loadCalendarizationAuto({silent:false}));
-  document.querySelectorAll('.rate-window-btn').forEach(b=>b.addEventListener('click',()=>{state.rateWindowDays=Number(b.dataset.days)||14;saveForecast();loadAutoRates({silent:false})}));
-
-  $('actualVolume').addEventListener('input',()=>{saveForecast();renderProjection()});
-  $('targetRate').addEventListener('input',()=>{saveForecast();renderForecastTable();renderProjection()});
-
-  ['T1','T2','T3','T4','T5'].forEach(t=>{
-    $(`rate${t}`).addEventListener('input',()=>{
-      saveForecast();
-      updateFutureBaseRate();
-      renderForecastTable();
-      renderProjection();
-    });
-  });
-
-  $('futureTurno').addEventListener('change',updateFutureBaseRate);
-
-  document.querySelectorAll('.scenario-btn').forEach(b=>{
-    b.addEventListener('click',()=>{
-      state.scenario=b.dataset.scenario;
-      updateScenarioButtons();
-      saveForecast();
-      renderForecastTable();
-      renderProjection();
-    });
-  });
-
-  $('addForecastBtn').addEventListener('click',addForecast);
-
-  $('clearForecastBtn').addEventListener('click',()=>{
-    if(state.calendarMode==='auto')return;
-    if(confirm('Limpar toda a simulação manual?')){
-      state.forecast=[];
-      saveForecast();
-      renderForecastTable();
-      renderProjection();
-    }
-  });
+  $('refreshCalendarBtn').addEventListener('click',()=>refreshCalendarizationV65({silent:false}));
+  document.querySelectorAll('.rate-window-btn').forEach(b=>b.addEventListener('click',()=>{
+    state.rateWindowDays=Number(b.dataset.days)||14;
+    saveCalendarPreferences();
+    updateRateWindowButtons();
+    loadAutoRates({silent:false});
+  }));
 }
 boot();

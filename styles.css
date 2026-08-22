@@ -1086,3 +1086,50 @@ thead,
 .manual-rate-details summary{cursor:pointer;color:#536d89;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
 .manual-rate-details .turn-rate-grid{margin-top:9px}
 @media(max-width:720px){.auto-rate-grid{grid-template-columns:1fr}.rate-window-control{margin-top:8px}}
+
+/* ===== V6.5 — CALENDARIZAÇÃO GEROT ===== */
+.target-badge{
+  min-width:150px;border:1px solid rgba(255,255,255,.18);border-radius:16px;
+  padding:16px 18px;background:rgba(255,255,255,.08);text-align:center;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08)
+}
+.target-badge span{display:block;font-size:9px;font-weight:950;letter-spacing:.11em;color:#c9d8e8}
+.target-badge strong{display:block;margin:4px 0;color:#fff;font-size:30px;line-height:1}
+.target-badge small{font-size:9px;color:#ffb8a8;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+.calendar-v65-controls{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.calendar-v65-controls>div:first-child{display:flex;flex-direction:column;gap:4px}
+.calendar-v65-controls .eyebrow{font-size:9px;color:#7287a2}
+.calendar-v65-controls strong{font-size:13px;color:var(--navy)}
+.calendar-kpis-v65{grid-template-columns:repeat(7,minmax(0,1fr))}
+.auto-rate-grid-v65{grid-template-columns:repeat(4,1fr)}
+.auto-rate-general{background:var(--orange-soft);border-color:#ffd3c8}
+.auto-rate-general strong{color:var(--orange)}
+.compact-table-wrap{max-height:360px}
+.calendar-compact-table{min-width:540px;width:100%}
+.calendar-compact-table th,.calendar-compact-table td{padding:10px 11px;font-size:10px}
+.calendar-table-v65{min-width:980px}
+.calendar-table-v65 th,.calendar-table-v65 td{white-space:nowrap}
+.history-calendar-table{min-width:1120px}
+.gap-positive{color:var(--red)!important}
+.gap-negative{color:var(--green)!important}
+#calGap.gap-positive{color:var(--red)}
+#calGap.gap-negative{color:var(--green)}
+@media(max-width:1280px){
+  .calendar-kpis-v65{grid-template-columns:repeat(4,1fr)}
+  .auto-rate-grid-v65{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:760px){
+  .projection-hero{flex-direction:column;align-items:flex-start}
+  .target-badge{width:100%;text-align:left}
+  .calendar-v65-controls{align-items:flex-start;flex-direction:column}
+  .calendar-kpis-v65{grid-template-columns:1fr 1fr}
+  .auto-rate-grid-v65{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .calendar-kpis-v65{grid-template-columns:1fr}
+}
+#calendarizacao .projection-hero{display:flex;align-items:center;justify-content:space-between;gap:20px}
+#calendarizacao .target-badge{background:var(--orange-soft);border-color:#ffd2c7;box-shadow:none}
+#calendarizacao .target-badge span{color:#91604f}
+#calendarizacao .target-badge strong{color:var(--orange)}
+#calendarizacao .target-badge small{color:#a65542}

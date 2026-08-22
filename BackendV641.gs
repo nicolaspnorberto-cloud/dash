@@ -1268,7 +1268,7 @@ function dedupeProducaoV63_(rows){const map={};rows.forEach(function(r){if(r.dat
 
 
 /* =========================================================
-   V6.4.2 — HISTÓRICO LM DINÂMICO • FIX PAYLOAD INCREMENTAL
+   V6.4.1 — HISTÓRICO LM DINÂMICO • FIX PAYLOAD
    - LM é a fonte oficial e crescente do histórico de Misscan.
    - Backfill completo é retomável e não depende de ordenação por data.
    - Sincronização de HC + LM é independente de Calendarização/Oráculo.
@@ -1277,7 +1277,6 @@ function dedupeProducaoV63_(rows){const map={};rows.forEach(function(r){if(r.dat
 const V64_INCREMENTAL_DAYS = 45;
 const V64_SCAN_CHUNK_SIZE = 5000;
 const V64_BACKFILL_ROWS_PER_RUN = 2000;
-const V642_INCREMENTAL_ROWS_PER_REQUEST = 1000;
 
 function testarConexaoV64() {
   const base = vercelBaseUrlV6_();
@@ -1391,7 +1390,7 @@ function sincronizarHCeMisscanV64() {
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) {
-    Logger.log('V6.4.2 HC+LM: outra execução está em andamento.');
+    Logger.log('V6.4 HC+LM: outra execução está em andamento.');
     return;
   }
 
@@ -1399,76 +1398,44 @@ function sincronizarHCeMisscanV64() {
     const ss = SpreadsheetApp.openById(spreadsheetIdV6_());
     const hc = lerHCV6_(ss);
     const misscanResult = lerMisscanPeriodoSeguroV64_(ss, V64_INCREMENTAL_DAYS);
-    const rows = misscanResult.rows || [];
 
-    const chunks = [];
-    if (!rows.length) {
-      chunks.push([]);
-    } else {
-      for (
-        let i = 0;
-        i < rows.length;
-        i += V642_INCREMENTAL_ROWS_PER_REQUEST
-      ) {
-        chunks.push(rows.slice(i, i + V642_INCREMENTAL_ROWS_PER_REQUEST));
+    const payload = {
+      hc: hc,
+      misscan: misscanResult.rows,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        spreadsheetId: spreadsheetIdV6_(),
+        hcSheet: V6_HC_SHEET,
+        misscanSheet: V6_MISSCAN_SHEET,
+        hcRecords: hc.length,
+        misscanRecords: misscanResult.rows.length,
+        misscanSourceLastRow: misscanResult.lastRow,
+        sourceRowsScanned: misscanResult.sourceRowsScanned,
+        days: V64_INCREMENTAL_DAYS,
+        periodStart: misscanResult.periodStart,
+        periodEnd: misscanResult.periodEnd,
+        periodLabel: misscanResult.periodLabel,
+        source: 'Apps Script Push V6.4 • LM dinâmica',
+        syncMode: 'INCREMENTAL',
+        sourceStrategy: 'SAFE_FULL_SCAN_RECENT_FILTER',
+        updateHC: true
       }
-    }
+    };
 
-    let lastData = null;
-
-    chunks.forEach(function(chunk, index) {
-      const first = index === 0;
-      const payload = {
-        misscan: chunk,
-        meta: {
-          generatedAt: new Date().toISOString(),
-          spreadsheetId: spreadsheetIdV6_(),
-          hcSheet: V6_HC_SHEET,
-          misscanSheet: V6_MISSCAN_SHEET,
-          hcRecords: hc.length,
-          misscanRecords: rows.length,
-          misscanSourceLastRow: misscanResult.lastRow,
-          sourceRowsScanned: misscanResult.sourceRowsScanned,
-          days: V64_INCREMENTAL_DAYS,
-          periodStart: misscanResult.periodStart,
-          periodEnd: misscanResult.periodEnd,
-          periodLabel: misscanResult.periodLabel,
-          source: 'Apps Script Push V6.4.2 • LM dinâmica',
-          syncMode: 'INCREMENTAL_CHUNKED',
-          sourceStrategy: 'SAFE_FULL_SCAN_RECENT_FILTER_CHUNKED',
-          updateHC: first,
-          chunk: {
-            index: index + 1,
-            total: chunks.length,
-            records: chunk.length
-          }
-        }
-      };
-
-      if (first) payload.hc = hc;
-
-      lastData = enviarHistoricoV64_(payload);
-
-      Logger.log(
-        'V6.4.2 HC+LM lote ' + (index + 1) + '/' + chunks.length +
-        ': ' + chunk.length + ' Misscan enviados.'
-      );
-    });
+    const data = enviarHistoricoV64_(payload);
 
     PropertiesService.getScriptProperties()
       .setProperty('V64_LAST_LM_SYNC', new Date().toISOString());
 
     Logger.log(
-      'V6.4.2 HC+LM OK: ' +
-      hc.length + ' HC | ' +
-      rows.length + ' Misscan recentes | ' +
-      chunks.length + ' lote(s) enviados | histórico ' +
-      ((lastData && lastData.historyStart) || '—') + ' → ' +
-      ((lastData && lastData.historyEnd) || '—') + '.'
+      'V6.4 HC+LM OK: ' +
+      data.hcRecords + ' HC | ' +
+      data.incomingMisscanRecords + ' Misscan recentes | histórico ' +
+      (data.historyStart || '—') + ' → ' + (data.historyEnd || '—') +
+      ' | ' + (data.historyActiveDays || 0) + ' dias com Misscan.'
     );
 
-    return lastData;
-
+    return data;
   } finally {
     lock.releaseLock();
   }
@@ -1856,61 +1823,4 @@ function retomarHistoricoLMV641() {
 
   Logger.log('V6.4.1 retomando backfill a partir da linha ' + cursor + '.');
   return continuarHistoricoCompletoLMV64();
-}
-
-
-/**
- * V6.4.2 — instalador seguro.
- * Só cria os gatilhos depois que o backfill completo da LM terminou.
- */
-function instalarAutomacoesV642() {
-  const props = PropertiesService.getScriptProperties();
-  const status = props.getProperty('V64_BACKFILL_STATUS') || 'NÃO INICIADO';
-
-  if (status !== 'DONE') {
-    throw new Error(
-      'Histórico LM ainda não terminou. Status atual: ' + status +
-      '. Execute statusHistoricoLMV64() e aguarde DONE antes de instalar os gatilhos.'
-    );
-  }
-
-  removerAutomacoesV64();
-
-  ScriptApp.newTrigger('sincronizarHCeMisscanV64')
-    .timeBased()
-    .everyMinutes(30)
-    .create();
-
-  ScriptApp.newTrigger('sincronizarCalendarizacaoV64')
-    .timeBased()
-    .everyMinutes(30)
-    .create();
-
-  ScriptApp.newTrigger('processarFilaEmailsV64')
-    .timeBased()
-    .everyMinutes(5)
-    .create();
-
-  // Validação imediata da LM já usando envio em lotes.
-  sincronizarHCeMisscanV64();
-
-  Logger.log(
-    'V6.4.2 instalada: HC+LM 30 min | Calendarização 30 min | E-mails 5 min.'
-  );
-}
-
-/**
- * Diagnóstico rápido: mostra se existe algum gatilho V6.4 ativo.
- */
-function listarGatilhosV642() {
-  const rows = ScriptApp.getProjectTriggers().map(function(t) {
-    return {
-      handler: t.getHandlerFunction(),
-      eventType: String(t.getEventType()),
-      source: String(t.getTriggerSource())
-    };
-  });
-
-  Logger.log(JSON.stringify(rows, null, 2));
-  return rows;
 }
