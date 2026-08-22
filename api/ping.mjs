@@ -3,16 +3,16 @@ import { json } from '../lib/blob-store.mjs';
 export async function GET() {
   return json({
     ok: true,
-    service: 'misscan-v6.7',
-    version: '6.7',
-    architecture: 'vercel-private-queue + apps-script-polling',
+    service: 'misscan-v6.8',
+    version: '6.8',
+    architecture: 'vercel-private-queue + exact-lm-date-snapshot',
     features: [
-      'atualizar-agora-fila-privada',
-      'sem-apps-script-publico',
-      'matinal-lm',
+      'lm-full-scan-exact-date',
+      'dedupe-date-shipment-id',
+      'replace-date-snapshot',
+      'private-refresh-queue',
       'gerot',
-      'target-0.88',
-      'email-queue'
+      'target-0.88'
     ],
     timestamp: new Date().toISOString()
   });

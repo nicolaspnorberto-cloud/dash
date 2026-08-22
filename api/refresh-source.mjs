@@ -32,7 +32,7 @@ export async function GET(request) {
       return json({
         ok: true,
         route: '/api/refresh-source',
-        version: '6.7',
+        version: '6.8',
         mode: 'private-queue',
         configured: Boolean(
           String(process.env.EMAIL_WEBHOOK_TOKEN || '').trim()
@@ -84,6 +84,13 @@ export async function POST(request) {
     )
       ? String(body.action || 'all').toLowerCase()
       : 'all';
+
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.from || ''))
+      ? String(body.from)
+      : '';
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.to || ''))
+      ? String(body.to)
+      : '';
 
     const now = new Date();
     const nowMs = now.getTime();
@@ -151,6 +158,8 @@ export async function POST(request) {
     const item = {
       id: uid(),
       action,
+      from,
+      to,
       status: 'PENDING',
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),

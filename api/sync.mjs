@@ -33,11 +33,17 @@ function rowScore(r) {
     (tm ? 1 : 0);
 }
 
+function rowIdentityKey(r, index = 0) {
+  const shipment = String(r?.shipment_id || '').trim();
+  const date = rowDateKey(r) || 'NO_DATE';
+  return shipment ? `${date}|${shipment}` : `${date}|ROW_${index}`;
+}
+
 function mergeRows(existingRows, incomingRows) {
   const map = new Map();
 
   [...(existingRows || []), ...(incomingRows || [])].forEach((r, index) => {
-    const key = String(r?.shipment_id || '').trim() || `ROW_${index}`;
+    const key = rowIdentityKey(r, index);
     const score = rowScore(r);
     const dt = Date.parse(String(r?.lmreceived_date || '').replace(' ', 'T')) || 0;
     const current = map.get(key);
@@ -93,9 +99,9 @@ export async function GET() {
   return json({
     ok: true,
     route: '/api/sync',
-    version: '6.4',
+    version: '6.8',
     method: 'POST',
-    message: 'Sincronização incremental + histórico LM dinâmico.'
+    message: 'Sincronização LM V6.8 com substituição integral por data e deduplicação por shipment_id.'
   });
 }
 
@@ -106,6 +112,11 @@ export async function POST(request) {
 
     const hasHC = Array.isArray(payload?.hc);
     const misscan = Array.isArray(payload?.misscan) ? payload.misscan : null;
+    const replaceDates = new Set(
+      Array.isArray(payload?.meta?.replaceDates)
+        ? payload.meta.replaceDates.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')))
+        : []
+    );
 
     if (!misscan) {
       return json({
@@ -132,7 +143,7 @@ export async function POST(request) {
     }
 
     const previousMeta = await readJson(META_PATH, {
-      version: '6.4',
+      version: '6.8',
       months: [],
       monthStats: {},
       historyStart: '',
@@ -162,7 +173,16 @@ export async function POST(request) {
     for (const [month, rows] of groups.entries()) {
       const path = `misscan/history/${month}.json`;
       const existing = await readJson(path, { rows: [] });
-      const merged = mergeRows(existing?.rows || [], rows);
+
+      // Quando o Apps Script informa replaceDates, removemos o snapshot antigo
+      // dessas datas antes de mesclar o novo. Isso impede resíduos de uma carga
+      // parcial (ex.: 952 BR) quando a LM já contém o bloco completo.
+      const baseRows = (existing?.rows || []).filter(row => {
+        const key = rowDateKey(row);
+        return !replaceDates.has(key);
+      });
+
+      const merged = mergeRows(baseRows, rows);
       const stats = statsForRows(merged);
 
       await writeJson(path, {
@@ -213,22 +233,15 @@ export async function POST(request) {
       0
     );
 
-    const historyRows = Math.max(
-      Number(previousMeta?.historyRows || 0),
-      statsRows
-    );
-
-    const historyActiveDays = Math.max(
-      Number(previousMeta?.historyActiveDays || 0),
-      statsActiveDays
-    );
+    const historyRows = statsRows;
+    const historyActiveDays = statsActiveDays;
 
     const historyCalendarDays = daysInclusive(historyStart, historyEnd);
 
     const meta = {
       ...previousMeta,
       ...(payload.meta || {}),
-      version: '6.4',
+      version: '6.8',
       architecture: 'PUSH_PRIVADO_V6_4_DYNAMIC_LM_HISTORY',
       receivedAt: now,
       updatedAt: now,
@@ -250,7 +263,7 @@ export async function POST(request) {
     return json({
       ok: true,
       stored: true,
-      version: '6.4',
+      version: '6.8',
       hcRecords: meta.hcRecords,
       incomingMisscanRecords: misscan.length,
       misscanRecords: misscan.length,
@@ -266,7 +279,7 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('MISSCAN_SYNC_V64_ERROR', error);
+    console.error('MISSCAN_SYNC_V68_ERROR', error);
     return json({
       ok: false,
       error: error?.message || 'Falha ao sincronizar histórico V6.4.'
