@@ -87,6 +87,177 @@ function resolvePeriod(url, meta) {
   }
 }
 
+
+function operatorParts(raw = '') {
+  return String(raw || '')
+    .split(/\s*[,;|\n]\s*/)
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
+function parseOperator(raw = '') {
+  const text = String(raw || '').trim();
+  const m = text.match(/\[(Ops\d+)\]/i);
+  const opsid = m ? m[1].toUpperCase() : '';
+  const name = text.replace(/\[Ops\d+\]/gi, '').trim();
+  const norm = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+  const invalid =
+    !name ||
+    /@/.test(name) ||
+    ['NA', 'NOT IDENTIFIED', 'NAO IDENTIFICADO'].includes(norm);
+
+  return invalid
+    ? null
+    : {
+        key: opsid || norm,
+        opsid,
+        name,
+        raw: `${opsid ? `[${opsid}]` : ''}${name}`
+      };
+}
+
+function operatorMap(raw = '') {
+  const map = new Map();
+  operatorParts(raw).forEach(part => {
+    const op = parseOperator(part);
+    if (op) map.set(op.key, op);
+  });
+  return map;
+}
+
+function responsibility(row) {
+  const pf = String(row?.process_fail || '').trim();
+  const tm = String(row?.to_mis_status || '').trim();
+
+  if (pf === 'Packed TO') return 'EXPEDIÇÃO';
+  if (pf.startsWith('Extra Parcel')) return 'ESTEIRA';
+  if (tm === 'Whole TO') return 'EXPEDIÇÃO';
+  if (tm === 'Extra Parcel') return 'ESTEIRA';
+  return 'NA';
+}
+
+function canonicalizeAndAttributeV612(rows = []) {
+  const groups = new Map();
+
+  for (const row of rows) {
+    const date = rowDateKey(row) || 'NO_DATE';
+    const shipment = String(row?.shipment_id || '').trim();
+    if (!shipment) continue;
+
+    const key = `${date}|${shipment}`;
+    if (!groups.has(key)) groups.set(key, { rows: [], operators: new Map() });
+    const g = groups.get(key);
+    g.rows.push(row);
+
+    operatorParts(row?.operator_fail).forEach(part => {
+      const op = parseOperator(part);
+      if (op) g.operators.set(op.key, op);
+    });
+  }
+
+  const canonical = [...groups.values()].map(group => {
+    const ranked = [...group.rows].sort((a, b) => {
+      const score = row =>
+        (responsibility(row) !== 'NA' ? 10 : 0) +
+        (row?.process_fail ? 3 : 0) +
+        (row?.to_mis_status ? 2 : 0) +
+        (row?.socpacked_tonumber ? 1 : 0);
+      return score(b) - score(a);
+    });
+
+    const base = { ...(ranked[0] || group.rows[0]) };
+    const ops = [...group.operators.values()];
+
+    base.operator_fail_original = String(
+      base.operator_fail_original || base.operator_fail || 'NA'
+    );
+
+    if (ops.length === 0) {
+      base.operator_fail = 'NA';
+      base.attribution_source = 'NO_OPERATOR';
+    } else if (ops.length === 1) {
+      base.operator_fail = ops[0].raw;
+      base.attribution_source = 'DIRECT_OPERATOR_FAIL';
+    } else {
+      base.operator_fail = ops.map(x => x.raw).join(',');
+      base.attribution_source = 'MULTI_OPERATOR_NOT_IDENTIFIED';
+    }
+
+    if (!base.socpacked_tonumber) {
+      base.socpacked_tonumber =
+        ranked.find(x => String(x?.socpacked_tonumber || '').trim())
+          ?.socpacked_tonumber || '';
+    }
+    if (!base.process_fail) {
+      base.process_fail =
+        ranked.find(x => String(x?.process_fail || '').trim())?.process_fail || '';
+    }
+    if (!base.to_mis_status) {
+      base.to_mis_status =
+        ranked.find(x => String(x?.to_mis_status || '').trim())?.to_mis_status || '';
+    }
+
+    return base;
+  });
+
+  const toContext = new Map();
+
+  for (const row of canonical) {
+    if (String(row?.to_mis_status || '').trim() !== 'Whole TO') continue;
+    const to = String(row?.socpacked_tonumber || '').trim();
+    if (!to) continue;
+
+    const date = rowDateKey(row) || 'NO_DATE';
+    const key = `${date}|${to}`;
+    if (!toContext.has(key)) {
+      toContext.set(key, { single: new Map(), rows: 0, multi: 0 });
+    }
+
+    const ctx = toContext.get(key);
+    ctx.rows++;
+    const ops = operatorMap(row.operator_fail);
+
+    if (ops.size === 1) {
+      const op = [...ops.values()][0];
+      ctx.single.set(op.key, op);
+    } else if (ops.size > 1) {
+      ctx.multi++;
+    }
+  }
+
+  for (const row of canonical) {
+    if (String(row?.to_mis_status || '').trim() !== 'Whole TO') continue;
+    const to = String(row?.socpacked_tonumber || '').trim();
+    if (!to) continue;
+
+    const currentOps = operatorMap(row.operator_fail);
+    if (currentOps.size > 0) continue;
+
+    const date = rowDateKey(row) || 'NO_DATE';
+    const ctx = toContext.get(`${date}|${to}`);
+    if (!ctx) continue;
+
+    if (ctx.single.size === 1) {
+      const op = [...ctx.single.values()][0];
+      row.operator_fail = op.raw;
+      row.attribution_source = 'WHOLE_TO_INHERITED';
+      row.attribution_to = to;
+    } else if (ctx.single.size > 1) {
+      row.attribution_source = 'WHOLE_TO_CONFLICT_NOT_IDENTIFIED';
+    } else {
+      row.attribution_source = 'WHOLE_TO_NO_OPERATOR_NOT_IDENTIFIED';
+    }
+  }
+
+  return canonical;
+}
+
 function formatBr(dateKey) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return dateKey || '—';
   const [y, m, d] = dateKey.split('-');
@@ -158,7 +329,10 @@ export async function GET(request) {
       ? Math.round((Date.now() - last.getTime()) / 60000)
       : null;
 
-    rows.sort((a, b) =>
+    const physicalPeriodRows = rows.length;
+    const canonicalRows = canonicalizeAndAttributeV612(rows);
+
+    canonicalRows.sort((a, b) =>
       String(a.lmreceived_date || '').localeCompare(
         String(b.lmreceived_date || '')
       )
@@ -167,7 +341,7 @@ export async function GET(request) {
     return json({
       ok: true,
       hc: hcFile?.rows || [],
-      misscan: rows,
+      misscan: canonicalRows,
       meta: {
         ...meta,
         ageMinutes,
@@ -177,13 +351,17 @@ export async function GET(request) {
         periodEnd: period.to,
         periodLabel: `${formatBr(period.from)} a ${formatBr(period.to)}`,
         historyLabel: `${formatBr(meta.historyStart)} a ${formatBr(meta.historyEnd)}`,
-        returnedMisscanRecords: rows.length,
+        returnedMisscanRecords: canonicalRows.length,
+        physicalPeriodRows,
+        canonicalPeriodRows: canonicalRows.length,
+        v612Canonicalized: true,
+        wholeToInheritance: true,
         historyMonths: Array.isArray(meta.months) ? meta.months.length : 0
       }
     });
 
   } catch (error) {
-    console.error('MISSCAN_DATA_V64_ERROR', error);
+    console.error('MISSCAN_DATA_V612_ERROR', error);
 
     return json({
       ok: false,
