@@ -4,70 +4,57 @@ import {
   writeJson
 } from '../lib/blob-store.mjs';
 
-const QUEUE_PATH = 'misscan/refresh-queue.json';
-const MAX_ITEMS = 80;
-const ACTIVE_TTL_MS = 8 * 60 * 1000;
-const COOLDOWN_MS = 20 * 1000;
+const REQUEST_PATH = 'misscan/refresh-current.json';
 
 function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function clean(items = []) {
-  return items
-    .sort((a, b) =>
-      String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
-    )
-    .slice(-MAX_ITEMS);
-}
-
 export async function GET(request) {
   try {
     const url = new URL(request.url);
-    const requestId = String(
-      url.searchParams.get('requestId') || ''
-    ).trim();
+    const requestId = String(url.searchParams.get('requestId') || '').trim();
+
+    const current = await readJson(REQUEST_PATH, null);
 
     if (!requestId) {
       return json({
         ok: true,
         route: '/api/refresh-source',
-        version: '6.8',
-        mode: 'private-queue',
+        version: '6.9',
+        mode: 'single-private-request',
         configured: Boolean(
           String(process.env.EMAIL_WEBHOOK_TOKEN || '').trim()
         ),
         appsScriptPublicWebAppRequired: false,
-        pollInterval: '1 minute'
+        current: current
+          ? {
+              id: current.id || '',
+              status: current.status || '',
+              createdAt: current.createdAt || '',
+              updatedAt: current.updatedAt || ''
+            }
+          : null
       });
     }
 
-    const queue = await readJson(
-      QUEUE_PATH,
-      { items: [] }
-    );
-
-    const item = (queue?.items || []).find(
-      x => String(x.id || '') === requestId
-    );
-
-    if (!item) {
+    if (!current || String(current.id || '') !== requestId) {
       return json({
         ok: false,
         requestId,
-        error: 'Pedido não encontrado.'
+        error: 'Pedido não encontrado ou já substituído por um pedido mais novo.'
       }, 404);
     }
 
     return json({
       ok: true,
-      request: item
+      request: current
     });
 
   } catch (error) {
     return json({
       ok: false,
-      error: error?.message || 'Falha ao consultar pedido.'
+      error: error?.message || 'Falha ao consultar atualização.'
     }, 500);
   }
 }
@@ -88,115 +75,47 @@ export async function POST(request) {
     const from = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.from || ''))
       ? String(body.from)
       : '';
+
     const to = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.to || ''))
       ? String(body.to)
       : '';
 
-    const now = new Date();
-    const nowMs = now.getTime();
+    const now = new Date().toISOString();
 
-    const queue = await readJson(
-      QUEUE_PATH,
-      { items: [] }
-    );
-
-    let items = clean(
-      Array.isArray(queue?.items)
-        ? queue.items
-        : []
-    );
-
-    const active = [...items].reverse().find(item => {
-      const status = String(
-        item.status || ''
-      ).toUpperCase();
-
-      const createdMs = Date.parse(
-        item.createdAt || 0
-      );
-
-      return (
-        ['PENDING', 'RUNNING'].includes(status) &&
-        Number.isFinite(createdMs) &&
-        nowMs - createdMs < ACTIVE_TTL_MS
-      );
-    });
-
-    if (active) {
-      return json({
-        ok: true,
-        accepted: true,
-        alreadyRunning: true,
-        requestId: active.id,
-        requestedAt: active.createdAt,
-        status: active.status,
-        mode: 'private-queue'
-      });
-    }
-
-    const latest = items.at(-1);
-    const latestMs = Date.parse(
-      latest?.createdAt || 0
-    );
-
-    if (
-      latest &&
-      Number.isFinite(latestMs) &&
-      nowMs - latestMs < COOLDOWN_MS
-    ) {
-      return json({
-        ok: true,
-        accepted: true,
-        alreadyRunning: true,
-        requestId: latest.id,
-        requestedAt: latest.createdAt,
-        status: latest.status,
-        mode: 'private-queue'
-      });
-    }
-
+    // V6.9: TODO clique cria um pedido novo.
+    // Não reutiliza PENDING/RUNNING antigo e não usa cooldown.
     const item = {
       id: uid(),
       action,
       from,
       to,
       status: 'PENDING',
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
+      createdAt: now,
+      updatedAt: now,
       startedAt: '',
       finishedAt: '',
       result: null,
       error: '',
-      source: 'dashboard'
+      source: 'dashboard-v6.9'
     };
 
-    items.push(item);
-    items = items.slice(-MAX_ITEMS);
-
-    await writeJson(QUEUE_PATH, {
-      updatedAt: now.toISOString(),
-      items
-    });
+    await writeJson(REQUEST_PATH, item);
 
     return json({
       ok: true,
       accepted: true,
-      alreadyRunning: false,
       requestId: item.id,
       requestedAt: item.createdAt,
       status: item.status,
-      mode: 'private-queue'
+      mode: 'single-private-request'
     });
 
   } catch (error) {
-    console.error(
-      'REFRESH_SOURCE_V67_ERROR',
-      error
-    );
+    console.error('REFRESH_SOURCE_V69_ERROR', error);
 
     return json({
       ok: false,
-      error: error?.message || 'Falha ao criar pedido.'
+      error: error?.message || 'Falha ao criar pedido de atualização.'
     }, 500);
   }
 }
