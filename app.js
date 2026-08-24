@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.8 — LM exata por data
+// MIS-SCAN CONTROL CENTER V6.12 — Whole TO atribuído por TO
 const state = {
   sourceRows: 0,
   raw: [],
@@ -158,7 +158,8 @@ function enrich(r){
     operator_count:operators.length,
     operator_name:identified?single.name:'NÃO IDENTIFICADO',
     opsid:identified?single.opsid:'',
-    operator_original:String(r.operator_fail||''),
+    operator_original:String(r.operator_fail_original||r.operator_fail||''),
+    attribution_source:String(r.attribution_source||'DIRECT'),
     turno,setor,lider_nome:liderNome,lider_email:liderEmail,tipo_hc:tipoHC,hc_status:hcStatus
   };
 }
@@ -177,11 +178,198 @@ function dedupeBR(rows){
   return [...map.values()].map(({__score,__dt,...r})=>r);
 }
 
+function canonicalOperatorTokenV612(token=''){
+  const parsed=parseSingleOperator(String(token||'').trim());
+  if(parsed.invalid)return null;
+  const key=(parsed.opsid||parsed.norm||'').toUpperCase();
+  if(!key)return null;
+  return {
+    key,
+    opsid:parsed.opsid||'',
+    name:parsed.name||'',
+    raw:`${parsed.opsid?`[${parsed.opsid}]`:''}${parsed.name||''}`
+  };
+}
+
+function operatorSetV612(raw=''){
+  const map=new Map();
+  parseOperators(raw).forEach(token=>{
+    const op=canonicalOperatorTokenV612(token);
+    if(op)map.set(op.key,op);
+  });
+  return map;
+}
+
+function canonicalizeAndAttributeV612(rows=[]){
+  // 1) Um único registro por DATA + shipment_id.
+  //    Duplicidades físicas da LM nunca podem aumentar o BR.
+  const groups=new Map();
+
+  rows.forEach(raw=>{
+    const dateKey=String(raw?.lmreceived_date||'').slice(0,10);
+    const shipment=String(raw?.shipment_id||'').trim();
+    if(!shipment)return;
+
+    const key=`${dateKey}|${shipment}`;
+    if(!groups.has(key))groups.set(key,{rows:[],operators:new Map()});
+    const g=groups.get(key);
+    g.rows.push(raw);
+
+    parseOperators(raw?.operator_fail||'').forEach(token=>{
+      const op=canonicalOperatorTokenV612(token);
+      if(op)g.operators.set(op.key,op);
+    });
+  });
+
+  const canonical=[];
+
+  groups.forEach(g=>{
+    const ranked=[...g.rows].sort((a,b)=>{
+      const score=x=>
+        (responsibility(x)!=='NA'?10:0)+
+        (x?.process_fail?3:0)+
+        (x?.to_mis_status?2:0)+
+        (x?.socpacked_tonumber?1:0);
+      const delta=score(b)-score(a);
+      if(delta)return delta;
+      return (Date.parse(b?.lmreceived_date||'')||0)-
+        (Date.parse(a?.lmreceived_date||'')||0);
+    });
+
+    const base={...(ranked[0]||g.rows[0]||{})};
+    const operators=[...g.operators.values()];
+
+    base.operator_fail_original=String(
+      base.operator_fail_original||base.operator_fail||'NA'
+    );
+
+    if(operators.length===0){
+      base.operator_fail='NA';
+      base.attribution_source='NO_OPERATOR';
+    }else if(operators.length===1){
+      base.operator_fail=operators[0].raw;
+      base.attribution_source='DIRECT_OPERATOR_FAIL';
+    }else{
+      // 2+ colaboradores NO MESMO BR = NÃO IDENTIFICADO.
+      base.operator_fail=operators.map(x=>x.raw).join(',');
+      base.attribution_source='MULTI_OPERATOR_NOT_IDENTIFIED';
+    }
+
+    if(!base.socpacked_tonumber){
+      base.socpacked_tonumber=
+        ranked.find(x=>String(x?.socpacked_tonumber||'').trim())
+          ?.socpacked_tonumber||'';
+    }
+    if(!base.process_fail){
+      base.process_fail=
+        ranked.find(x=>String(x?.process_fail||'').trim())?.process_fail||'';
+    }
+    if(!base.to_mis_status){
+      base.to_mis_status=
+        ranked.find(x=>String(x?.to_mis_status||'').trim())?.to_mis_status||'';
+    }
+
+    canonical.push(base);
+  });
+
+  // 2) Whole TO: usamos o operator_fail como fonte da responsabilidade.
+  //    Se um BR do TO está NA, ele herda o operador quando o TO possui
+  //    exatamente UM operador válido nas linhas identificadas.
+  //    BR com 2+ operadores permanece NÃO IDENTIFICADO e não contamina
+  //    os outros BR do mesmo TO.
+  const toContext=new Map();
+
+  canonical.forEach(row=>{
+    if(String(row?.to_mis_status||'').trim()!=='Whole TO')return;
+    const to=String(row?.socpacked_tonumber||'').trim();
+    if(!to)return;
+    const dateKey=String(row?.lmreceived_date||'').slice(0,10);
+    const key=`${dateKey}|${to}`;
+    if(!toContext.has(key))toContext.set(key,{single:new Map(),rows:0,multi:0});
+    const ctx=toContext.get(key);
+    ctx.rows++;
+    const ops=operatorSetV612(row.operator_fail);
+    if(ops.size===1){
+      const op=[...ops.values()][0];
+      ctx.single.set(op.key,op);
+    }else if(ops.size>1){
+      ctx.multi++;
+    }
+  });
+
+  canonical.forEach(row=>{
+    if(String(row?.to_mis_status||'').trim()!=='Whole TO')return;
+    const to=String(row?.socpacked_tonumber||'').trim();
+    if(!to)return;
+
+    const ops=operatorSetV612(row.operator_fail);
+    if(ops.size>0)return; // direto ou multi: não mexe.
+
+    const dateKey=String(row?.lmreceived_date||'').slice(0,10);
+    const ctx=toContext.get(`${dateKey}|${to}`);
+    if(!ctx)return;
+
+    if(ctx.single.size===1){
+      const op=[...ctx.single.values()][0];
+      row.operator_fail=op.raw;
+      row.attribution_source='WHOLE_TO_INHERITED';
+      row.attribution_to=to;
+    }else if(ctx.single.size>1){
+      row.attribution_source='WHOLE_TO_CONFLICT_NOT_IDENTIFIED';
+    }else{
+      row.attribution_source='WHOLE_TO_NO_OPERATOR_NOT_IDENTIFIED';
+    }
+  });
+
+  return canonical.sort((a,b)=>
+    String(a?.lmreceived_date||'').localeCompare(String(b?.lmreceived_date||''))
+  );
+}
+
+function scopeRowsToLivePeriodV612(rows=[]){
+  const from=String(
+    state.liveMeta?.periodStart||
+    $('dateFrom')?.value||
+    ''
+  );
+  const to=String(
+    state.liveMeta?.periodEnd||
+    $('dateTo')?.value||
+    ''
+  );
+
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||
+     !/^\d{4}-\d{2}-\d{2}$/.test(to)){
+    return rows;
+  }
+
+  return rows.filter(r=>{
+    const d=String(r?.lmreceived_date||'').slice(0,10);
+    return d>=from&&d<=to;
+  });
+}
+
 function loadMisscanRows(rows){
   state.sourceRows=rows.length;
-  const enriched=rows.map(enrich);
-  state.raw=dedupeBR(enriched);
+
+  // V6.12: consolida o BR físico e aplica a regra de Whole TO antes do HC.
+  // NA em Whole TO herda o único operator_fail válido do TO;
+  // BR com 2+ operadores continua NÃO IDENTIFICADO.
+  const canonical=canonicalizeAndAttributeV612(rows);
+  const scoped=scopeRowsToLivePeriodV612(canonical);
+  const enriched=scoped.map(enrich);
+
+  state.raw=enriched;
   state.filtered=[...state.raw];
+
+  state.v612Integrity={
+    apiRows:rows.length,
+    canonicalBR:canonical.length,
+    periodBR:scoped.length,
+    periodStart:state.liveMeta?.periodStart||'',
+    periodEnd:state.liveMeta?.periodEnd||''
+  };
+
   setupFilters();
   resetFilterValues(false);
   renderAll();
@@ -247,14 +435,52 @@ function renderBars(id,entries,limit=10){
 function dominant(map){return [...map.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||'NA'}
 
 function ranking(){
-  const data=(state.rankArea==='all'?state.filtered:state.filtered.filter(r=>r.responsabilidade===state.rankArea)).filter(r=>r.identificacao==='IDENTIFICADO');
+  let scoped=scopeRowsToLivePeriodV612(state.filtered);
+
+  if(state.rankArea!=='all'){
+    scoped=scoped.filter(r=>r.responsabilidade===state.rankArea);
+  }
+
+  const data=scoped.filter(r=>r.identificacao==='IDENTIFICADO');
   const m=new Map();
+
   data.forEach(r=>{
-    const key=normalizeName(r.operator_name)||r.operator_name;
-    if(!m.has(key)) m.set(key,{name:r.operator_name,opsid:r.opsid||'',br:new Set(),to:new Set(),areas:new Map(),turnos:new Map(),setores:new Map(),lideres:new Map(),tipos:new Map()});
-    const x=m.get(key);x.br.add(r.shipment_id);if(r.socpacked_tonumber)x.to.add(r.socpacked_tonumber);
-    [['areas',r.responsabilidade],['turnos',r.turno],['setores',r.setor],['lideres',r.lider_nome],['tipos',r.tipo_hc]].forEach(([prop,val])=>x[prop].set(val,(x[prop].get(val)||0)+1));
+    // Usa OPSID como identidade primária. Nome é apenas fallback.
+    const key=String(r.opsid||normalizeName(r.operator_name)||'')
+      .trim()
+      .toUpperCase();
+
+    if(!key)return;
+
+    if(!m.has(key)){
+      m.set(key,{
+        name:r.operator_name,
+        opsid:r.opsid||'',
+        br:new Set(),
+        to:new Set(),
+        areas:new Map(),
+        turnos:new Map(),
+        setores:new Map(),
+        lideres:new Map(),
+        tipos:new Map()
+      });
+    }
+
+    const x=m.get(key);
+    if(r.shipment_id)x.br.add(String(r.shipment_id).trim());
+    if(r.socpacked_tonumber)x.to.add(String(r.socpacked_tonumber).trim());
+
+    [
+      ['areas',r.responsabilidade],
+      ['turnos',r.turno],
+      ['setores',r.setor],
+      ['lideres',r.lider_nome],
+      ['tipos',r.tipo_hc]
+    ].forEach(([prop,val])=>{
+      x[prop].set(val,(x[prop].get(val)||0)+1);
+    });
   });
+
   return [...m.values()].sort((a,b)=>b.br.size-a.br.size);
 }
 
@@ -302,16 +528,19 @@ function renderLeaders(){
 }
 
 function renderKPIs(){
-  const total=state.filtered.length;
-  const areas=Object.fromEntries(countBy('responsabilidade'));
+  const scoped=scopeRowsToLivePeriodV612(state.filtered);
+  const total=new Set(
+    scoped.map(r=>String(r.shipment_id||'').trim()).filter(Boolean)
+  ).size;
+  const areas=Object.fromEntries(countBy('responsabilidade',scoped));
   const est=areas.ESTEIRA||0,exp=areas['EXPEDIÇÃO']||0;
-  const unidentified=state.filtered.filter(r=>r.identificacao==='NÃO IDENTIFICADO').length;
-  const tos=new Set(state.filtered.map(r=>r.socpacked_tonumber).filter(Boolean));
-  const operators=new Set(state.filtered.filter(r=>r.identificacao==='IDENTIFICADO').map(r=>normalizeName(r.operator_name)).filter(Boolean));
+  const unidentified=scoped.filter(r=>r.identificacao==='NÃO IDENTIFICADO').length;
+  const tos=new Set(scoped.map(r=>r.socpacked_tonumber).filter(Boolean));
+  const operators=new Set(scoped.filter(r=>r.identificacao==='IDENTIFICADO').map(r=>r.opsid||normalizeName(r.operator_name)).filter(Boolean));
   const pending=hcPendingRows().length;
   $('kBR').textContent=fmtInt.format(total);$('kTO').textContent=fmtInt.format(tos.size);$('kEsteira').textContent=fmtInt.format(est);$('kExpedicao').textContent=fmtInt.format(exp);$('kUnidentified').textContent=fmtInt.format(unidentified);$('kOperators').textContent=fmtInt.format(operators.size);$('kHCPending').textContent=fmtInt.format(pending);
   $('pEsteira').textContent=total?fmtPct(est/total*100):'—';$('pExpedicao').textContent=total?fmtPct(exp/total*100):'—';$('pUnidentified').textContent=total?fmtPct(unidentified/total*100):'—';
-  const dates=state.filtered.map(r=>String(r.lmreceived_date||'').slice(0,10)).filter(Boolean).sort();
+  const dates=scoped.map(r=>String(r.lmreceived_date||'').slice(0,10)).filter(Boolean).sort();
   $('kDate').textContent=dates.length?`${dates[0].split('-').reverse().join('/')} ${dates.at(-1)!==dates[0]?'→ '+dates.at(-1).split('-').reverse().join('/'):''}`:'sem data';
 }
 
@@ -326,7 +555,7 @@ function renderAll(){
   renderBars('stationBars',countBy('lmreceived_station'),10);
   renderRanking();renderTreatments();renderProjection();
   const duplicateNote=state.sourceRows-state.raw.length;
-  $('dataNote').textContent=`${fmtInt.format(state.filtered.length)} de ${fmtInt.format(state.raw.length)} BR únicos exibidos • ${fmtInt.format(state.sourceRows)} linhas de origem${duplicateNote>0?` • ${duplicateNote} duplicidade(s) de BR consolidada(s)`:''}. Regras: Packed TO = Expedição • Extra Parcel = Esteira • múltiplos operadores = não identificado.`;
+  $('dataNote').textContent=`${fmtInt.format(state.filtered.length)} de ${fmtInt.format(state.raw.length)} BR únicos exibidos • ${fmtInt.format(state.sourceRows)} linhas de origem${duplicateNote>0?` • ${duplicateNote} duplicidade(s) de BR consolidada(s)`:''}. Regras: Packed TO = Expedição • Extra Parcel = Esteira • Whole TO/NA herda o único operator_fail válido do TO • 2+ operadores no mesmo BR = não identificado.`;
 }
 
 function exportCSV(rows,filename){
@@ -337,7 +566,7 @@ function exportCSV(rows,filename){
 }
 
 function exportFiltered(){
-  exportCSV(state.filtered.map(r=>({shipment_id:r.shipment_id,socpacked_tonumber:r.socpacked_tonumber,process_fail:r.process_fail,to_mis_status:r.to_mis_status,responsabilidade:r.responsabilidade,operator_fail:r.operator_original,identificacao:r.identificacao,colaborador:r.operator_name,opsid:r.opsid,turno:r.turno,setor:r.setor,lider:r.lider_nome,tipo_hc:r.tipo_hc,hc_status:r.hc_status,destino:r.lmreceived_station,last_status:r.last_status})),'misscan_tratado_filtrado.csv');
+  exportCSV(state.filtered.map(r=>({shipment_id:r.shipment_id,socpacked_tonumber:r.socpacked_tonumber,process_fail:r.process_fail,to_mis_status:r.to_mis_status,responsabilidade:r.responsabilidade,operator_fail:r.operator_original,operator_fail_efetivo:r.operator_fail,regra_atribuicao:r.attribution_source,identificacao:r.identificacao,colaborador:r.operator_name,opsid:r.opsid,turno:r.turno,setor:r.setor,lider:r.lider_nome,tipo_hc:r.tipo_hc,hc_status:r.hc_status,destino:r.lmreceived_station,last_status:r.last_status})),'misscan_tratado_filtrado.csv');
 }
 
 function exportPending(){
@@ -1379,7 +1608,7 @@ async function refreshLiveData({silent=false}={}){
         ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
         : '';
       $('dataNote').textContent=
-        `Histórico LM dinâmico V6.5. ${fmtInt.format(state.raw.length)} BR únicos no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
+        `Histórico LM V6.12. ${fmtInt.format(state.raw.length)} BR únicos canônicos no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
   }catch(err){
     console.error(err);
