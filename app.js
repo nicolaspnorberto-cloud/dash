@@ -82,16 +82,29 @@ function leaderFromEmail(email=''){
   return local.replaceAll('.',' ').split(/\s+/).filter(Boolean).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(' ');
 }
 
-function buildHCMap(records){
-  state.hcRecords=records;
-  state.hcMap=new Map(records.filter(x=>x.norm).map(x=>[x.norm,x]));
+function normalizeTurno(v=''){
+  const raw=String(v||'').trim().toUpperCase();
+  if(!raw) return 'Não cadastrado';
+
+  // Regra operacional: T4 pertence ao T2 e T5 pertence ao T3.
+  // Também trata valores combinados, ex.: "T2 / T4" ou "T3,T5".
+  const mapped=raw
+    .split(/\s*[\/|,;]+\s*/)
+    .map(t=>t==='T4'?'T2':t==='T5'?'T3':t)
+    .filter(Boolean);
+
+  return [...new Set(mapped)].join(' / ') || 'Não cadastrado';
 }
 
-function normalizeTurno(v=''){
-  const t=String(v||'').trim().toUpperCase();
-  if(t==='T4') return 'T2';
-  if(t==='T5') return 'T3';
-  return t || 'Não cadastrado';
+function buildHCMap(records){
+  // A Base HC que vem da API já chega estruturada e não passa por parseHCUpload.
+  // Por isso a normalização precisa acontecer também aqui.
+  const normalized=(records||[]).map(r=>({
+    ...r,
+    turno:normalizeTurno(r.turno)
+  }));
+  state.hcRecords=normalized;
+  state.hcMap=new Map(normalized.filter(x=>x.norm).map(x=>[x.norm,x]));
 }
 
 function parseHCUpload(text){
