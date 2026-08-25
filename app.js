@@ -662,7 +662,7 @@ function filteredTreatments(){
   const q=$('treatSearch').value.trim().toLowerCase();
   return state.treatmentSource.filter(x=>{
     const st=treatmentStatus(x);
-    return x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && (!q||`${x.colaborador} ${x.turno} ${x.setor}`.toLowerCase().includes(q));
+    return x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && (!q||`${x.colaborador} ${x.turno} ${x.setor} ${x.lider}`.toLowerCase().includes(q));
   }).sort((a,b)=>b.indicador-a.indicador||b.miss_scan-a.miss_scan);
 }
 
@@ -703,13 +703,14 @@ function renderTreatments(){
       <td><strong>${fmtInt.format(x.miss_scan)}</strong></td>
       <td><span class="tag tag-good">${escapeHtml(x.turno)}</span></td>
       <td>${escapeHtml(x.setor)}</td>
+      <td><strong>${escapeHtml(x.lider||'Não cadastrado')}</strong></td>
       <td>${dialogueButton(x,1)}</td><td>${recycleButton(x,1)}</td>
       <td>${dialogueButton(x,2)}</td><td>${recycleButton(x,2)}</td>
       <td>${dialogueButton(x,3)}</td><td>${recycleButton(x,3)}</td>
       <td><span class="${st.className}">${escapeHtml(st.text)}</span></td>
       <td><button class="mini-action" onclick="registerRecurrence('${x.id}')">+ Reincidência</button></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="14" class="empty">Nenhum colaborador acima da meta nos filtros atuais.</td></tr>';
+  }).join('')||'<tr><td colspan="15" class="empty">Nenhum colaborador acima da meta nos filtros atuais.</td></tr>';
 }
 
 window.registerRecurrence=id=>{
