@@ -87,6 +87,13 @@ function buildHCMap(records){
   state.hcMap=new Map(records.filter(x=>x.norm).map(x=>[x.norm,x]));
 }
 
+function normalizeTurno(v=''){
+  const t=String(v||'').trim().toUpperCase();
+  if(t==='T4') return 'T2';
+  if(t==='T5') return 'T3';
+  return t || 'Não cadastrado';
+}
+
 function parseHCUpload(text){
   const rows=csvRowsParse(text);
   const headerIndex=rows.findIndex(r=>String(r[0]||'').trim().toLowerCase()==='colaborador');
@@ -97,7 +104,7 @@ function parseHCUpload(text){
     const colaborador=String(r[0]||'').trim();
     if(!colaborador) return;
     const norm=normalizeName(colaborador);
-    const turno=String(r[1]||'').trim()||'Não cadastrado';
+    const turno=normalizeTurno(r[1]);
     const setor=String(r[2]||'').trim()||'Não cadastrado';
     const lider_email=String(r[3]||'').trim().toLowerCase()||'Não cadastrado';
     const lider_nome=String(r[4]||'').trim()||leaderFromEmail(lider_email);
