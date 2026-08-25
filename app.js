@@ -639,7 +639,7 @@ function enrichTreatmentRow(r){
     operacao:String(r.operacao||r['Operação dominante']||r.responsabilidade||'NA'),
     periodo:String(r.periodo||r.Periodo||r.Semana||''),
     fonte_indicador:String(r.fonte_indicador||r.Fonte||'Indicador importado'),
-    turno:hc?hc.turno:'Não cadastrado',
+    turno:normalizeTurno(hc?.turno || r.turno || r.Turno || ''),
     setor:hc?hc.setor:'Não cadastrado',
     lider:hc?hc.lider_nome:'Não cadastrado',
     lider_email:hc?hc.lider_email:'Não cadastrado',
@@ -650,6 +650,8 @@ function enrichTreatmentRow(r){
 
 function loadTreatmentRows(rows){
   state.treatmentSource=(rows||[]).map(enrichTreatmentRow).filter(x=>x.id&&x.colaborador!=='Não identificado');
+  // Regra final de exibição: T4 = T2 e T5 = T3, independentemente da origem dos dados.
+  state.treatmentSource.forEach(x=>{x.turno=normalizeTurno(x.turno)});
   loadTreatmentProgress();
   setupTreatmentFilters();
   renderTreatments();
@@ -657,6 +659,8 @@ function loadTreatmentRows(rows){
 
 function setupTreatmentFilters(){
   if(!$('treatTurnoFilter'))return;
+  // Normaliza novamente aqui para impedir T4/T5 ou valores combinados no filtro.
+  state.treatmentSource.forEach(x=>{x.turno=normalizeTurno(x.turno)});
   const turns=[...new Set(state.treatmentSource.map(x=>x.turno).filter(Boolean))].sort();
   const sectors=[...new Set(state.treatmentSource.map(x=>x.setor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   fillSelect('treatTurnoFilter',turns,'Todos');
