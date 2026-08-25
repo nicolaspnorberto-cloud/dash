@@ -20,6 +20,8 @@ const state = {
   treatmentMode: null,
   treatmentCycle: 1,
   treatmentFiltered: [],
+  treatmentArchive: {},
+  treatmentHistoryFilter: '',
   liveMeta: null,
   liveRefreshing: false,
   forceRefreshing: false,
@@ -598,6 +600,7 @@ function exportPending(){
 const TREATMENT_STORAGE='misscanTreatmentProgressV4';
 const TREATMENT_DB='misscanTreatmentEvidenceV4';
 const TREATMENT_STORE='files';
+const TREATMENT_ARCHIVE_STORAGE='misscanTreatmentOffenderArchiveV1';
 
 function treatmentKey(name=''){return normalizeName(name)||String(name)}
 function nowISO(){return new Date().toISOString()}
@@ -607,6 +610,48 @@ function loadTreatmentProgress(){
   try{state.treatmentProgress=JSON.parse(localStorage.getItem(TREATMENT_STORAGE)||'{}')}catch{state.treatmentProgress={}}
 }
 function saveTreatmentProgress(){localStorage.setItem(TREATMENT_STORAGE,JSON.stringify(state.treatmentProgress))}
+
+function loadTreatmentArchive(){
+  try{state.treatmentArchive=JSON.parse(localStorage.getItem(TREATMENT_ARCHIVE_STORAGE)||'{}')||{}}catch{state.treatmentArchive={}}
+}
+function saveTreatmentArchive(){
+  localStorage.setItem(TREATMENT_ARCHIVE_STORAGE,JSON.stringify(state.treatmentArchive||{}));
+}
+function mergeTreatmentArchive(rows=[]){
+  const stamp=nowISO();
+  rows.forEach(row=>{
+    if(!row?.id)return;
+    const old=state.treatmentArchive[row.id]||{};
+    const periods=new Set([...(old.periods||[]),row.periodo].filter(Boolean));
+    const seenIndicators=[...(old.indicators||[])];
+    const snapshot={at:stamp,periodo:row.periodo||'',indicador:Number(row.indicador)||0,miss_scan:Number(row.miss_scan)||0};
+    const last=seenIndicators.at(-1);
+    if(!last || last.periodo!==snapshot.periodo || last.indicador!==snapshot.indicador || last.miss_scan!==snapshot.miss_scan){
+      seenIndicators.push(snapshot);
+    }
+    state.treatmentArchive[row.id]={
+      ...old,
+      id:row.id,
+      colaborador:row.colaborador||old.colaborador||row.id,
+      turno:normalizeTurno(row.turno||old.turno||''),
+      setor:row.setor||old.setor||'Não cadastrado',
+      lider:row.lider||old.lider||'Não cadastrado',
+      lider_email:row.lider_email||old.lider_email||'Não cadastrado',
+      operacao:row.operacao||old.operacao||'NA',
+      tipo_hc:row.tipo_hc||old.tipo_hc||'Não cadastrado',
+      firstSeen:old.firstSeen||stamp,
+      lastSeen:stamp,
+      latestIndicador:Number(row.indicador)||0,
+      latestMissScan:Number(row.miss_scan)||0,
+      periods:[...periods],
+      indicators:seenIndicators.slice(-100)
+    };
+  });
+  saveTreatmentArchive();
+}
+function archiveRowFor(id){
+  return state.treatmentArchive?.[id]||state.treatmentSource.find(x=>x.id===id)||null;
+}
 
 function baseProgress(){
   return {requiredCycle:1,history:[],dialogue1:{},recycle1:{signatures:{}},dialogue2:{},recycle2:{signatures:{}},dialogue3:{},recycle3:{signatures:{}}};
@@ -653,8 +698,11 @@ function loadTreatmentRows(rows){
   // Regra final de exibição: T4 = T2 e T5 = T3, independentemente da origem dos dados.
   state.treatmentSource.forEach(x=>{x.turno=normalizeTurno(x.turno)});
   loadTreatmentProgress();
+  loadTreatmentArchive();
+  mergeTreatmentArchive(state.treatmentSource.filter(x=>Number(x.indicador)>0.88));
   setupTreatmentFilters();
   renderTreatments();
+  renderGlobalTreatmentHistory();
 }
 
 function setupTreatmentFilters(){
@@ -732,9 +780,10 @@ function renderTreatments(){
       <td>${dialogueButton(x,2)}</td><td>${recycleButton(x,2)}</td>
       <td>${dialogueButton(x,3)}</td><td>${recycleButton(x,3)}</td>
       <td><span class="${st.className}">${escapeHtml(st.text)}</span></td>
-      <td><button class="mini-action" onclick="registerRecurrence('${x.id}')">+ Reincidência</button></td>
+      <td><div class="row-action-stack"><button class="mini-action" onclick="openOffenderHistory('${x.id}')">Histórico</button><button class="mini-action" onclick="registerRecurrence('${x.id}')">+ Reincidência</button></div></td>
     </tr>`;
   }).join('')||'<tr><td colspan="15" class="empty">Nenhum colaborador acima da meta nos filtros atuais.</td></tr>';
+  if($('globalHistoryModal')?.classList.contains('open'))renderGlobalTreatmentHistory();
 }
 
 window.registerRecurrence=id=>{
@@ -990,6 +1039,111 @@ function refreshSignatureStatus(){
 }
 function renderTreatmentHistory(){
   const row=modalRow();if(!row)return;const hist=progressFor(row.id).history||[];$('treatmentHistory').innerHTML=hist.map(x=>`<div class="history-item"><strong>${escapeHtml(x.title)}</strong><span>${brDate(x.at)}</span><p>${escapeHtml(x.detail||'')}</p></div>`).join('')||'<div class="empty">Ainda não há histórico registrado.</div>';
+}
+
+function treatmentTimelineDetails(id){
+  const p=progressFor(id);
+  const events=[];
+  [1,2,3].forEach(c=>{
+    const d=p[`dialogue${c}`]||{};
+    if(d.done||d.date||d.notes||d.responsible){
+      events.push({
+        type:'Diálogo',cycle:c,date:d.date||d.updatedAt||'',at:d.updatedAt||d.date||'',responsible:d.responsible||'—',
+        title:`${c}º Diálogo de Performance`,detail:d.notes||'',email:d.instructorEmail||''
+      });
+    }
+    const r=p[`recycle${c}`]||{};
+    if(r.done||r.infoSaved||r.date||r.topic||r.orientation||r.responsible){
+      const detail=[r.topic&&`Tema: ${r.topic}`,r.cause&&`Causa: ${r.cause}`,r.orientation&&`Orientação: ${r.orientation}`,r.notes&&`Obs.: ${r.notes}`].filter(Boolean).join(' • ');
+      events.push({
+        type:'Reciclagem',cycle:c,date:r.date||r.completedAt||r.updatedAt||'',at:r.completedAt||r.updatedAt||r.date||'',responsible:r.responsible||'—',
+        title:`${c}ª Reciclagem${r.done?' concluída':r.infoSaved?' em andamento':''}`,detail,email:r.instructorEmail||'',evidenceCount:Number(r.evidenceCount)||0,
+        signedColab:!!r.signatures?.colaborador,signedResp:!!r.signatures?.responsavel
+      });
+    }
+  });
+  return events.sort((a,b)=>String(b.at||b.date).localeCompare(String(a.at||a.date)));
+}
+
+function historyStatusFor(id){
+  const p=progressFor(id);
+  const c=p.requiredCycle||1;
+  if(cycleComplete(p,c))return 'Em monitoramento';
+  if(p[`dialogue${c}`]?.done)return `Pendente ${c}ª reciclagem`;
+  return `Pendente ${c}º diálogo`;
+}
+
+function globalHistoryRows(){
+  const sourceIds=new Set(state.treatmentSource.map(x=>x.id));
+  const ids=new Set([...Object.keys(state.treatmentArchive||{}),...Object.keys(state.treatmentProgress||{}),...sourceIds]);
+  const q=String($('historyGlobalSearch')?.value||'').trim().toLowerCase();
+  return [...ids].map(id=>{
+    const meta=archiveRowFor(id)||{id,colaborador:id};
+    const p=progressFor(id);
+    const events=treatmentTimelineDetails(id);
+    const lastEvent=events[0]||p.history?.[0]||null;
+    return {
+      id,
+      ...meta,
+      turno:normalizeTurno(meta.turno||''),
+      ciclo:p.requiredCycle||1,
+      dialogos:[1,2,3].filter(c=>!!p[`dialogue${c}`]?.done).length,
+      reciclagens:[1,2,3].filter(c=>!!p[`recycle${c}`]?.done).length,
+      status:historyStatusFor(id),
+      lastTreatment:lastEvent?.at||lastEvent?.date||'',
+      lastTreatmentTitle:lastEvent?.title||'Sem tratativa registrada',
+      hasTreatment:events.length>0 || (p.history||[]).length>0
+    };
+  }).filter(x=>!q||`${x.colaborador} ${x.turno} ${x.setor} ${x.lider} ${x.operacao} ${x.status}`.toLowerCase().includes(q))
+    .sort((a,b)=>String(b.lastTreatment||b.lastSeen||'').localeCompare(String(a.lastTreatment||a.lastSeen||''))||String(a.colaborador).localeCompare(String(b.colaborador),'pt-BR'));
+}
+
+function renderGlobalTreatmentHistory(){
+  const body=$('globalHistoryBody');if(!body)return;
+  const rows=globalHistoryRows();
+  $('globalHistoryCount').textContent=`${rows.length} colaborador(es) registrados no histórico`;
+  body.innerHTML=rows.map((x,i)=>`<tr>
+    <td>${i+1}</td>
+    <td><strong>${escapeHtml(x.colaborador||x.id)}</strong><div class="cell-sub">${escapeHtml(x.operacao||'NA')} • ${escapeHtml(x.tipo_hc||'—')}</div></td>
+    <td><span class="tag tag-good">${escapeHtml(x.turno||'—')}</span></td>
+    <td>${escapeHtml(x.setor||'—')}</td>
+    <td>${escapeHtml(x.lider||'—')}</td>
+    <td>${escapeHtml((x.periods||[]).join(', ')||'—')}</td>
+    <td>${fmtPct(Number(x.latestIndicador)||0)}</td>
+    <td>${fmtInt.format(Number(x.latestMissScan)||0)}</td>
+    <td>${x.dialogos}</td>
+    <td>${x.reciclagens}</td>
+    <td>${x.ciclo}</td>
+    <td>${escapeHtml(x.status)}</td>
+    <td>${x.lastTreatment?escapeHtml(brDate(x.lastTreatment)):escapeHtml(x.lastTreatmentTitle)}</td>
+    <td><button class="mini-action" onclick="openOffenderHistory('${x.id}')">Ver histórico</button></td>
+  </tr>`).join('')||'<tr><td colspan="14" class="empty">Nenhum colaborador encontrado no histórico.</td></tr>';
+}
+
+window.openGlobalTreatmentHistory=()=>{
+  renderGlobalTreatmentHistory();
+  const m=$('globalHistoryModal');m.classList.add('open');m.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
+};
+function closeGlobalTreatmentHistory(){
+  const m=$('globalHistoryModal');if(!m)return;m.classList.remove('open');m.setAttribute('aria-hidden','true');document.body.style.overflow='';
+}
+window.openOffenderHistory=id=>{
+  const meta=archiveRowFor(id)||{id,colaborador:id,turno:'—',setor:'—',lider:'—',operacao:'—'};
+  const p=progressFor(id);
+  const events=treatmentTimelineDetails(id);
+  $('offenderHistoryTitle').textContent=meta.colaborador||id;
+  $('offenderHistoryMeta').textContent=`${normalizeTurno(meta.turno||'—')} • ${meta.setor||'—'} • Líder: ${meta.lider||'—'} • Ciclo atual: ${p.requiredCycle||1}`;
+  const indicatorHistory=(meta.indicators||[]).slice().reverse().map(x=>`<div class="history-item"><strong>Ofensor ${escapeHtml(x.periodo||'período registrado')}</strong><span>${brDate(x.at)}</span><p>Indicador ${fmtPct(Number(x.indicador)||0)} • ${fmtInt.format(Number(x.miss_scan)||0)} Miss Scan</p></div>`).join('');
+  const actions=events.map(x=>`<div class="history-item"><strong>${escapeHtml(x.title)}</strong><span>${escapeHtml(x.date?brDate(x.date):brDate(x.at))}</span><p><b>Responsável:</b> ${escapeHtml(x.responsible||'—')}${x.email?` • ${escapeHtml(x.email)}`:''}<br>${escapeHtml(x.detail||'')}${x.type==='Reciclagem'?`<br>Evidências: ${x.evidenceCount||0} • Assinaturas: colaborador ${x.signedColab?'✓':'✕'} / responsável ${x.signedResp?'✓':'✕'}`:''}</p></div>`).join('');
+  const audit=(p.history||[]).map(x=>`<div class="history-item"><strong>${escapeHtml(x.title)}</strong><span>${brDate(x.at)}</span><p>${escapeHtml(x.detail||'')}</p></div>`).join('');
+  $('offenderHistoryContent').innerHTML=`
+    <div class="history-detail-section"><h3>Tratativas realizadas</h3>${actions||'<div class="empty">Nenhuma tratativa realizada até o momento.</div>'}</div>
+    <div class="history-detail-section"><h3>Ocorrências como ofensor</h3>${indicatorHistory||'<div class="empty">Sem snapshot histórico disponível.</div>'}</div>
+    <div class="history-detail-section"><h3>Log completo</h3>${audit||'<div class="empty">Sem eventos adicionais.</div>'}</div>`;
+  const m=$('offenderHistoryModal');m.classList.add('open');m.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
+};
+function closeOffenderHistory(){
+  const m=$('offenderHistoryModal');if(!m)return;m.classList.remove('open');m.setAttribute('aria-hidden','true');document.body.style.overflow='';
 }
 
 function parseTreatmentCSV(text){
@@ -1673,6 +1827,17 @@ async function boot(){
   ['treatmentThreshold','treatTurnoFilter','treatSetorFilter','treatStatusFilter'].forEach(id=>$(id).addEventListener('change',renderTreatments));
   $('treatSearch').addEventListener('input',renderTreatments);
   $('treatResetBtn').addEventListener('click',()=>{$('treatmentThreshold').value='0.88';$('treatTurnoFilter').value='';$('treatSetorFilter').value='';$('treatStatusFilter').value='';$('treatSearch').value='';renderTreatments()});
+
+  $('historyGlobalBtn')?.addEventListener('click',openGlobalTreatmentHistory);
+  $('closeGlobalHistoryModal')?.addEventListener('click',closeGlobalTreatmentHistory);
+  $('globalHistoryModal')?.addEventListener('click',e=>{if(e.target===$('globalHistoryModal'))closeGlobalTreatmentHistory()});
+  $('historyGlobalSearch')?.addEventListener('input',renderGlobalTreatmentHistory);
+  $('exportGlobalHistoryBtn')?.addEventListener('click',()=>{
+    const rows=globalHistoryRows().map(x=>({colaborador:x.colaborador,turno:x.turno,setor:x.setor,lider:x.lider,operacao:x.operacao,periodos:(x.periods||[]).join(' / '),ultimo_indicador_pct:x.latestIndicador,ultimo_miss_scan:x.latestMissScan,dialogos_realizados:x.dialogos,reciclagens_concluidas:x.reciclagens,ciclo_atual:x.ciclo,status:x.status,ultima_tratativa:x.lastTreatmentTitle,data_ultima_tratativa:x.lastTreatment?brDate(x.lastTreatment):''}));
+    exportCSV(rows,'historico_geral_tratativas_misscan.csv');
+  });
+  $('closeOffenderHistoryModal')?.addEventListener('click',closeOffenderHistory);
+  $('offenderHistoryModal')?.addEventListener('click',e=>{if(e.target===$('offenderHistoryModal'))closeOffenderHistory()});
 
   $('exportTreatBtn').addEventListener('click',exportTreatmentList);
   $('generateReportBtn').addEventListener('click',generateTreatmentReport);

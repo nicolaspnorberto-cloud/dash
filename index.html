@@ -5,6 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mis-Scan Control Center</title>
   <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    .row-action-stack{display:flex;gap:6px;flex-wrap:wrap;min-width:150px}
+    .history-modal-card{width:min(1480px,96vw);max-height:90vh;overflow:hidden;display:flex;flex-direction:column}
+    .history-modal-toolbar{display:flex;gap:10px;align-items:end;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #dbe5f0;flex-wrap:wrap}
+    .history-modal-toolbar label{flex:1;min-width:260px;font-size:12px;font-weight:800;color:#607795;text-transform:uppercase;letter-spacing:.04em}
+    .history-modal-toolbar input{width:100%;margin-top:6px;padding:11px 12px;border:1px solid #cbd9e8;border-radius:10px;background:#fff;color:#10233f}
+    .history-modal-body{overflow:auto;padding:0 18px 18px}
+    .history-modal-table{min-width:1380px;width:100%;border-collapse:collapse}
+    .history-modal-table th{position:sticky;top:0;z-index:2;background:#184a86;color:#fff;padding:10px 8px;text-align:left;font-size:11px;white-space:nowrap}
+    .history-modal-table td{padding:10px 8px;border-bottom:1px solid #e7eef6;vertical-align:top;font-size:12px}
+    .history-count{font-size:12px;color:#6f86a4;font-weight:700}
+    .history-detail-card{width:min(900px,95vw);max-height:90vh;overflow:auto}
+    .history-detail-content{padding:0 22px 22px}
+    .history-detail-section{margin-top:18px}
+    .history-detail-section h3{margin:0 0 10px;color:#10233f;font-size:16px}
+    .history-detail-section .history-item{background:#f7faff;border:1px solid #dbe7f3;border-radius:12px;padding:12px 14px;margin-bottom:9px}
+    .history-detail-section .history-item strong{display:block;color:#163f70;margin-bottom:4px}
+    .history-detail-section .history-item span{font-size:11px;color:#7690ad}
+    .history-detail-section .history-item p{margin:7px 0 0;line-height:1.45;color:#425a77}
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -214,6 +235,7 @@
           <p id="treatCountLabel">—</p>
         </div>
         <div class="treatment-actions">
+          <button id="historyGlobalBtn" class="action-btn blue">Histórico Geral</button>
           <button id="registerEvidenceBtn" class="action-btn green">Registrar Evidência</button>
           <button id="generateReportBtn" class="action-btn blue">Gerar Relatório</button>
           <button id="exportTreatBtn" class="action-btn orange">Gerar Lista</button>
@@ -384,6 +406,49 @@
       </article>
     </section>
 
+
+
+    <div id="globalHistoryModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal-card history-modal-card">
+        <div class="modal-head">
+          <div>
+            <span class="modal-eyebrow">HISTÓRICO GERAL</span>
+            <h2>Todos os colaboradores ofensores e tratativas</h2>
+            <p id="globalHistoryCount" class="history-count">0 colaboradores registrados</p>
+          </div>
+          <button id="closeGlobalHistoryModal" class="modal-close" aria-label="Fechar">×</button>
+        </div>
+        <div class="history-modal-toolbar">
+          <label>Buscar no histórico
+            <input id="historyGlobalSearch" type="search" placeholder="Colaborador, turno, setor, líder, operação ou status..." />
+          </label>
+          <button id="exportGlobalHistoryBtn" class="action-btn orange">Exportar Histórico</button>
+        </div>
+        <div class="history-modal-body">
+          <table class="history-modal-table">
+            <thead><tr>
+              <th>#</th><th>Colaborador</th><th>Turno</th><th>Setor</th><th>Líder</th><th>Períodos</th>
+              <th>Últ. indicador</th><th>Últ. Miss Scan</th><th>Diálogos</th><th>Reciclagens</th><th>Ciclo</th><th>Status</th><th>Última tratativa</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="globalHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="offenderHistoryModal" class="modal-backdrop" aria-hidden="true">
+      <div class="modal-card history-detail-card">
+        <div class="modal-head">
+          <div>
+            <span class="modal-eyebrow">HISTÓRICO DO COLABORADOR</span>
+            <h2 id="offenderHistoryTitle">Colaborador</h2>
+            <p id="offenderHistoryMeta">—</p>
+          </div>
+          <button id="closeOffenderHistoryModal" class="modal-close" aria-label="Fechar">×</button>
+        </div>
+        <div id="offenderHistoryContent" class="history-detail-content"></div>
+      </div>
+    </div>
 
     <div id="treatmentModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal-card treatment-modal-card">
