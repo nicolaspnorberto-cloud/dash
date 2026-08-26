@@ -99,14 +99,43 @@ function normalizeTurno(v=''){
 }
 
 function buildHCMap(records){
-  // A Base HC que vem da API já chega estruturada e não passa por parseHCUpload.
-  // Por isso a normalização precisa acontecer também aqui.
-  const normalized=(records||[]).map(r=>({
-    ...r,
-    turno:normalizeTurno(r.turno)
-  }));
+  const normalized=(records||[]).map(r=>{
+    const colaborador=String(
+      r.colaborador ||
+      r.Colaborador ||
+      r.nome ||
+      r.Nome ||
+      ''
+    ).trim();
+
+    return {
+      ...r,
+      colaborador,
+      norm: r.norm || normalizeName(colaborador),
+      turno: normalizeTurno(r.turno || r.Turno || ''),
+      setor: String(r.setor || r.Setor || '').trim() || 'Não cadastrado',
+      lider_nome: String(
+        r.lider_nome ||
+        r.lider ||
+        r.Lider ||
+        r['Líder'] ||
+        ''
+      ).trim() || leaderFromEmail(r.lider_email || ''),
+      lider_email: String(
+        r.lider_email ||
+        r.email_lider ||
+        ''
+      ).trim().toLowerCase() || 'Não cadastrado'
+    };
+  });
+
   state.hcRecords=normalized;
-  state.hcMap=new Map(normalized.filter(x=>x.norm).map(x=>[x.norm,x]));
+
+  state.hcMap=new Map(
+    normalized
+      .filter(x=>x.norm)
+      .map(x=>[x.norm,x])
+  );
 }
 
 function parseHCUpload(text){
