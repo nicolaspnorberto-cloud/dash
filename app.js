@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.12 — Whole TO atribuído por TO
+// MIS-SCAN CONTROL CENTER V6.15 — API canônica + atribuição individual de operator_fail
 const state = {
   sourceRows: 0,
   raw: [],
@@ -353,7 +353,12 @@ function explodeOperatorAttributionsV614(rows=[]){
   const out=[];
 
   rows.forEach(row=>{
-    const parts=parseOperators(row?.operator_fail||'');
+    // operator_fail vindo da API contém a união canônica dos operadores.
+    // operator_fail_original entra apenas como fallback de rastreabilidade.
+    const effective=String(row?.operator_fail||'').trim();
+    const original=String(row?.operator_fail_original||'').trim();
+    const rawOperators=effective && effective!=='NA' ? effective : original;
+    const parts=parseOperators(rawOperators);
     const valid=[];
     const seen=new Set();
 
@@ -370,7 +375,7 @@ function explodeOperatorAttributionsV614(rows=[]){
       out.push({
         ...row,
         operator_fail:'NA',
-        operator_fail_original:String(row?.operator_fail_original||row?.operator_fail||''),
+        operator_fail_original:String(row?.operator_fail_original||rawOperators||''),
         attribution_source:String(row?.attribution_source||'NO_OPERATOR'),
         attribution_shared:false,
         attribution_index:0,
@@ -383,7 +388,7 @@ function explodeOperatorAttributionsV614(rows=[]){
       out.push({
         ...row,
         operator_fail:`${op.opsid?`[${op.opsid}]`:''}${op.name}`,
-        operator_fail_original:String(row?.operator_fail_original||row?.operator_fail||''),
+        operator_fail_original:String(row?.operator_fail_original||rawOperators||''),
         attribution_source:valid.length>1?'MULTI_OPERATOR_EXPLODED':String(row?.attribution_source||'DIRECT_OPERATOR_FAIL'),
         attribution_shared:valid.length>1,
         attribution_index:index+1,
@@ -398,9 +403,12 @@ function explodeOperatorAttributionsV614(rows=[]){
 function loadMisscanRows(rows){
   state.sourceRows=rows.length;
 
-  // V6.14: primeiro consolida o BR físico; depois reúne e explode
-  // todas as atribuições válidas de operator_fail antes do HC/ranking.
-  const canonical=canonicalizeAndAttributeV612(rows);
+  // V6.15:
+  // /api/dados é a ÚNICA fonte de canonicalização do BR físico.
+  // O frontend NÃO consolida novamente shipment_id.
+  // Aqui apenas aplicamos o período e explodimos os operadores preservados
+  // em operator_fail para o ranking individual.
+  const canonical=Array.isArray(rows)?rows:[];
   const scoped=scopeRowsToLivePeriodV612(canonical);
   const attributed=explodeOperatorAttributionsV614(scoped);
   const enriched=attributed.map(enrich);
@@ -408,15 +416,38 @@ function loadMisscanRows(rows){
   state.raw=enriched;
   state.filtered=[...state.raw];
 
+  console.info('[MISSCAN V6.15]',{
+    apiRows:rows.length,
+    attributedRows:attributed.length,
+    multiOperatorRows:attributed.filter(r=>r.attribution_shared).length,
+    sampleShared:attributed.filter(r=>r.attribution_shared).slice(0,5).map(r=>({
+      shipment_id:r.shipment_id,
+      operator_fail:r.operator_fail,
+      operator_fail_original:r.operator_fail_original
+    }))
+  });
+
+  const physicalBR=new Set(
+    scoped.map(r=>String(r?.shipment_id||'').trim()).filter(Boolean)
+  ).size;
+
+  const sharedBR=new Set(
+    attributed
+      .filter(r=>r.attribution_shared)
+      .map(r=>String(r?.shipment_id||'').trim())
+      .filter(Boolean)
+  ).size;
+
   state.v612Integrity={
     apiRows:rows.length,
-    canonicalBR:canonical.length,
-    periodBR:scoped.length,
+    canonicalBR:physicalBR,
+    periodBR:physicalBR,
     operatorAttributions:attributed.length,
+    sharedBR,
     periodStart:state.liveMeta?.periodStart||'',
     periodEnd:state.liveMeta?.periodEnd||'',
     dateRule:'SOCPACKED_DATE',
-    attributionRule:'EXPLODE_ALL_VALID_OPERATOR_FAIL'
+    attributionRule:'API_CANONICAL_THEN_EXPLODE'
   };
 
   setupFilters();
@@ -603,8 +634,11 @@ function renderAll(){
   renderBars('statusBars',countBy('last_status'),10);
   renderBars('stationBars',countBy('lmreceived_station'),10);
   renderRanking();renderTreatments();renderProjection();
-  const duplicateNote=state.sourceRows-state.raw.length;
-  $('dataNote').textContent=`${fmtInt.format(state.filtered.length)} de ${fmtInt.format(state.raw.length)} BR únicos exibidos • ${fmtInt.format(state.sourceRows)} linhas de origem${duplicateNote>0?` • ${duplicateNote} duplicidade(s) de BR consolidada(s)`:''}. Regras: Packed TO = Expedição • Extra Parcel = Esteira • Whole TO/NA herda o único operator_fail válido do TO • 2+ operadores no mesmo BR = não identificado.`;
+  const integrity=state.v612Integrity||{};
+  const physical=Number(integrity.periodBR||0);
+  const attrs=Number(integrity.operatorAttributions||state.raw.length||0);
+  const shared=Number(integrity.sharedBR||0);
+  $('dataNote').textContent=`${fmtInt.format(physical)} BR físicos • ${fmtInt.format(attrs)} atribuições de operador • ${fmtInt.format(shared)} BR compartilhado(s) • ${fmtInt.format(state.sourceRows)} BR recebidos da API. Regra V6.15: API canonicaliza shipment_id → frontend atribui cada operator_fail válido ao ranking.`;
 }
 
 function exportCSV(rows,filename){
