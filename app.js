@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.15 — API canônica + atribuição individual de operator_fail
+// MIS-SCAN CONTROL CENTER V6.16 — LM Received + atribuição individual
 const state = {
   sourceRows: 0,
   raw: [],
@@ -344,7 +344,7 @@ function scopeRowsToLivePeriodV612(rows=[]){
   }
 
   return rows.filter(r=>{
-    const d=String(r?.socpacked_date||r?.lmreceived_date||'').slice(0,10);
+    const d=String(r?.lmreceived_date||r?.socpacked_date||'').slice(0,10);
     return d>=from&&d<=to;
   });
 }
@@ -353,12 +353,7 @@ function explodeOperatorAttributionsV614(rows=[]){
   const out=[];
 
   rows.forEach(row=>{
-    // operator_fail vindo da API contém a união canônica dos operadores.
-    // operator_fail_original entra apenas como fallback de rastreabilidade.
-    const effective=String(row?.operator_fail||'').trim();
-    const original=String(row?.operator_fail_original||'').trim();
-    const rawOperators=effective && effective!=='NA' ? effective : original;
-    const parts=parseOperators(rawOperators);
+    const parts=parseOperators(row?.operator_fail||'');
     const valid=[];
     const seen=new Set();
 
@@ -375,7 +370,7 @@ function explodeOperatorAttributionsV614(rows=[]){
       out.push({
         ...row,
         operator_fail:'NA',
-        operator_fail_original:String(row?.operator_fail_original||rawOperators||''),
+        operator_fail_original:String(row?.operator_fail_original||row?.operator_fail||''),
         attribution_source:String(row?.attribution_source||'NO_OPERATOR'),
         attribution_shared:false,
         attribution_index:0,
@@ -388,7 +383,7 @@ function explodeOperatorAttributionsV614(rows=[]){
       out.push({
         ...row,
         operator_fail:`${op.opsid?`[${op.opsid}]`:''}${op.name}`,
-        operator_fail_original:String(row?.operator_fail_original||rawOperators||''),
+        operator_fail_original:String(row?.operator_fail_original||row?.operator_fail||''),
         attribution_source:valid.length>1?'MULTI_OPERATOR_EXPLODED':String(row?.attribution_source||'DIRECT_OPERATOR_FAIL'),
         attribution_shared:valid.length>1,
         attribution_index:index+1,
@@ -403,11 +398,9 @@ function explodeOperatorAttributionsV614(rows=[]){
 function loadMisscanRows(rows){
   state.sourceRows=rows.length;
 
-  // V6.15:
-  // /api/dados é a ÚNICA fonte de canonicalização do BR físico.
-  // O frontend NÃO consolida novamente shipment_id.
-  // Aqui apenas aplicamos o período e explodimos os operadores preservados
-  // em operator_fail para o ranking individual.
+  // V6.16: /api/dados.mjs é a única camada de canonicalização física.
+  // Frontend apenas aplica o recorte LM Received e explode operator_fail
+  // para a análise individual por colaborador.
   const canonical=Array.isArray(rows)?rows:[];
   const scoped=scopeRowsToLivePeriodV612(canonical);
   const attributed=explodeOperatorAttributionsV614(scoped);
@@ -415,17 +408,6 @@ function loadMisscanRows(rows){
 
   state.raw=enriched;
   state.filtered=[...state.raw];
-
-  console.info('[MISSCAN V6.15]',{
-    apiRows:rows.length,
-    attributedRows:attributed.length,
-    multiOperatorRows:attributed.filter(r=>r.attribution_shared).length,
-    sampleShared:attributed.filter(r=>r.attribution_shared).slice(0,5).map(r=>({
-      shipment_id:r.shipment_id,
-      operator_fail:r.operator_fail,
-      operator_fail_original:r.operator_fail_original
-    }))
-  });
 
   const physicalBR=new Set(
     scoped.map(r=>String(r?.shipment_id||'').trim()).filter(Boolean)
@@ -446,9 +428,11 @@ function loadMisscanRows(rows){
     sharedBR,
     periodStart:state.liveMeta?.periodStart||'',
     periodEnd:state.liveMeta?.periodEnd||'',
-    dateRule:'SOCPACKED_DATE',
+    dateRule:'LMRECEIVED_DATE',
     attributionRule:'API_CANONICAL_THEN_EXPLODE'
   };
+
+  console.info('[MISSCAN V6.16]',state.v612Integrity);
 
   setupFilters();
   resetFilterValues(false);
@@ -620,7 +604,7 @@ function renderKPIs(){
   const pending=hcPendingRows().length;
   $('kBR').textContent=fmtInt.format(total);$('kTO').textContent=fmtInt.format(tos.size);$('kEsteira').textContent=fmtInt.format(est);$('kExpedicao').textContent=fmtInt.format(exp);$('kUnidentified').textContent=fmtInt.format(unidentified);$('kOperators').textContent=fmtInt.format(operators.size);$('kHCPending').textContent=fmtInt.format(pending);
   $('pEsteira').textContent=total?fmtPct(est/total*100):'—';$('pExpedicao').textContent=total?fmtPct(exp/total*100):'—';$('pUnidentified').textContent=total?fmtPct(unidentified/total*100):'—';
-  const dates=scoped.map(r=>String(r.lmreceived_date||'').slice(0,10)).filter(Boolean).sort();
+  const dates=scoped.map(r=>String(r.lmreceived_date||r.socpacked_date||'').slice(0,10)).filter(Boolean).sort();
   $('kDate').textContent=dates.length?`${dates[0].split('-').reverse().join('/')} ${dates.at(-1)!==dates[0]?'→ '+dates.at(-1).split('-').reverse().join('/'):''}`:'sem data';
 }
 
@@ -638,7 +622,7 @@ function renderAll(){
   const physical=Number(integrity.periodBR||0);
   const attrs=Number(integrity.operatorAttributions||state.raw.length||0);
   const shared=Number(integrity.sharedBR||0);
-  $('dataNote').textContent=`${fmtInt.format(physical)} BR físicos • ${fmtInt.format(attrs)} atribuições de operador • ${fmtInt.format(shared)} BR compartilhado(s) • ${fmtInt.format(state.sourceRows)} BR recebidos da API. Regra V6.15: API canonicaliza shipment_id → frontend atribui cada operator_fail válido ao ranking.`;
+  $('dataNote').textContent=`${fmtInt.format(physical)} BR físicos • ${fmtInt.format(attrs)} atribuições de operador • ${fmtInt.format(shared)} BR compartilhado(s) • Regra V6.16: LM Received → shipment_id único → todos os operator_fail válidos.`;
 }
 
 function exportCSV(rows,filename){
