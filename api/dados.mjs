@@ -1,29 +1,12 @@
 import {
   json,
   readJson,
+  rowDateKey,
   monthsBetween
 } from '../lib/blob-store.mjs';
 
 const HC_PATH = 'misscan/hc.json';
 const META_PATH = 'misscan/history-meta.json';
-
-function misscanDateValue(row = {}) {
-  // Regra V6.16: para reproduzir a aba LM / ranking oficial,
-  // a data operacional do recorte é LM Received.
-  // SOC Packed fica somente como fallback para registros antigos.
-  return String(row?.lmreceived_date || row?.socpacked_date || '').trim();
-}
-
-function misscanDateKey(row = {}) {
-  return misscanDateValue(row).slice(0, 10);
-}
-
-function monthOffset(monthKey, delta) {
-  const m = String(monthKey || '').match(/^(\d{4})-(\d{2})$/);
-  if (!m) return monthKey;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
 
 function isoDateUTC(date) {
   return date.toISOString().slice(0, 10);
@@ -48,7 +31,7 @@ function resolvePeriod(url, meta) {
   const customFrom = String(url.searchParams.get('from') || '');
   const customTo = String(url.searchParams.get('to') || '');
 
-  const today = isoDateUTC(new Date());
+  const today = new Intl.DateTimeFormat('en-CA', {   timeZone: 'America/Sao_Paulo',   year: 'numeric',   month: '2-digit',   day: '2-digit' }).format(new Date());
   const availableStart = meta?.historyStart || today;
   const availableEnd = meta?.historyEnd || today;
 
@@ -159,16 +142,15 @@ function responsibility(row) {
   return 'NA';
 }
 
-function canonicalizeAndAttributeV616(rows = []) {
+function canonicalizeAndAttributeV612(rows = []) {
   const groups = new Map();
 
   for (const row of rows) {
+    const date = rowDateKey(row) || 'NO_DATE';
     const shipment = String(row?.shipment_id || '').trim();
     if (!shipment) continue;
 
-    // V6.16: shipment_id é a identidade física do pacote dentro do recorte.
-    // Todas as linhas do mesmo BR são reunidas antes da atribuição do operador.
-    const key = shipment;
+    const key = `${date}|${shipment}`;
     if (!groups.has(key)) groups.set(key, { rows: [], operators: new Map() });
     const g = groups.get(key);
     g.rows.push(row);
@@ -204,7 +186,7 @@ function canonicalizeAndAttributeV616(rows = []) {
       base.attribution_source = 'DIRECT_OPERATOR_FAIL';
     } else {
       base.operator_fail = ops.map(x => x.raw).join(',');
-      base.attribution_source = 'MULTI_OPERATOR_SHARED';
+      base.attribution_source = 'MULTI_OPERATOR_NOT_IDENTIFIED';
     }
 
     if (!base.socpacked_tonumber) {
@@ -231,7 +213,7 @@ function canonicalizeAndAttributeV616(rows = []) {
     const to = String(row?.socpacked_tonumber || '').trim();
     if (!to) continue;
 
-    const date = misscanDateKey(row) || 'NO_DATE';
+    const date = rowDateKey(row) || 'NO_DATE';
     const key = `${date}|${to}`;
     if (!toContext.has(key)) {
       toContext.set(key, { single: new Map(), rows: 0, multi: 0 });
@@ -257,7 +239,7 @@ function canonicalizeAndAttributeV616(rows = []) {
     const currentOps = operatorMap(row.operator_fail);
     if (currentOps.size > 0) continue;
 
-    const date = misscanDateKey(row) || 'NO_DATE';
+    const date = rowDateKey(row) || 'NO_DATE';
     const ctx = toContext.get(`${date}|${to}`);
     if (!ctx) continue;
 
@@ -311,11 +293,7 @@ export async function GET(request) {
       Array.isArray(meta?.months) ? meta.months : []
     );
 
-    // V6.16: o histórico é particionado por LM Received,
-    // portanto basta ler os meses efetivamente solicitados.
-    const candidateMonths = [...new Set(requestedMonths)].sort();
-
-    const months = candidateMonths.filter(
+    const months = requestedMonths.filter(
       month => indexed.size === 0 || indexed.has(month)
     );
 
@@ -328,7 +306,7 @@ export async function GET(request) {
       );
 
       for (const row of (file?.rows || [])) {
-        const dateKey = misscanDateKey(row);
+        const dateKey = rowDateKey(row);
 
         if (
           dateKey &&
@@ -352,10 +330,12 @@ export async function GET(request) {
       : null;
 
     const physicalPeriodRows = rows.length;
-    const canonicalRows = canonicalizeAndAttributeV616(rows);
+    const canonicalRows = canonicalizeAndAttributeV612(rows);
 
     canonicalRows.sort((a, b) =>
-      misscanDateValue(a).localeCompare(misscanDateValue(b))
+      String(a.lmreceived_date || '').localeCompare(
+        String(b.lmreceived_date || '')
+      )
     );
 
     return json({
@@ -374,18 +354,14 @@ export async function GET(request) {
         returnedMisscanRecords: canonicalRows.length,
         physicalPeriodRows,
         canonicalPeriodRows: canonicalRows.length,
-        v616Canonicalized: true,
-        dateRule: 'LMRECEIVED_DATE',
-        multiOperatorRule: 'ALL_OPERATOR_FAIL_PRESERVED',
+        v612Canonicalized: true,
         wholeToInheritance: true,
-        brIdentityRule: 'UNIQUE_SHIPMENT_ID',
-        attributionPipeline: 'GROUP_BR_THEN_COLLECT_ALL_OPERATOR_FAIL',
         historyMonths: Array.isArray(meta.months) ? meta.months.length : 0
       }
     });
 
   } catch (error) {
-    console.error('MISSCAN_DATA_V616_ERROR', error);
+    console.error('MISSCAN_DATA_V612_ERROR', error);
 
     return json({
       ok: false,
