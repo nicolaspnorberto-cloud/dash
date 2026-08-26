@@ -8,9 +8,10 @@ const HC_PATH = 'misscan/hc.json';
 const META_PATH = 'misscan/history-meta.json';
 
 function misscanDateValue(row = {}) {
-  // Regra V6.13: a data oficial do Misscan é SOC Packed.
-  // lmreceived_date fica apenas como fallback para históricos antigos.
-  return String(row?.socpacked_date || row?.lmreceived_date || '').trim();
+  // Regra V6.16: para reproduzir a aba LM / ranking oficial,
+  // a data operacional do recorte é LM Received.
+  // SOC Packed fica somente como fallback para registros antigos.
+  return String(row?.lmreceived_date || row?.socpacked_date || '').trim();
 }
 
 function misscanDateKey(row = {}) {
@@ -158,16 +159,15 @@ function responsibility(row) {
   return 'NA';
 }
 
-function canonicalizeAndAttributeV614(rows = []) {
+function canonicalizeAndAttributeV616(rows = []) {
   const groups = new Map();
 
   for (const row of rows) {
     const shipment = String(row?.shipment_id || '').trim();
     if (!shipment) continue;
 
-    // V6.14: shipment_id é a identidade física do BR.
-    // Não usamos a data na chave para evitar o mesmo pacote ser contado novamente
-    // quando existir em mais de uma linha/data do histórico.
+    // V6.16: shipment_id é a identidade física do pacote dentro do recorte.
+    // Todas as linhas do mesmo BR são reunidas antes da atribuição do operador.
     const key = shipment;
     if (!groups.has(key)) groups.set(key, { rows: [], operators: new Map() });
     const g = groups.get(key);
@@ -311,14 +311,9 @@ export async function GET(request) {
       Array.isArray(meta?.months) ? meta.months : []
     );
 
-    // O histórico legado pode estar particionado pelo mês de LM Received.
-    // Para aplicar SOC Packed com segurança inclusive nas viradas de mês,
-    // lemos também o mês anterior e o seguinte e filtramos depois por SOC Packed.
-    const candidateMonths = [...new Set([
-      ...requestedMonths,
-      ...requestedMonths.map(m => monthOffset(m, -1)),
-      ...requestedMonths.map(m => monthOffset(m, 1))
-    ])].sort();
+    // V6.16: o histórico é particionado por LM Received,
+    // portanto basta ler os meses efetivamente solicitados.
+    const candidateMonths = [...new Set(requestedMonths)].sort();
 
     const months = candidateMonths.filter(
       month => indexed.size === 0 || indexed.has(month)
@@ -357,7 +352,7 @@ export async function GET(request) {
       : null;
 
     const physicalPeriodRows = rows.length;
-    const canonicalRows = canonicalizeAndAttributeV614(rows);
+    const canonicalRows = canonicalizeAndAttributeV616(rows);
 
     canonicalRows.sort((a, b) =>
       misscanDateValue(a).localeCompare(misscanDateValue(b))
@@ -379,8 +374,8 @@ export async function GET(request) {
         returnedMisscanRecords: canonicalRows.length,
         physicalPeriodRows,
         canonicalPeriodRows: canonicalRows.length,
-        v614Canonicalized: true,
-        dateRule: 'SOCPACKED_DATE',
+        v616Canonicalized: true,
+        dateRule: 'LMRECEIVED_DATE',
         multiOperatorRule: 'ALL_OPERATOR_FAIL_PRESERVED',
         wholeToInheritance: true,
         brIdentityRule: 'UNIQUE_SHIPMENT_ID',
@@ -390,7 +385,7 @@ export async function GET(request) {
     });
 
   } catch (error) {
-    console.error('MISSCAN_DATA_V614_ERROR', error);
+    console.error('MISSCAN_DATA_V616_ERROR', error);
 
     return json({
       ok: false,
