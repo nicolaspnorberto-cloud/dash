@@ -31,7 +31,7 @@ function resolvePeriod(url, meta) {
   const customFrom = String(url.searchParams.get('from') || '');
   const customTo = String(url.searchParams.get('to') || '');
 
-  const today = isoDateUTC(new Date());
+  const today = new Intl.DateTimeFormat('en-CA', {   timeZone: 'America/Sao_Paulo',   year: 'numeric',   month: '2-digit',   day: '2-digit' }).format(new Date());
   const availableStart = meta?.historyStart || today;
   const availableEnd = meta?.historyEnd || today;
 
