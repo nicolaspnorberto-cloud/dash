@@ -23,6 +23,7 @@ function rowScore(r) {
 
   const identified =
     op &&
+    !op.includes(',') &&
     !/@/.test(op) &&
     !/^\s*NA\s*$/i.test(op);
 
@@ -38,49 +39,6 @@ function rowIdentityKey(r, index = 0) {
   return shipment ? `${date}|${shipment}` : `${date}|ROW_${index}`;
 }
 
-function normalizeOperatorToken(raw = '') {
-  const text = String(raw || '').trim();
-  if (!text) return null;
-
-  const opsMatch = text.match(/\[(Ops\d+)\]/i);
-  const opsid = opsMatch ? opsMatch[1].toUpperCase() : '';
-  const name = text.replace(/\[Ops\d+\]/gi, '').trim();
-  const norm = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
-
-  if (
-    !name ||
-    /@/.test(name) ||
-    ['NA', 'NOT IDENTIFIED', 'NAO IDENTIFICADO'].includes(norm)
-  ) return null;
-
-  return {
-    key: opsid || norm,
-    raw: `${opsid ? `[${opsid}]` : ''}${name}`
-  };
-}
-
-function collectOperators(...values) {
-  const map = new Map();
-
-  values.forEach(value => {
-    String(value || '')
-      .split(/\s*[,;|\n]\s*/)
-      .map(x => x.trim())
-      .filter(Boolean)
-      .forEach(part => {
-        const op = normalizeOperatorToken(part);
-        if (op) map.set(op.key, op.raw);
-      });
-  });
-
-  return map;
-}
-
 function mergeRows(existingRows, incomingRows) {
   const map = new Map();
 
@@ -89,64 +47,18 @@ function mergeRows(existingRows, incomingRows) {
     const score = rowScore(r);
     const dt = Date.parse(String(r?.lmreceived_date || '').replace(' ', 'T')) || 0;
     const current = map.get(key);
-    const incomingOps = collectOperators(
-      r?.operator_fail,
-      r?.operator_fail_original
-    );
-
-    if (!current) {
-      map.set(key, {
-        ...r,
-        __score: score,
-        __dt: dt,
-        __operators: incomingOps
-      });
-      return;
-    }
-
-    incomingOps.forEach((raw, opKey) => {
-      current.__operators.set(opKey, raw);
-    });
 
     if (
+      !current ||
       score > current.__score ||
       (score === current.__score && dt > current.__dt)
     ) {
-      const operators = current.__operators;
-
-      map.set(key, {
-        ...r,
-        __score: score,
-        __dt: dt,
-        __operators: operators
-      });
+      map.set(key, { ...r, __score: score, __dt: dt });
     }
   });
 
   return [...map.values()]
-    .map(item => {
-      const { __score, __dt, __operators, ...row } = item;
-      const operators = __operators || new Map();
-      const joined = [...operators.values()].join(',');
-
-      if (joined) {
-        row.operator_fail = joined;
-        row.operator_fail_original = joined;
-        row.operator_count_sync = operators.size;
-        row.operator_merge_rule = operators.size > 1
-          ? 'SYNC_MULTI_OPERATOR_UNION'
-          : 'SYNC_SINGLE_OPERATOR';
-      } else {
-        row.operator_fail = String(row?.operator_fail || 'NA').trim() || 'NA';
-        row.operator_fail_original = String(
-          row?.operator_fail_original || row.operator_fail || 'NA'
-        );
-        row.operator_count_sync = 0;
-        row.operator_merge_rule = 'SYNC_NO_VALID_OPERATOR';
-      }
-
-      return row;
-    })
+    .map(({ __score, __dt, ...r }) => r)
     .sort((a, b) =>
       String(a.lmreceived_date || '').localeCompare(
         String(b.lmreceived_date || '')
@@ -177,14 +89,9 @@ function statsForRows(rows = []) {
 
 function daysInclusive(start, end) {
   if (!start || !end) return 0;
-
   const a = new Date(`${start}T12:00:00Z`);
   const b = new Date(`${end}T12:00:00Z`);
-
-  if (!Number.isFinite(a.getTime()) || !Number.isFinite(b.getTime())) {
-    return 0;
-  }
-
+  if (!Number.isFinite(a.getTime()) || !Number.isFinite(b.getTime())) return 0;
   return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
 }
 
@@ -192,10 +99,9 @@ export async function GET() {
   return json({
     ok: true,
     route: '/api/sync',
-    version: '6.17.1',
+    version: '6.8',
     method: 'POST',
-    message:
-      'Sincronização LM V6.17.1: reconstrução automática das datas recebidas + união de todos os operator_fail.'
+    message: 'Sincronização LM V6.8 com substituição integral por data e deduplicação por shipment_id.'
   });
 }
 
@@ -205,32 +111,12 @@ export async function POST(request) {
     const payload = await request.json();
 
     const hasHC = Array.isArray(payload?.hc);
-    const misscan = Array.isArray(payload?.misscan)
-      ? payload.misscan
-      : null;
-
-    const requestedReplaceDates = new Set(
+    const misscan = Array.isArray(payload?.misscan) ? payload.misscan : null;
+    const replaceDates = new Set(
       Array.isArray(payload?.meta?.replaceDates)
-        ? payload.meta.replaceDates.filter(x =>
-            /^\d{4}-\d{2}-\d{2}$/.test(String(x || ''))
-          )
+        ? payload.meta.replaceDates.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')))
         : []
     );
-
-    // V6.17.1:
-    // toda data presente na carga recebida é reconstruída integralmente.
-    // Isso remove snapshots antigos criados pela regra anterior, mesmo quando
-    // o Apps Script não envia explicitamente meta.replaceDates.
-    const incomingDates = new Set(
-      (misscan || [])
-        .map(row => rowDateKey(row))
-        .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')))
-    );
-
-    const replaceDates = new Set([
-      ...requestedReplaceDates,
-      ...incomingDates
-    ]);
 
     if (!misscan) {
       return json({
@@ -239,10 +125,7 @@ export async function POST(request) {
       }, 400);
     }
 
-    if (
-      (hasHC && payload.hc.length > 30000) ||
-      misscan.length > 100000
-    ) {
+    if ((hasHC && payload.hc.length > 30000) || misscan.length > 100000) {
       return json({
         ok: false,
         error: 'Payload acima do limite operacional esperado.'
@@ -260,7 +143,7 @@ export async function POST(request) {
     }
 
     const previousMeta = await readJson(META_PATH, {
-      version: '6.17.1',
+      version: '6.8',
       months: [],
       monthStats: {},
       historyStart: '',
@@ -275,13 +158,8 @@ export async function POST(request) {
     for (const row of misscan) {
       const dateKey = rowDateKey(row);
       const month = monthKeyFromDateKey(dateKey);
-
       if (!month) continue;
-
-      if (!groups.has(month)) {
-        groups.set(month, []);
-      }
-
+      if (!groups.has(month)) groups.set(month, []);
       groups.get(month).push(row);
     }
 
@@ -291,15 +169,14 @@ export async function POST(request) {
 
     const savedMonths = [];
     let totalMergedRows = 0;
-    let totalMultiOperatorBR = 0;
 
     for (const [month, rows] of groups.entries()) {
       const path = `misscan/history/${month}.json`;
       const existing = await readJson(path, { rows: [] });
 
-      // Dias presentes na atualização são removidos antes da nova carga.
-      // Assim, uma sincronização completa do dia substitui o snapshot antigo
-      // e reconstrói corretamente os operator_fail.
+      // Quando o Apps Script informa replaceDates, removemos o snapshot antigo
+      // dessas datas antes de mesclar o novo. Isso impede resíduos de uma carga
+      // parcial (ex.: 952 BR) quando a LM já contém o bloco completo.
       const baseRows = (existing?.rows || []).filter(row => {
         const key = rowDateKey(row);
         return !replaceDates.has(key);
@@ -308,28 +185,16 @@ export async function POST(request) {
       const merged = mergeRows(baseRows, rows);
       const stats = statsForRows(merged);
 
-      const multiOperatorBR = merged.filter(
-        row => Number(row?.operator_count_sync || 0) > 1
-      ).length;
-
       await writeJson(path, {
         month,
         rows: merged,
         updatedAt: now,
-        version: '6.17.1',
-        operatorMergeRule: 'UNION_BY_DATE_SHIPMENT',
-        multiOperatorBR,
         stats
       });
 
-      monthStats[month] = {
-        ...stats,
-        multiOperatorBR
-      };
-
+      monthStats[month] = stats;
       savedMonths.push(month);
       totalMergedRows += merged.length;
-      totalMultiOperatorBR += multiOperatorBR;
     }
 
     const legacyMonths = Array.isArray(previousMeta?.months)
@@ -345,15 +210,8 @@ export async function POST(request) {
     const trackedStats = Object.values(monthStats)
       .filter(x => x && typeof x === 'object');
 
-    const trackedStarts = trackedStats
-      .map(x => x.start)
-      .filter(Boolean)
-      .sort();
-
-    const trackedEnds = trackedStats
-      .map(x => x.end)
-      .filter(Boolean)
-      .sort();
+    const trackedStarts = trackedStats.map(x => x.start).filter(Boolean).sort();
+    const trackedEnds = trackedStats.map(x => x.end).filter(Boolean).sort();
 
     const historyStart = [
       previousMeta?.historyStart,
@@ -365,30 +223,26 @@ export async function POST(request) {
       trackedEnds.at(-1)
     ].filter(Boolean).sort().at(-1) || '';
 
-    const historyRows = trackedStats.reduce(
+    const statsRows = trackedStats.reduce(
       (sum, x) => sum + Number(x.rows || 0),
       0
     );
 
-    const historyActiveDays = trackedStats.reduce(
+    const statsActiveDays = trackedStats.reduce(
       (sum, x) => sum + Number(x.activeDays || 0),
       0
     );
 
-    const historyMultiOperatorBR = trackedStats.reduce(
-      (sum, x) => sum + Number(x.multiOperatorBR || 0),
-      0
-    );
+    const historyRows = statsRows;
+    const historyActiveDays = statsActiveDays;
 
-    const historyCalendarDays =
-      daysInclusive(historyStart, historyEnd);
+    const historyCalendarDays = daysInclusive(historyStart, historyEnd);
 
     const meta = {
       ...previousMeta,
       ...(payload.meta || {}),
-      version: '6.17.1',
-      architecture: 'PUSH_PRIVADO_V6_17_OPERATOR_UNION',
-      operatorMergeRule: 'UNION_BY_DATE_SHIPMENT',
+      version: '6.8',
+      architecture: 'PUSH_PRIVADO_V6_4_DYNAMIC_LM_HISTORY',
       receivedAt: now,
       updatedAt: now,
       historyStart,
@@ -396,7 +250,6 @@ export async function POST(request) {
       historyRows,
       historyActiveDays,
       historyCalendarDays,
-      historyMultiOperatorBR,
       months: allMonths,
       monthStats,
       hcRecords: hasHC
@@ -410,16 +263,12 @@ export async function POST(request) {
     return json({
       ok: true,
       stored: true,
-      version: '6.17.1',
+      version: '6.8',
       hcRecords: meta.hcRecords,
       incomingMisscanRecords: misscan.length,
       misscanRecords: misscan.length,
       monthsUpdated: savedMonths,
-      autoRebuiltDates: replaceDates.size,
-      rebuiltDateList: [...replaceDates].sort(),
       mergedRowsAcrossUpdatedMonths: totalMergedRows,
-      multiOperatorBRAcrossUpdatedMonths: totalMultiOperatorBR,
-      historyMultiOperatorBR,
       historyStart,
       historyEnd,
       historyRows,
@@ -430,11 +279,10 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('MISSCAN_SYNC_V6171_ERROR', error);
-
+    console.error('MISSCAN_SYNC_V68_ERROR', error);
     return json({
       ok: false,
-      error: error?.message || 'Falha ao sincronizar histórico V6.17.1.'
+      error: error?.message || 'Falha ao sincronizar histórico V6.4.'
     }, error?.status || 500);
   }
 }
