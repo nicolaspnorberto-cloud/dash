@@ -192,10 +192,10 @@ export async function GET() {
   return json({
     ok: true,
     route: '/api/sync',
-    version: '6.17',
+    version: '6.17.1',
     method: 'POST',
     message:
-      'Sincronização LM V6.17: 1 BR físico por data+shipment_id com união de todos os operator_fail.'
+      'Sincronização LM V6.17.1: reconstrução automática das datas recebidas + união de todos os operator_fail.'
   });
 }
 
@@ -209,13 +209,28 @@ export async function POST(request) {
       ? payload.misscan
       : null;
 
-    const replaceDates = new Set(
+    const requestedReplaceDates = new Set(
       Array.isArray(payload?.meta?.replaceDates)
         ? payload.meta.replaceDates.filter(x =>
             /^\d{4}-\d{2}-\d{2}$/.test(String(x || ''))
           )
         : []
     );
+
+    // V6.17.1:
+    // toda data presente na carga recebida é reconstruída integralmente.
+    // Isso remove snapshots antigos criados pela regra anterior, mesmo quando
+    // o Apps Script não envia explicitamente meta.replaceDates.
+    const incomingDates = new Set(
+      (misscan || [])
+        .map(row => rowDateKey(row))
+        .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')))
+    );
+
+    const replaceDates = new Set([
+      ...requestedReplaceDates,
+      ...incomingDates
+    ]);
 
     if (!misscan) {
       return json({
@@ -245,7 +260,7 @@ export async function POST(request) {
     }
 
     const previousMeta = await readJson(META_PATH, {
-      version: '6.17',
+      version: '6.17.1',
       months: [],
       monthStats: {},
       historyStart: '',
@@ -301,7 +316,7 @@ export async function POST(request) {
         month,
         rows: merged,
         updatedAt: now,
-        version: '6.17',
+        version: '6.17.1',
         operatorMergeRule: 'UNION_BY_DATE_SHIPMENT',
         multiOperatorBR,
         stats
@@ -371,7 +386,7 @@ export async function POST(request) {
     const meta = {
       ...previousMeta,
       ...(payload.meta || {}),
-      version: '6.17',
+      version: '6.17.1',
       architecture: 'PUSH_PRIVADO_V6_17_OPERATOR_UNION',
       operatorMergeRule: 'UNION_BY_DATE_SHIPMENT',
       receivedAt: now,
@@ -395,11 +410,13 @@ export async function POST(request) {
     return json({
       ok: true,
       stored: true,
-      version: '6.17',
+      version: '6.17.1',
       hcRecords: meta.hcRecords,
       incomingMisscanRecords: misscan.length,
       misscanRecords: misscan.length,
       monthsUpdated: savedMonths,
+      autoRebuiltDates: replaceDates.size,
+      rebuiltDateList: [...replaceDates].sort(),
       mergedRowsAcrossUpdatedMonths: totalMergedRows,
       multiOperatorBRAcrossUpdatedMonths: totalMultiOperatorBR,
       historyMultiOperatorBR,
@@ -413,11 +430,11 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('MISSCAN_SYNC_V617_ERROR', error);
+    console.error('MISSCAN_SYNC_V6171_ERROR', error);
 
     return json({
       ok: false,
-      error: error?.message || 'Falha ao sincronizar histórico V6.17.'
+      error: error?.message || 'Falha ao sincronizar histórico V6.17.1.'
     }, error?.status || 500);
   }
 }
