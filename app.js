@@ -235,7 +235,7 @@ function dedupeBR(rows){
   rows.forEach(r=>{
     const dateKey=misscanDateKey(r);
     const shipment=String(r.shipment_id||'').trim();
-    const key=shipment?`${dateKey}|${shipment}`:`${dateKey}|ROW_${map.size}`;
+    const key=shipment?shipment:`ROW_${map.size}`;
     const score=(r.responsabilidade!=='NA'?10:0)+(r.identificacao==='IDENTIFICADO'?4:0)+(r.process_fail?2:0)+(r.to_mis_status?1:0);
     const dt=Date.parse(misscanDateValue(r))||0;
     const current=map.get(key);
@@ -276,7 +276,7 @@ function canonicalizeAndAttributeV612(rows=[]){
     const shipment=String(raw?.shipment_id||'').trim();
     if(!shipment)return;
 
-    const key=`${dateKey}|${shipment}`;
+    const key=shipment;
     if(!groups.has(key))groups.set(key,{rows:[],operators:new Map()});
     const g=groups.get(key);
     g.rows.push(raw);
