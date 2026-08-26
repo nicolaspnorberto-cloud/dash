@@ -158,15 +158,17 @@ function responsibility(row) {
   return 'NA';
 }
 
-function canonicalizeAndAttributeV612(rows = []) {
+function canonicalizeAndAttributeV614(rows = []) {
   const groups = new Map();
 
   for (const row of rows) {
-    const date = misscanDateKey(row) || 'NO_DATE';
     const shipment = String(row?.shipment_id || '').trim();
     if (!shipment) continue;
 
-    const key = `${date}|${shipment}`;
+    // V6.14: shipment_id é a identidade física do BR.
+    // Não usamos a data na chave para evitar o mesmo pacote ser contado novamente
+    // quando existir em mais de uma linha/data do histórico.
+    const key = shipment;
     if (!groups.has(key)) groups.set(key, { rows: [], operators: new Map() });
     const g = groups.get(key);
     g.rows.push(row);
@@ -355,7 +357,7 @@ export async function GET(request) {
       : null;
 
     const physicalPeriodRows = rows.length;
-    const canonicalRows = canonicalizeAndAttributeV612(rows);
+    const canonicalRows = canonicalizeAndAttributeV614(rows);
 
     canonicalRows.sort((a, b) =>
       misscanDateValue(a).localeCompare(misscanDateValue(b))
@@ -377,16 +379,18 @@ export async function GET(request) {
         returnedMisscanRecords: canonicalRows.length,
         physicalPeriodRows,
         canonicalPeriodRows: canonicalRows.length,
-        v613Canonicalized: true,
+        v614Canonicalized: true,
         dateRule: 'SOCPACKED_DATE',
-        multiOperatorRule: 'SHARED_ATTRIBUTION',
+        multiOperatorRule: 'ALL_OPERATOR_FAIL_PRESERVED',
         wholeToInheritance: true,
+        brIdentityRule: 'UNIQUE_SHIPMENT_ID',
+        attributionPipeline: 'GROUP_BR_THEN_COLLECT_ALL_OPERATOR_FAIL',
         historyMonths: Array.isArray(meta.months) ? meta.months.length : 0
       }
     });
 
   } catch (error) {
-    console.error('MISSCAN_DATA_V613_ERROR', error);
+    console.error('MISSCAN_DATA_V614_ERROR', error);
 
     return json({
       ok: false,
