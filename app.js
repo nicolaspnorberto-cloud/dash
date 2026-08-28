@@ -625,6 +625,68 @@ function exportPending(){
 }
 
 
+
+// ================= HISTÓRICO: TRATATIVAS + DIAS REINCIDENTE =================
+// Mantém as mesmas opções de tratativa na tela principal e no Histórico Geral.
+// Dias reincidente = dias corridos desde a última reincidência registrada.
+
+function historyTreatmentRow(id){
+  return state.treatmentSource.find(x=>x.id===id) || (()=>{
+    const a=state.treatmentArchive?.[id];
+    if(!a)return null;
+    return {
+      id,
+      colaborador:a.colaborador||id,
+      indicador:Number(a.latestIndicador)||0,
+      miss_scan:Number(a.latestMissScan)||0,
+      operacao:a.operacao||'NA',
+      periodo:(a.periods||[]).at(-1)||'Histórico Geral',
+      fonte_indicador:'Histórico Geral',
+      turno:normalizeTurno(a.turno||''),
+      setor:a.setor||'Não cadastrado',
+      lider:a.lider||'Não cadastrado',
+      lider_email:a.lider_email||'Não cadastrado',
+      tipo_hc:a.tipo_hc||'Não cadastrado',
+      hc_status:'Histórico'
+    };
+  })();
+}
+
+function recurrenceEvents(id){
+  const p=progressFor(id);
+  return (p.history||[])
+    .filter(x=>/reincid/i.test(String(x.title||'')))
+    .sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));
+}
+
+function recurrenceDays(id){
+  const last=recurrenceEvents(id)[0];
+  if(!last?.at)return null;
+  const d=new Date(last.at);
+  if(Number.isNaN(d.getTime()))return null;
+  return Math.max(0,Math.floor((Date.now()-d.getTime())/86400000));
+}
+
+function recurrenceSummaryHtml(id){
+  const events=recurrenceEvents(id);
+  const days=recurrenceDays(id);
+  return `<div class="history-recurrence-summary">
+    <span><b>Reincidências:</b> ${events.length}</span>
+    <span><b>Dias reincidente:</b> ${days===null?'—':days+' dia(s)'}</span>
+    <span><b>Última:</b> ${events[0]?.at?escapeHtml(brDate(events[0].at)):'—'}</span>
+  </div>`;
+}
+
+function historyTreatmentActionsHtml(id){
+  const p=progressFor(id),c=p.requiredCycle,d=p[`dialogue${c}`]||{},r=p[`recycle${c}`]||{};
+  return `<div class="history-treatment-actions">
+    <button class="mini-action" onclick="openDialogue('${id}',${c})">${d.done?'Diálogo realizado':'Realizar diálogo'}</button>
+    <button class="mini-action" ${!d.done?'disabled':''} onclick="openRecycle('${id}',${c})">${r.done?'Reciclagem realizada':'Realizar reciclagem'}</button>
+    <button class="mini-action" ${!cycleComplete(p,c)||c>=3?'disabled':''} onclick="registerRecurrence('${id}')">+ Reincidência</button>
+  </div>`;
+}
+
+
 // ========================= TRATATIVAS V4 =========================
 const TREATMENT_STORAGE='misscanTreatmentProgressV4';
 const TREATMENT_DB='misscanTreatmentEvidenceV4';
@@ -809,14 +871,14 @@ function renderTreatments(){
       <td>${dialogueButton(x,2)}</td><td>${recycleButton(x,2)}</td>
       <td>${dialogueButton(x,3)}</td><td>${recycleButton(x,3)}</td>
       <td><span class="${st.className}">${escapeHtml(st.text)}</span></td>
-      <td><div class="row-action-stack"><button class="mini-action" onclick="openOffenderHistory('${x.id}')">Histórico</button><button class="mini-action" onclick="registerRecurrence('${x.id}')">+ Reincidência</button></div></td>
+      <td><div class="row-action-stack"><button class="mini-action" onclick="openOffenderHistory('${x.id}')">Histórico</button>${recurrenceSummaryHtml(x.id)}${historyTreatmentActionsHtml(x.id)}<button class="mini-action" onclick="registerRecurrence('${x.id}')">+ Reincidência</button><span class="cell-sub">Dias reincidente: ${recurrenceDays(x.id)===null?'—':recurrenceDays(x.id)+' dia(s)'}</span></div></td>
     </tr>`;
   }).join('')||'<tr><td colspan="15" class="empty">Nenhum colaborador acima da meta nos filtros atuais.</td></tr>';
   if($('globalHistoryModal')?.classList.contains('open'))renderGlobalTreatmentHistory();
 }
 
 window.registerRecurrence=id=>{
-  const row=state.treatmentSource.find(x=>x.id===id);if(!row)return;
+  const row=historyTreatmentRow(id);if(!row)return;
   const p=progressFor(id);
   if(!cycleComplete(p,p.requiredCycle))return alert('Conclua o ciclo atual antes de registrar uma reincidência.');
   if(p.requiredCycle>=3)return alert('O colaborador já está no 3º ciclo de tratativa.');
@@ -825,13 +887,13 @@ window.registerRecurrence=id=>{
   saveTreatmentProgress();renderTreatments();
 };
 
-function modalRow(){return state.treatmentSource.find(x=>x.id===state.treatmentCurrent)}
+function modalRow(){return historyTreatmentRow(state.treatmentCurrent)}
 function showModal(){const m=$('treatmentModal');m.classList.add('open');m.setAttribute('aria-hidden','false');document.body.style.overflow='hidden'}
 function closeModal(){const m=$('treatmentModal');m.classList.remove('open');m.setAttribute('aria-hidden','true');document.body.style.overflow='';state.treatmentCurrent=null;state.treatmentMode=null}
 function modalHeader(row,cycle,label){$('modalEyebrow').textContent=`${label} • CICLO ${cycle}`;$('modalTitle').textContent=row.colaborador;$('modalMeta').textContent=`Indicador ${fmtPct(row.indicador)} • ${row.turno} • ${row.setor} • Líder: ${row.lider}`}
 
 window.openDialogue=(id,cycle)=>{
-  const row=state.treatmentSource.find(x=>x.id===id);if(!row)return;
+  const row=historyTreatmentRow(id);if(!row)return;
   state.treatmentCurrent=id;state.treatmentMode='dialogue';state.treatmentCycle=cycle;
   const d=progressFor(id)[`dialogue${cycle}`]||{};
   modalHeader(row,cycle,'DIÁLOGO DE PERFORMANCE');
@@ -844,7 +906,7 @@ window.openDialogue=(id,cycle)=>{
 };
 
 window.openRecycle=async(id,cycle)=>{
-  const row=state.treatmentSource.find(x=>x.id===id);if(!row)return;
+  const row=historyTreatmentRow(id);if(!row)return;
   state.treatmentCurrent=id;state.treatmentMode='recycle';state.treatmentCycle=cycle;
   const r=progressFor(id)[`recycle${cycle}`]||{};
   modalHeader(row,cycle,'RECICLAGEM');
@@ -1145,7 +1207,7 @@ function renderGlobalTreatmentHistory(){
     <td>${x.ciclo}</td>
     <td>${escapeHtml(x.status)}</td>
     <td>${x.lastTreatment?escapeHtml(brDate(x.lastTreatment)):escapeHtml(x.lastTreatmentTitle)}</td>
-    <td><button class="mini-action" onclick="openOffenderHistory('${x.id}')">Ver histórico</button></td>
+    <td><button class="mini-action" onclick="openOffenderHistory('${x.id}')">Ver histórico</button>${recurrenceSummaryHtml(x.id)}${historyTreatmentActionsHtml(x.id)}</td>
   </tr>`).join('')||'<tr><td colspan="14" class="empty">Nenhum colaborador encontrado no histórico.</td></tr>';
 }
 
