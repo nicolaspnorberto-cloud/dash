@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.12 — Whole TO atribuído por TO
+// MIS-SCAN CONTROL CENTER V6.13 — operator_fail oficial por BR
 const state = {
   sourceRows: 0,
   raw: [],
@@ -288,7 +288,10 @@ function canonicalizeAndAttributeV612(rows=[]){
     });
 
     const base={...(ranked[0]||g.rows[0]||{})};
-    const operators=[...g.operators.values()];
+    // V6.13: operator_fail já é o resultado probabilístico oficial.
+    // Usamos somente o valor da linha canônica; nunca unimos operadores
+    // encontrados em outras cópias do mesmo BR.
+    const operators=[...operatorSetV612(base.operator_fail).values()];
 
     base.operator_fail_original=String(
       base.operator_fail_original||base.operator_fail||'NA'
@@ -323,6 +326,21 @@ function canonicalizeAndAttributeV612(rows=[]){
     canonical.push(base);
   });
 
+  // V6.13: não existe herança por TO. O operator_fail é autoritativo por BR.
+  // to_mis_status=OK não é Misscan e Misrouting, quando sinalizado, prevalece.
+  const officialRows=canonical.filter(row=>{
+    if(String(row?.to_mis_status||'').trim().toUpperCase()==='OK')return false;
+    const mr=String(
+      row?.is_misrouting??row?.is_mis_routing??row?.misrouting??row?.mis_routing??''
+    ).trim().toUpperCase();
+    return !['SIM','YES','TRUE','1','MISROUTING','MIS_ROUTING','MISROUTE'].includes(mr);
+  });
+
+  return officialRows.sort((a,b)=>
+    String(a?.lmreceived_date||'').localeCompare(String(b?.lmreceived_date||''))
+  );
+
+  /* Legado V6.12 desativado: Whole TO não pode alterar operator_fail.
   // 2) Whole TO: usamos o operator_fail como fonte da responsabilidade.
   //    Se um BR do TO está NA, ele herda o operador quando o TO possui
   //    exatamente UM operador válido nas linhas identificadas.
@@ -375,6 +393,7 @@ function canonicalizeAndAttributeV612(rows=[]){
   return canonical.sort((a,b)=>
     String(a?.lmreceived_date||'').localeCompare(String(b?.lmreceived_date||''))
   );
+  */
 }
 
 function scopeRowsToLivePeriodV612(rows=[]){
@@ -403,9 +422,7 @@ function scopeRowsToLivePeriodV612(rows=[]){
 function loadMisscanRows(rows){
   state.sourceRows=rows.length;
 
-  // V6.12: consolida o BR físico e aplica a regra de Whole TO antes do HC.
-  // NA em Whole TO herda o único operator_fail válido do TO;
-  // BR com 2+ operadores continua NÃO IDENTIFICADO.
+  // V6.13: BR único com operator_fail oficial, sem herança por Whole TO.
   const canonical=canonicalizeAndAttributeV612(rows);
   const scoped=scopeRowsToLivePeriodV612(canonical);
   const enriched=scoped.map(enrich);
@@ -1878,7 +1895,7 @@ async function refreshLiveData({silent=false}={}){
         ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
         : '';
       $('dataNote').textContent=
-        `Histórico LM V6.12. ${fmtInt.format(state.raw.length)} BR únicos canônicos no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
+        `Histórico LM V6.13. ${fmtInt.format(state.raw.length)} BR únicos oficiais no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
   }catch(err){
     console.error(err);
