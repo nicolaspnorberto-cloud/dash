@@ -1,4 +1,4 @@
-// MIS-SCAN CONTROL CENTER V6.12 — Whole TO atribuído por TO
+// MIS-SCAN CONTROL CENTER V6.13 — operator_fail oficial por BR
 const state = {
   sourceRows: 0,
   raw: [],
@@ -52,6 +52,15 @@ function normalizeName(v=''){
     .replace(/\s+/g,' ')
     .trim();
 }
+
+// De/para controlado para divergencias conhecidas entre operator_fail e Base de HC.
+// Mantemos correspondencias explicitas para evitar falsos positivos entre homonimos.
+const HC_NAME_ALIASES={
+  'ANICE HELENA CRISTINA ABEL':'ANICE HELENA CRISTINA ABEL DE SOUZA',
+  'JUAN SOUZA GOMES DA SILVA':'JUAN DE SOUZA GOMES DA SILVA',
+  'VITORIA CRISTINA PIRES':'VITORIA CRISTINA PIRES TEODORO',
+  'THAYLANE SAMARA MEIRELES':'THAYLLANE SAMARA MEIRELES DE SOUZA'
+};
 
 function csvRowsParse(text){
   const rows=[]; let row=[], field='', quoted=false;
@@ -131,11 +140,18 @@ function buildHCMap(records){
 
   state.hcRecords=normalized;
 
-  state.hcMap=new Map(
+  const hcMap=new Map(
     normalized
       .filter(x=>x.norm)
       .map(x=>[x.norm,x])
   );
+
+  Object.entries(HC_NAME_ALIASES).forEach(([alias,canonical])=>{
+    const record=hcMap.get(normalizeName(canonical));
+    if(record) hcMap.set(normalizeName(alias),{...record,hc_alias:canonical});
+  });
+
+  state.hcMap=hcMap;
 }
 
 function parseHCUpload(text){
@@ -288,7 +304,10 @@ function canonicalizeAndAttributeV612(rows=[]){
     });
 
     const base={...(ranked[0]||g.rows[0]||{})};
-    const operators=[...g.operators.values()];
+    // V6.13: operator_fail já é o resultado probabilístico oficial.
+    // Usamos somente o valor da linha canônica; nunca unimos operadores
+    // encontrados em outras cópias do mesmo BR.
+    const operators=[...operatorSetV612(base.operator_fail).values()];
 
     base.operator_fail_original=String(
       base.operator_fail_original||base.operator_fail||'NA'
@@ -323,6 +342,21 @@ function canonicalizeAndAttributeV612(rows=[]){
     canonical.push(base);
   });
 
+  // V6.13: não existe herança por TO. O operator_fail é autoritativo por BR.
+  // to_mis_status=OK não é Misscan e Misrouting, quando sinalizado, prevalece.
+  const officialRows=canonical.filter(row=>{
+    if(String(row?.to_mis_status||'').trim().toUpperCase()==='OK')return false;
+    const mr=String(
+      row?.is_misrouting??row?.is_mis_routing??row?.misrouting??row?.mis_routing??''
+    ).trim().toUpperCase();
+    return !['SIM','YES','TRUE','1','MISROUTING','MIS_ROUTING','MISROUTE'].includes(mr);
+  });
+
+  return officialRows.sort((a,b)=>
+    String(a?.lmreceived_date||'').localeCompare(String(b?.lmreceived_date||''))
+  );
+
+  /* Legado V6.12 desativado: Whole TO não pode alterar operator_fail.
   // 2) Whole TO: usamos o operator_fail como fonte da responsabilidade.
   //    Se um BR do TO está NA, ele herda o operador quando o TO possui
   //    exatamente UM operador válido nas linhas identificadas.
@@ -375,6 +409,7 @@ function canonicalizeAndAttributeV612(rows=[]){
   return canonical.sort((a,b)=>
     String(a?.lmreceived_date||'').localeCompare(String(b?.lmreceived_date||''))
   );
+  */
 }
 
 function scopeRowsToLivePeriodV612(rows=[]){
@@ -403,9 +438,7 @@ function scopeRowsToLivePeriodV612(rows=[]){
 function loadMisscanRows(rows){
   state.sourceRows=rows.length;
 
-  // V6.12: consolida o BR físico e aplica a regra de Whole TO antes do HC.
-  // NA em Whole TO herda o único operator_fail válido do TO;
-  // BR com 2+ operadores continua NÃO IDENTIFICADO.
+  // V6.13: BR único com operator_fail oficial, sem herança por Whole TO.
   const canonical=canonicalizeAndAttributeV612(rows);
   const scoped=scopeRowsToLivePeriodV612(canonical);
   const enriched=scoped.map(enrich);
@@ -1346,12 +1379,6 @@ async function loadAutoRates({silent=true}={}){
       productionMeta:data.productionMeta||{},
       mapping:data.mapping||{}
     };
-    // A taxa individual usa o volume expedido do mesmo recorte como
-    // denominador. Recalcula as tratativas somente depois que o GEROT
-    // disponibiliza os volumes reais por dia.
-    if(state.raw.length){
-      loadTreatmentRows(liveTreatmentRows());
-    }
     renderAutoRates();
     renderForecastTable();
     renderProjection();
@@ -1581,61 +1608,38 @@ function setLiveStatus(mode,text,detail=''){
   if(updated)updated.textContent=detail||'Google Sheets • automático';
 }
 
-function volumeExpedidoNoRecorte(){
-  const start=String(state.liveMeta?.periodStart||'').slice(0,10);
-  const end=String(state.liveMeta?.periodEnd||'').slice(0,10);
-  const daily=Array.isArray(state.autoRateMeta?.daily)
-    ?state.autoRateMeta.daily
-    :[];
-
-  if(!start||!end||!daily.length)return 0;
-
-  // daily.volumeReal já representa o SOC_Packed INTER-SOC consolidado
-  // de todos os turnos do dia. Cada data entra uma única vez.
-  const usedDates=new Set();
-  return daily.reduce((total,row)=>{
-    const date=String(row?.date||row?.day||'').slice(0,10);
-    if(!date||date<start||date>end||usedDates.has(date))return total;
-    usedDates.add(date);
-    return total+Math.max(0,Number(row?.volumeReal)||0);
-  },0);
-}
-
 function liveTreatmentRows(){
   const identified=state.raw.filter(r=>r.identificacao==='IDENTIFICADO' && r.responsabilidade!=='NA');
-  const volumeExpedido=volumeExpedidoNoRecorte();
+  const total=identified.length||1;
   const groups=new Map();
 
   identified.forEach(r=>{
-    const id=String(r.opsid||normalizeName(r.operator_name)||'').trim().toUpperCase();
+    const id=normalizeName(r.operator_name);
     if(!id)return;
     if(!groups.has(id)){
       groups.set(id,{
         colaborador:r.operator_name,
-        br:new Set(),
+        miss_scan:0,
         areaCounts:{},
         periodo:state.liveMeta?.periodLabel||'Janela automática'
       });
     }
     const g=groups.get(id);
-    const shipmentId=String(r.shipment_id||'').trim();
-    if(shipmentId)g.br.add(shipmentId);
+    g.miss_scan++;
     g.areaCounts[r.responsabilidade]=(g.areaCounts[r.responsabilidade]||0)+1;
   });
 
   return [...groups.values()].map(g=>{
     const operacao=Object.entries(g.areaCounts)
       .sort((a,b)=>b[1]-a[1])[0]?.[0]||'NA';
-    const missScan=g.br.size;
 
     return {
       colaborador:g.colaborador,
-      miss_scan:missScan,
-      indicador:volumeExpedido>0?missScan/volumeExpedido*100:0,
-      volume_expedido:volumeExpedido,
+      miss_scan:g.miss_scan,
+      indicador:g.miss_scan/total*100,
       operacao,
       periodo:g.periodo,
-      fonte_indicador:'BR único de Miss Scan ÷ volume expedido do recorte'
+      fonte_indicador:'Share Misscan por período'
     };
   });
 }
@@ -1907,7 +1911,7 @@ async function refreshLiveData({silent=false}={}){
         ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
         : '';
       $('dataNote').textContent=
-        `Histórico LM V6.12. ${fmtInt.format(state.raw.length)} BR únicos canônicos no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
+        `Histórico LM V6.13. ${fmtInt.format(state.raw.length)} BR únicos oficiais no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
   }catch(err){
     console.error(err);
