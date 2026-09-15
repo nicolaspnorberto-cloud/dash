@@ -25,6 +25,10 @@ const state = {
   liveMeta: null,
   liveRefreshing: false,
   forceRefreshing: false,
+  evolution: [],
+  evolutionWeeks: [],
+  evolutionMeta: null,
+  evolutionRefreshing: false,
   datePreset: 'LAST_7',
   dateFrom: '',
   dateTo: ''
@@ -908,6 +912,7 @@ function renderTreatments(){
     </tr>`;
   }).join('')||'<tr><td colspan="15" class="empty">Nenhum colaborador acima da meta nos filtros atuais.</td></tr>';
   if($('globalHistoryModal')?.classList.contains('open'))renderGlobalTreatmentHistory();
+  renderEvolution();
 }
 
 window.registerRecurrence=id=>{
@@ -1524,6 +1529,153 @@ async function refreshCalendarizationV65({silent=true}={}){
   await loadAutoRates({silent});
 }
 
+// ================= MATRIZ DE EVOLUÇÃO AUTOMÁTICA V6.15 =================
+function evolutionMetrics(row){
+  const comparable=state.evolutionWeeks.slice(-6).map(w=>w.week);
+  const values=comparable.map(week=>Number(row.weeks?.[week]?.missScan)||0);
+  const presence=values.filter(value=>value>0).length;
+  const total=values.reduce((sum,value)=>sum+value,0);
+  const peak=Math.max(0,...values);
+  const previous=values.slice(0,3).reduce((sum,value)=>sum+value,0);
+  const recent=values.slice(3).reduce((sum,value)=>sum+value,0);
+  const trend=presence<2?'—':recent>previous*1.1?'Piora aparente':recent<previous*.9?'Melhora aparente':'Estável';
+  const status=presence>=5?'Crônico':presence>=3?'Recorrente':presence===2?'Intermitente':presence===1?'Pontual':'Sem classificação';
+  return {presence,total,peak,trend,status};
+}
+
+function evolutionOperation(row){
+  let esteira=0,expedicao=0;
+  Object.values(row.weeks||{}).forEach(metric=>{
+    esteira+=Number(metric?.esteira)||0;
+    expedicao+=Number(metric?.expedicao)||0;
+  });
+  return expedicao>=esteira?'EXPEDIÇÃO':'ESTEIRA';
+}
+
+function evolutionTreatment(row){
+  const id=treatmentKey(row.colaborador||row.key);
+  const progress=state.treatmentProgress?.[id];
+  if(progress){
+    const cycle=Math.min(3,Math.max(1,Number(progress.requiredCycle)||1));
+    if(!progress[`dialogue${cycle}`]?.done)return `${cycle}º Diálogo pendente`;
+    if(!progress[`recycle${cycle}`]?.done)return `${cycle}ª Reciclagem pendente`;
+    return 'Em monitoramento';
+  }
+  const latest=state.evolutionWeeks.at(-1)?.week;
+  const share=Number(row.weeks?.[latest]?.share);
+  return Number.isFinite(share)&&share>state.treatmentThreshold
+    ?'1º Diálogo pendente'
+    :'Acompanhar evolução';
+}
+
+function evolutionTone(value=''){
+  if(/Piora|Crônico/i.test(value))return 'evolution-danger';
+  if(/Melhora|monitoramento/i.test(value))return 'evolution-good';
+  if(/Recorrente|Intermitente|pendente/i.test(value))return 'evolution-warning';
+  return 'evolution-neutral';
+}
+
+function filteredEvolution(){
+  const scope=$('evolutionScope')?.value||'CURRENT';
+  const operation=$('evolutionOperation')?.value||'';
+  const status=$('evolutionStatus')?.value||'';
+  const search=String($('evolutionSearch')?.value||'').trim().toLowerCase();
+  const latest=state.evolutionWeeks.at(-1)?.week;
+  return state.evolution.filter(row=>{
+    const metrics=evolutionMetrics(row);
+    const current=Number(row.weeks?.[latest]?.missScan)||0;
+    const scopeOk=scope==='ALL'||(scope==='CURRENT'&&current>0)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
+    const op=evolutionOperation(row);
+    return scopeOk&&(!operation||op===operation)&&(!status||metrics.status===status)&&(!search||`${row.colaborador} ${row.opsid} ${row.lider} ${row.setor}`.toLowerCase().includes(search));
+  }).sort((a,b)=>Number(b.weeks?.[latest]?.missScan||0)-Number(a.weeks?.[latest]?.missScan||0)||evolutionMetrics(b).total-evolutionMetrics(a).total||String(a.colaborador).localeCompare(String(b.colaborador),'pt-BR'));
+}
+
+function renderEvolution(){
+  if(!$('evolutionBody')||!$('evolutionHead'))return;
+  const weeks=state.evolutionWeeks;
+  const latest=weeks.at(-1)?.week;
+  const rows=filteredEvolution();
+  const metrics=rows.map(row=>evolutionMetrics(row));
+  const current=rows.filter(row=>Number(row.weeks?.[latest]?.missScan)>0).length;
+  const chronic=metrics.filter(item=>item.status==='Crônico').length;
+  const recurrent=metrics.filter(item=>item.status==='Recorrente').length;
+  const worse=metrics.filter(item=>item.trend==='Piora aparente').length;
+
+  $('evolutionTotal').textContent=fmtInt.format(rows.length);
+  $('evolutionCurrent').textContent=fmtInt.format(current);
+  $('evolutionCurrentWeek').textContent=latest||'—';
+  $('evolutionChronic').textContent=fmtInt.format(chronic);
+  $('evolutionRecurrent').textContent=fmtInt.format(recurrent);
+  $('evolutionWorse').textContent=fmtInt.format(worse);
+  $('evolutionCountLabel').textContent=weeks.length
+    ?`${rows.length} colaborador(es) • ${weeks[0].week} a ${latest}`
+    :'Aguardando dados semanais...';
+
+  $('evolutionHead').innerHTML=`<tr><th>Colaborador</th><th>Operação</th>${weeks.map(w=>`<th>${escapeHtml(w.week)}</th>`).join('')}<th>Aparições</th><th>Tendência</th><th>Status</th><th>Tratativa atual</th></tr>`;
+  $('evolutionBody').innerHTML=rows.map(row=>{
+    const item=evolutionMetrics(row);
+    const weekCells=weeks.map(week=>{
+      const metric=row.weeks?.[week.week];
+      return `<td class="evolution-week">${metric?`<strong>${fmtInt.format(metric.missScan)}</strong><span>${Number.isFinite(metric.share)?fmtPct(metric.share):'sem volume'}</span>`:'—'}</td>`;
+    }).join('');
+    const action=evolutionTreatment(row);
+    return `<tr>
+      <td><div class="evolution-name">${escapeHtml(row.colaborador)}</div><div class="evolution-sub">${escapeHtml(row.opsid||'Sem OpsID')} • ${escapeHtml(row.turno)} • ${escapeHtml(row.lider)}</div></td>
+      <td><span class="evolution-pill ${evolutionOperation(row)==='EXPEDIÇÃO'?'evolution-neutral':'evolution-warning'}">${escapeHtml(evolutionOperation(row))}</span></td>
+      ${weekCells}
+      <td><strong>${item.presence}</strong></td>
+      <td><span class="evolution-pill ${evolutionTone(item.trend)}">${escapeHtml(item.trend)}</span></td>
+      <td><span class="evolution-pill ${evolutionTone(item.status)}">${escapeHtml(item.status)}</span></td>
+      <td><span class="evolution-pill evolution-action ${evolutionTone(action)}">${escapeHtml(action)}</span></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="${weeks.length+6}" class="empty">Nenhum colaborador encontrado nos filtros atuais.</td></tr>`;
+}
+
+async function refreshEvolution({silent=true}={}){
+  if(state.evolutionRefreshing)return;
+  state.evolutionRefreshing=true;
+  const button=$('refreshEvolutionBtn');
+  if(button)button.disabled=true;
+  if($('evolutionUpdated'))$('evolutionUpdated').textContent='Atualizando histórico...';
+  try{
+    const response=await fetch(`/api/evolucao?weeks=8&t=${Date.now()}`,{cache:'no-store',headers:{Accept:'application/json'}});
+    let data={};try{data=await response.json()}catch{}
+    if(!response.ok||!data.ok)throw new Error(data.error||`Falha (${response.status})`);
+    state.evolution=data.rows||[];
+    state.evolutionWeeks=data.weeks||[];
+    state.evolutionMeta=data.meta||{};
+    const generated=state.evolutionMeta.generatedAt?new Date(state.evolutionMeta.generatedAt).toLocaleString('pt-BR'):'—';
+    if($('evolutionUpdated'))$('evolutionUpdated').textContent=`Atualizado ${generated}`;
+    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Fonte automática: ${state.evolutionMeta.numeratorSource||'Matinal/LM'} ÷ ${state.evolutionMeta.volumeSource||'volume expedido'}. Período ${state.evolutionMeta.periodStart||'—'} a ${state.evolutionMeta.periodEnd||'—'}.`;
+    renderEvolution();
+  }catch(error){
+    console.error('EVOLUCAO_V615_FRONTEND_ERROR',error);
+    if($('evolutionUpdated'))$('evolutionUpdated').textContent='Falha na atualização';
+    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Não foi possível atualizar a matriz: ${error.message}`;
+    renderEvolution();
+    if(!silent)alert(`Falha ao atualizar a matriz:\n${error.message}`);
+  }finally{
+    state.evolutionRefreshing=false;
+    if(button)button.disabled=false;
+  }
+}
+
+function exportEvolution(){
+  const weeks=state.evolutionWeeks.map(item=>item.week);
+  const rows=filteredEvolution().map(row=>{
+    const metrics=evolutionMetrics(row);
+    const out={colaborador:row.colaborador,opsid:row.opsid,turno:row.turno,setor:row.setor,lider:row.lider,operacao:evolutionOperation(row)};
+    weeks.forEach(week=>{
+      out[`${week}_miss_scan`]=row.weeks?.[week]?.missScan??'';
+      out[`${week}_percentual`]=row.weeks?.[week]?.share??'';
+      out[`${week}_volume_expedido`]=row.weeks?.[week]?.volume??'';
+    });
+    return {...out,aparicoes:metrics.presence,total:metrics.total,pico:metrics.peak,tendencia:metrics.trend,status:metrics.status,tratativa_atual:evolutionTreatment(row)};
+  });
+  exportCSV(rows,'matriz_evolucao_ofensores_mg4.csv');
+}
+// ================= FIM MATRIZ DE EVOLUÇÃO V6.15 =================
+
 
 function tabs(){
   document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
@@ -1531,6 +1683,10 @@ function tabs(){
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
     if(b.dataset.tab==='calendarizacao'){refreshCalendarizationV65({silent:true})}
     if(b.dataset.tab==='tratativas')renderTreatments();
+    if(b.dataset.tab==='evolucao'){
+      if(state.evolution.length)renderEvolution();
+      else refreshEvolution({silent:true});
+    }
   }));
 }
 
@@ -1760,6 +1916,7 @@ async function forceRefreshSourcesV67({silent=false}={}){
     ){
       await refreshLiveData({silent:true});
       await refreshCalendarizationV65({silent:true});
+      await refreshEvolution({silent:true});
 
       const result=finalRequest?.result||{};
       const lm=result.lm||'';
@@ -1931,6 +2088,7 @@ async function boot(){
   tabs();loadCalendarPreferences();restorePeriodPreference();
   await refreshLiveData({silent:true});
   await refreshCalendarizationV65({silent:true});
+  await refreshEvolution({silent:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV67({silent:false}));
@@ -1951,6 +2109,19 @@ async function boot(){
   ['treatmentThreshold','treatTurnoFilter','treatSetorFilter','treatStatusFilter'].forEach(id=>$(id).addEventListener('change',renderTreatments));
   $('treatSearch').addEventListener('input',renderTreatments);
   $('treatResetBtn').addEventListener('click',()=>{$('treatmentThreshold').value='0.88';$('treatTurnoFilter').value='';$('treatSetorFilter').value='';$('treatStatusFilter').value='';$('treatSearch').value='';renderTreatments()});
+
+  // Matriz de evolução V6.15
+  ['evolutionScope','evolutionOperation','evolutionStatus'].forEach(id=>$(id)?.addEventListener('change',renderEvolution));
+  $('evolutionSearch')?.addEventListener('input',renderEvolution);
+  $('evolutionResetBtn')?.addEventListener('click',()=>{
+    $('evolutionScope').value='CURRENT';
+    $('evolutionOperation').value='';
+    $('evolutionStatus').value='';
+    $('evolutionSearch').value='';
+    renderEvolution();
+  });
+  $('refreshEvolutionBtn')?.addEventListener('click',()=>refreshEvolution({silent:false}));
+  $('exportEvolutionBtn')?.addEventListener('click',exportEvolution);
 
   $('historyGlobalBtn')?.addEventListener('click',openGlobalTreatmentHistory);
   $('closeGlobalHistoryModal')?.addEventListener('click',closeGlobalTreatmentHistory);

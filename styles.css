@@ -22,6 +22,64 @@
   --shadow:0 8px 24px rgba(19,52,91,.08);
   --radius:18px;
 }
+
+/* ================= MATRIZ DE EVOLUÇÃO V6.15 ================= */
+.evolution-hero{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+  padding:28px;
+  margin-bottom:18px;
+  border-radius:24px;
+  color:#fff;
+  background:linear-gradient(135deg,#0b3764 0%,#19558d 68%,#ff6426 160%);
+  box-shadow:0 18px 42px rgba(16,55,96,.15);
+}
+.evolution-hero h1{margin:6px 0 8px;font-size:32px;line-height:1.12}
+.evolution-hero p{margin:0;max-width:760px;color:#dce9f6}
+.evolution-source-card{
+  min-width:275px;
+  padding:17px 20px;
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:18px;
+  background:rgba(255,255,255,.11);
+  backdrop-filter:blur(8px);
+}
+.evolution-source-card span,.evolution-source-card small{display:block;color:#dbe9f7;font-size:11px}
+.evolution-source-card strong{display:block;margin:6px 0;font-size:16px}
+.evolution-filter-panel{margin-bottom:16px}
+.evolution-filter-grid{
+  display:grid;
+  grid-template-columns:190px 170px 170px minmax(240px,1fr) auto;
+  gap:12px;
+  align-items:end;
+}
+.evolution-filter-grid label{display:grid;gap:6px;color:#526b82;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.evolution-filter-grid input,.evolution-filter-grid select{
+  width:100%;height:42px;padding:0 12px;border:1px solid #cfdeed;border-radius:11px;background:#fff;color:#153653;font-weight:600;text-transform:none;letter-spacing:0
+}
+.evolution-source-note{margin-top:14px;padding-top:12px;border-top:1px solid #e3ebf4;color:#60778e;font-size:12px}
+.evolution-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}
+.evolution-kpi{padding:17px 18px;border:1px solid #dce6f1;border-radius:17px;background:#fff;box-shadow:0 8px 24px rgba(15,52,89,.06)}
+.evolution-kpi span,.evolution-kpi small{display:block;color:#6c8297;font-size:11px}.evolution-kpi strong{display:block;margin:6px 0 2px;color:#102a46;font-size:25px}
+.evolution-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:22px 0 12px}.evolution-toolbar h2{margin:0}.evolution-toolbar p{margin:4px 0 0;color:#71869b;font-size:12px}
+.evolution-table-card{overflow:hidden;border:1px solid #d9e4f0;border-radius:20px;background:#fff;box-shadow:0 10px 28px rgba(16,55,96,.07)}
+.evolution-table-wrap{max-height:690px;overflow:auto}
+.evolution-table{width:100%;min-width:1500px;border-collapse:separate;border-spacing:0;font-size:12px}
+.evolution-table th{position:sticky;top:0;z-index:3;padding:11px 10px;background:#20558d;color:#fff;text-align:center;white-space:nowrap}
+.evolution-table th:first-child{left:0;z-index:4;text-align:left}
+.evolution-table td{padding:10px;border-bottom:1px solid #e4edf5;background:#fff;text-align:center;white-space:nowrap}
+.evolution-table td:first-child{position:sticky;left:0;z-index:2;min-width:300px;text-align:left;background:inherit}
+.evolution-table tr:nth-child(even) td{background:#f8fbff}.evolution-table tr:hover td{background:#edf6ff}
+.evolution-name{font-weight:800;color:#102a46}.evolution-sub{margin-top:3px;color:#74899d;font-size:10px}
+.evolution-week strong,.evolution-week span{display:block}.evolution-week strong{color:#112f4e}.evolution-week span{margin-top:2px;color:#71869b;font-size:10px}
+.evolution-pill{display:inline-block;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:800}
+.evolution-danger{background:#ffe7eb;color:#c92443}.evolution-good{background:#e5f8ee;color:#148155}.evolution-warning{background:#fff2d2;color:#9c6700}.evolution-neutral{background:#edf3f8;color:#536b82}
+.evolution-action{max-width:190px;white-space:normal;line-height:1.25}
+.evolution-table-footer{display:flex;justify-content:space-between;gap:12px;padding:12px 16px;background:#fbfdff;color:#71869b;font-size:11px}
+@media(max-width:1050px){.evolution-filter-grid{grid-template-columns:1fr 1fr}.evolution-search{grid-column:1/-1}.evolution-kpi-grid{grid-template-columns:repeat(2,1fr)}.evolution-hero{align-items:flex-start;flex-direction:column}.evolution-source-card{width:100%;min-width:0}}
+@media(max-width:620px){.evolution-filter-grid,.evolution-kpi-grid{grid-template-columns:1fr}.evolution-toolbar,.evolution-table-footer{align-items:flex-start;flex-direction:column}}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{
