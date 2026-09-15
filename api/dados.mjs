@@ -308,6 +308,9 @@ function formatBr(dateKey) {
   return `${d}/${m}/${y}`;
 }
 
+// Reutilizado pela matriz semanal para garantir a mesma atribuição do ranking.
+export { attributeDynamicV613, responsibility, validOperators };
+
 export async function GET(request) {
   try {
     const url = new URL(request.url);
