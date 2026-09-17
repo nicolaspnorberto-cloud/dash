@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Backup local — Miss Scan</title>
+<style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px;color:#16365d}button{background:#16365d;color:white;padding:12px;border:0;border-radius:8px;margin:10px 0}small{display:block}#status{white-space:pre-wrap}</style>
+<h1>Preservar tratativas e evidências locais</h1>
+<p>Abra esta página no <strong>endereço antigo</strong> para exportar e no <strong>novo</strong> para importar. Repita em cada navegador/perfil que registrou tratativas.</p>
+<p>O arquivo contém dados pessoais e evidências. Guarde-o em local corporativo autorizado. Não envie ao GitHub. Nada é transmitido por esta página.</p>
+<small id="origin"></small>
+<button id="export">Exportar backup deste navegador</button>
+<hr><label>Importar arquivo de backup: <input type="file" id="file" accept="application/json,.json"></label>
+<button id="import">Importar somente registros ausentes</button>
+<p>Registros já existentes não são sobrescritos. Conflitos exigem conferência manual. Feche o dashboard antes de importar e reabra depois.</p>
+<p id="status"></p>
+<script>
+const keys=['misscanTreatmentProgressV4','misscanTreatmentOffenderArchiveV1','lastTreatmentInstructorEmail','misscanRateWindowV65','misscanPeriodPresetV61','misscanPeriodFromV61','misscanPeriodToV61'];
+const dbName='misscanTreatmentEvidenceV4',store='files';
+const status=document.getElementById('status');
+document.getElementById('origin').textContent='Origem deste navegador: '+location.origin;
+function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open(dbName,1);r.onupgradeneeded=()=>{const s=r.result.createObjectStore(store,{keyPath:'id'});s.createIndex('treatmentCycle',['treatmentId','cycle']);};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+function request(r){return new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+function base64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});}
+document.getElementById('export').onclick=async()=>{try{
+ const local={};for(const k of keys){const v=localStorage.getItem(k);if(v!==null)local[k]=v;}
+ const d=await db();const files=await request(d.transaction(store,'readonly').objectStore(store).getAll());d.close();
+ const encoded=[];for(const f of files){const {blob,...metadata}=f;encoded.push({...metadata,fileBase64:blob?await base64(blob):null});}
+ const out={version:1,origin:location.origin,createdAt:new Date().toISOString(),local,files:encoded};
+ const u=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='misscan-local-'+Date.now()+'.backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),10000);
+ status.textContent='Backup exportado: '+files.length+' evidências. Origem mantida sem alterações.';
+ }catch(e){status.textContent='Falha ao exportar: '+e.message;}};
+document.getElementById('import').onclick=async()=>{try{
+ const f=document.getElementById('file').files[0];if(!f)throw Error('Selecione o backup.');
+ const b=JSON.parse(await f.text());if(b.version!==1||!b.local||!Array.isArray(b.files))throw Error('Backup inválido.');
+ // Valida e decodifica tudo antes de modificar o navegador.
+ const records=b.files.map(f=>{if(typeof f.id!=='string'||!f.id)throw Error('Evidência inválida.');const {fileBase64,...meta}=f;const bytes=fileBase64?Uint8Array.from(atob(fileBase64),c=>c.charCodeAt(0)):null;return {...meta,...(bytes?{blob:new Blob([bytes],{type:f.type||'application/octet-stream'})}:{})};});
+ for(const k of keys){if(k in b.local&&typeof b.local[k]!=='string')throw Error('Registro local inválido.');}
+ const objectKeys=keys.slice(0,2);for(const k of objectKeys){if(k in b.local){const value=JSON.parse(b.local[k]);if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Tratativas inválidas.');}const current=localStorage.getItem(k);if(current!==null){const value=JSON.parse(current);if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Tratativas atuais inválidas; exporte e confira antes de importar.');}}
+ if(!confirm('Importar registros ausentes de '+b.origin+' neste navegador? Não substitui dados já existentes.'))return;
+ let added=0,conflicts=0;const d=await db();
+ await new Promise((resolve,reject)=>{const tx=d.transaction(store,'readwrite');const s=tx.objectStore(store);for(const row of records){const r=s.get(row.id);r.onsuccess=()=>{if(r.result){conflicts++;return;}s.add(row);added++;};}tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Importação cancelada'));});d.close();
+ for(const k of keys){if(!(k in b.local))continue;const existing=localStorage.getItem(k);if(existing===null){localStorage.setItem(k,b.local[k]);}else if(objectKeys.includes(k)){const current=Object.assign(Object.create(null),JSON.parse(existing)),incoming=JSON.parse(b.local[k]);for(const [id,value]of Object.entries(incoming)){if(!Object.hasOwn(current,id)){current[id]=value;}else if(JSON.stringify(current[id])!==JSON.stringify(value)){conflicts++;}}localStorage.setItem(k,JSON.stringify(current));}else if(existing!==b.local[k]){conflicts++;}}
+ status.textContent='Importadas '+added+' evidências. '+conflicts+' registros existentes preservados para conferência. Reabra o dashboard.';
+ }catch(e){status.textContent='Falha ao importar: '+e.message;}};
+</script></html>
