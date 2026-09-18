@@ -12,5 +12,35 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/calendar-sync",
+      "destination": "/api/operations?__misscan_route=calendar-sync"
+    },
+    {
+      "source": "/api/gerot-sync",
+      "destination": "/api/operations?__misscan_route=gerot-sync"
+    },
+    {
+      "source": "/api/history-reset",
+      "destination": "/api/operations?__misscan_route=history-reset"
+    },
+    {
+      "source": "/api/ping",
+      "destination": "/api/operations?__misscan_route=ping"
+    },
+    {
+      "source": "/api/producao-sync",
+      "destination": "/api/operations?__misscan_route=producao-sync"
+    },
+    {
+      "source": "/api/snapshot-sync",
+      "destination": "/api/operations?__misscan_route=snapshot-sync"
+    },
+    {
+      "source": "/api/sync",
+      "destination": "/api/operations?__misscan_route=sync"
+    }
   ]
 }
