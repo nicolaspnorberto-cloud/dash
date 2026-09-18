@@ -1,3 +1,4 @@
+import { withReportCache } from '../lib/report-cache.mjs';
 import {
   json,
   readJson,
@@ -84,7 +85,10 @@ function weekMetric() {
   };
 }
 
-export async function GET(request) {
+const cachedReport=withReportCache(buildReport);
+export async function GET(request){return cachedReport(request);}
+
+async function buildReport(request) {
   try {
     const url = new URL(request.url);
     const requestedWeeks = Math.max(6, Math.min(16, Number(url.searchParams.get('weeks') || 8)));

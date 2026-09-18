@@ -1365,9 +1365,9 @@ function renderAutoRates(){
   renderCalendarWeeks();
 }
 
-async function loadAutoRates({silent=true}={}){
+async function loadAutoRates({silent=true,fresh=false}={}){
   try{
-    const res=await fetch(`/api/taxas?days=${encodeURIComponent(state.rateWindowDays)}&t=${Date.now()}`,{cache:'no-store'});
+    const res=await fetch(`/api/taxas?days=${encodeURIComponent(state.rateWindowDays)}${fresh?'&fresh=1':''}`,{cache:'no-store'});
     let data={};try{data=await res.json()}catch{}
     if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
     state.autoRates=data.rates||null;
@@ -1387,6 +1387,7 @@ async function loadAutoRates({silent=true}={}){
     renderAutoRates();
     renderForecastTable();
     renderProjection();
+    return true;
   }catch(err){
     console.error('Taxa automática V6.5',err);
     state.autoRates=null;
@@ -1396,6 +1397,7 @@ async function loadAutoRates({silent=true}={}){
     renderProjection();
     if(!silent)alert(`Falha ao carregar taxa real automática:
 ${err.message}`);
+    return false;
   }
 }
 
@@ -1497,10 +1499,10 @@ function renderProjection(){
   }
 }
 
-async function loadCalendarizationAuto({silent=true}={}){
+async function loadCalendarizationAuto({silent=true,fresh=false}={}){
   renderCalendarSourceStatus('loading','Atualizando GEROT...','Lendo Forecast Total diário');
   try{
-    const res=await fetch(`/api/calendarizacao?days=21&t=${Date.now()}`,{cache:'no-store'});
+    const res=await fetch(`/api/calendarizacao?days=21${fresh?'&fresh=1':''}`,{cache:'no-store'});
     let data={};try{data=await res.json()}catch{}
     if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
     state.forecastAuto=data.rows||[];
@@ -1513,6 +1515,7 @@ async function loadCalendarizationAuto({silent=true}={}){
     );
     renderForecastTable();
     renderProjection();
+    return true;
   }catch(err){
     console.error('Calendarização V6.5',err);
     state.forecastAuto=[];
@@ -1521,12 +1524,14 @@ async function loadCalendarizationAuto({silent=true}={}){
     renderProjection();
     if(!silent)alert(`Falha na Calendarização V6.5:
 ${err.message}`);
+    return false;
   }
 }
 
-async function refreshCalendarizationV65({silent=true}={}){
-  await loadCalendarizationAuto({silent});
-  await loadAutoRates({silent});
+async function refreshCalendarizationV65({silent=true,fresh=false}={}){
+  const calendar=await loadCalendarizationAuto({silent,fresh});
+  const rates=await loadAutoRates({silent,fresh});
+  return calendar===true&&rates===true;
 }
 
 // ================= MATRIZ DE EVOLUÇÃO AUTOMÁTICA V6.15 =================
@@ -1631,14 +1636,14 @@ function renderEvolution(){
   }).join('')||`<tr><td colspan="${weeks.length+6}" class="empty">Nenhum colaborador encontrado nos filtros atuais.</td></tr>`;
 }
 
-async function refreshEvolution({silent=true}={}){
+async function refreshEvolution({silent=true,fresh=false}={}){
   if(state.evolutionRefreshing)return;
   state.evolutionRefreshing=true;
   const button=$('refreshEvolutionBtn');
   if(button)button.disabled=true;
   if($('evolutionUpdated'))$('evolutionUpdated').textContent='Atualizando histórico...';
   try{
-    const response=await fetch(`/api/evolucao?weeks=8&t=${Date.now()}`,{cache:'no-store',headers:{Accept:'application/json'}});
+    const response=await fetch(`/api/evolucao?weeks=8${fresh?'&fresh=1':''}`,{cache:'no-store',headers:{Accept:'application/json'}});
     let data={};try{data=await response.json()}catch{}
     if(!response.ok||!data.ok)throw new Error(data.error||`Falha (${response.status})`);
     state.evolution=data.rows||[];
@@ -1648,12 +1653,14 @@ async function refreshEvolution({silent=true}={}){
     if($('evolutionUpdated'))$('evolutionUpdated').textContent=`Atualizado ${generated}`;
     if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Fonte automática: ${state.evolutionMeta.numeratorSource||'Matinal/LM'} ÷ ${state.evolutionMeta.volumeSource||'volume expedido'}. Período ${state.evolutionMeta.periodStart||'—'} a ${state.evolutionMeta.periodEnd||'—'}.`;
     renderEvolution();
+    return true;
   }catch(error){
     console.error('EVOLUCAO_V615_FRONTEND_ERROR',error);
     if($('evolutionUpdated'))$('evolutionUpdated').textContent='Falha na atualização';
     if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Não foi possível atualizar a matriz: ${error.message}`;
     renderEvolution();
     if(!silent)alert(`Falha ao atualizar a matriz:\n${error.message}`);
+    return false;
   }finally{
     state.evolutionRefreshing=false;
     if(button)button.disabled=false;
@@ -1914,9 +1921,9 @@ async function forceRefreshSourcesV67({silent=false}={}){
     if(
       ['DONE','PARTIAL'].includes(finalStatus)
     ){
-      await refreshLiveData({silent:true});
-      await refreshCalendarizationV65({silent:true});
-      await refreshEvolution({silent:true});
+      await refreshLiveData({silent:true,fresh:true});
+      await refreshCalendarizationV65({silent:true,fresh:true});
+      await refreshEvolution({silent:true,fresh:true});
 
       const result=finalRequest?.result||{};
       const lm=result.lm||'';
@@ -1998,7 +2005,7 @@ async function forceRefreshSourcesV67({silent=false}={}){
   }
 }
 
-async function refreshLiveData({silent=false}={}){
+async function refreshLiveData({silent=false,fresh=false}={}){
   if(state.liveRefreshing)return;
   state.liveRefreshing=true;
 
@@ -2007,7 +2014,7 @@ async function refreshLiveData({silent=false}={}){
   setLiveStatus('loading','Atualizando...','Consultando histórico dinâmico da LM');
 
   try{
-    const response=await fetch(`/api/dados?${periodQuery()}&t=${Date.now()}`,{
+    const response=await fetch(`/api/dados?${periodQuery()}${fresh?'&fresh=1':''}`,{
       headers:{'Accept':'application/json'},
       cache:'no-store'
     });
@@ -2070,6 +2077,7 @@ async function refreshLiveData({silent=false}={}){
       $('dataNote').textContent=
         `Histórico LM V6.13. ${fmtInt.format(state.raw.length)} BR únicos oficiais no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
+    return true;
   }catch(err){
     console.error(err);
     setLiveStatus('error','Falha na atualização',err.message);
@@ -2078,17 +2086,26 @@ async function refreshLiveData({silent=false}={}){
         `Não foi possível atualizar automaticamente: ${err.message}`;
     }
     if(!silent)alert(`Falha na atualização automática:\n${err.message}`);
+    return false;
   }finally{
     state.liveRefreshing=false;
     if(btn)btn.disabled=false;
   }
 }
 
+async function checkSourceRevision(){
+  const response=await fetch('/api/dados?revision=1',{cache:'no-store',headers:{Accept:'application/json'}});
+  const data=await response.json();
+  if(!response.ok||!data.ok)throw new Error(data.error||'Não foi possível conferir as bases.');
+  return data.revision;
+}
+
 async function boot(){
   tabs();loadCalendarPreferences();restorePeriodPreference();
-  await refreshLiveData({silent:true});
-  await refreshCalendarizationV65({silent:true});
-  await refreshEvolution({silent:true});
+  const initialRevision=await checkSourceRevision().catch(()=>'');
+  const initialLive=await refreshLiveData({silent:true,fresh:true});
+  const initialCalendar=await refreshCalendarizationV65({silent:true,fresh:true});
+  const initialEvolution=await refreshEvolution({silent:true,fresh:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV67({silent:false}));
@@ -2101,7 +2118,23 @@ async function boot(){
     $('datePreset').value='CUSTOM';
     state.datePreset='CUSTOM';
   }));
-  setInterval(()=>refreshLiveData({silent:true}),5*60*1000);
+  const refreshController=MisscanRefreshPolicy.create({
+    revision:initialLive&&initialCalendar&&initialEvolution?initialRevision:'',
+    visible:()=>!document.hidden,
+    blocked:()=>state.liveRefreshing||state.evolutionRefreshing||state.forceRefreshing,
+    check:checkSourceRevision,
+    refresh:async()=>{
+      const live=await refreshLiveData({silent:true,fresh:true});
+      const calendar=await refreshCalendarizationV65({silent:true,fresh:true});
+      const evolution=await refreshEvolution({silent:true,fresh:true});
+      return live===true&&calendar===true&&evolution===true;
+    },
+    onError:error=>setLiveStatus('error','Falha na verificação',error.message)
+  });
+  setInterval(()=>refreshController.tick(),5*60*1000);
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden)refreshController.tick();
+  });
   document.querySelectorAll('.rank-pill').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.rank-pill').forEach(x=>x.classList.toggle('active',x===b));state.rankArea=b.dataset.rank;renderRanking()}));
 
 
@@ -2120,7 +2153,7 @@ async function boot(){
     $('evolutionSearch').value='';
     renderEvolution();
   });
-  $('refreshEvolutionBtn')?.addEventListener('click',()=>refreshEvolution({silent:false}));
+  $('refreshEvolutionBtn')?.addEventListener('click',()=>refreshEvolution({silent:false,fresh:true}));
   $('exportEvolutionBtn')?.addEventListener('click',exportEvolution);
 
   $('historyGlobalBtn')?.addEventListener('click',openGlobalTreatmentHistory);

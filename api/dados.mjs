@@ -1,3 +1,5 @@
+import { withReportCache } from '../lib/report-cache.mjs';
+import { sourceRevision } from '../lib/source-revision.mjs';
 import {
   json,
   readJson,
@@ -311,7 +313,13 @@ function formatBr(dateKey) {
 // Reutilizado pela matriz semanal para garantir a mesma atribuição do ranking.
 export { attributeDynamicV613, responsibility, validOperators };
 
-export async function GET(request) {
+const cachedReport=withReportCache(buildReport);
+export async function GET(request){
+  if(new URL(request.url).searchParams.get('revision')==='1')return sourceRevision(request);
+  return cachedReport(request);
+}
+
+async function buildReport(request) {
   try {
     const url = new URL(request.url);
     const meta = await readJson(META_PATH, null);

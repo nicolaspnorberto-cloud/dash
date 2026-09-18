@@ -1,3 +1,4 @@
+import { withReportCache } from '../lib/report-cache.mjs';
 import { json, readJson } from '../lib/blob-store.mjs';
 
 const PATH = 'misscan/gerot.json';
@@ -17,7 +18,10 @@ function addDays(key, days) {
   return d.toISOString().slice(0, 10);
 }
 
-export async function GET(request) {
+const cachedReport=withReportCache(buildReport);
+export async function GET(request){return cachedReport(request);}
+
+async function buildReport(request) {
   try {
     const data = await readJson(PATH, null);
     if (!data) {

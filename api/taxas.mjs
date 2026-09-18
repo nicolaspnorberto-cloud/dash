@@ -1,3 +1,4 @@
+import { withReportCache } from '../lib/report-cache.mjs';
 import { json, readJson, normalizeName, rowDateKey, monthsBetween } from '../lib/blob-store.mjs';
 
 const GEROT_PATH = 'misscan/gerot.json';
@@ -63,7 +64,10 @@ function emptyBlocks() {
   };
 }
 
-export async function GET(request) {
+const cachedReport=withReportCache(buildReport);
+export async function GET(request){return cachedReport(request);}
+
+async function buildReport(request) {
   try {
     const url = new URL(request.url);
     const days = Math.max(
