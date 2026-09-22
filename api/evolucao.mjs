@@ -2,8 +2,8 @@ import { withReportCache } from '../lib/report-cache.mjs';
 import {
   json,
   readJson,
+  readHistoryRange,
   rowDateKey,
-  monthsBetween,
   normalizeName
 } from '../lib/blob-store.mjs';
 import {
@@ -106,17 +106,7 @@ async function buildReport(request) {
     const end = meta.historyEnd;
     const requestedStart = addDays(mondayOf(end), -(requestedWeeks - 1) * 7);
     const start = requestedStart < meta.historyStart ? meta.historyStart : requestedStart;
-    const indexedMonths = new Set(Array.isArray(meta.months) ? meta.months : []);
-    const months = monthsBetween(start, end).filter(month => indexedMonths.size === 0 || indexedMonths.has(month));
-    const sourceRows = [];
-
-    for (const month of months) {
-      const file = await readJson(`misscan/history/${month}.json`, { rows: [] });
-      for (const row of (file?.rows || [])) {
-        const date = rowDateKey(row);
-        if (date && date >= start && date <= end) sourceRows.push(row);
-      }
-    }
+    const sourceRows = await readHistoryRange(start, end, meta);
 
     const volumeByWeek = new Map();
     const volumeDaysByWeek = new Map();
