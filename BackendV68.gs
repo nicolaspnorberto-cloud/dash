@@ -1274,7 +1274,9 @@ function dedupeProducaoV63_(rows){const map={};rows.forEach(function(r){if(r.dat
    - Sincronização de HC + LM é independente de Calendarização/Oráculo.
 ========================================================= */
 
-const V64_INCREMENTAL_DAYS = 45;
+// Após o backfill completo, a rotina recorrente precisa atualizar somente a
+// janela recente. Isso reduz uso de CPU no Worker sem apagar o histórico.
+const V64_INCREMENTAL_DAYS = 3;
 const V64_SCAN_CHUNK_SIZE = 5000;
 const V64_BACKFILL_ROWS_PER_RUN = 2000;
 const V642_INCREMENTAL_ROWS_PER_REQUEST = 1000;
