@@ -1,12 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "dash",
+  "main": "worker/index.mjs",
   "compatibility_date": "2026-09-21",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": false
   },
   "assets": {
     "directory": ".",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
   }
 }
