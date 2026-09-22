@@ -3,8 +3,8 @@ import { sourceRevision } from '../lib/source-revision.mjs';
 import {
   json,
   readJson,
+  readHistoryRange,
   rowDateKey,
-  monthsBetween
 } from '../lib/blob-store.mjs';
 
 const HC_PATH = 'misscan/hc.json';
@@ -339,22 +339,7 @@ async function buildReport(request) {
     }
 
     const period = resolvePeriod(url, meta);
-    const requestedMonths = monthsBetween(period.from, period.to);
-    const indexed = new Set(Array.isArray(meta?.months) ? meta.months : []);
-    const months = requestedMonths.filter(month => indexed.size === 0 || indexed.has(month));
-    const rows = [];
-
-    for (const month of months) {
-      const file = await readJson(`misscan/history/${month}.json`, { rows: [] });
-
-      for (const row of (file?.rows || [])) {
-        const dateKey = rowDateKey(row);
-
-        if (dateKey && dateKey >= period.from && dateKey <= period.to) {
-          rows.push(row);
-        }
-      }
-    }
+    const rows = await readHistoryRange(period.from, period.to, meta);
 
     const attributed = attributeDynamicV613(rows);
 
