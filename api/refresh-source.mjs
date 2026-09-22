@@ -1,7 +1,8 @@
 import {
   json,
   readJson,
-  writeJson
+  writeJson,
+  envValue
 } from '../lib/blob-store.mjs';
 
 const REQUEST_PATH = 'misscan/refresh-current.json';
@@ -24,7 +25,7 @@ export async function GET(request) {
         version: '6.9',
         mode: 'single-private-request',
         configured: Boolean(
-          String(process.env.EMAIL_WEBHOOK_TOKEN || '').trim()
+          envValue('EMAIL_WEBHOOK_TOKEN')
         ),
         appsScriptPublicWebAppRequired: false,
         current: current

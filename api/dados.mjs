@@ -63,7 +63,12 @@ function resolvePeriod(url, meta) {
     case 'LAST_30': return { preset, from: addDays(today, -29), to: today };
     case 'ALL': return { preset, from: availableStart, to: availableEnd };
     case 'LAST_7':
-    default: return { preset: 'LAST_7', from: addDays(today, -6), to: today };
+    default: {
+      // Durante a migração, ou quando a fonte atrasa, mostra os sete dias mais
+      // recentes realmente disponíveis em vez de entregar um painel vazio.
+      const anchor = availableEnd && availableEnd < today ? availableEnd : today;
+      return { preset: 'LAST_7', from: addDays(anchor, -6), to: anchor };
+    }
   }
 }
 
