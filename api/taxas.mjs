@@ -1,5 +1,5 @@
 import { withReportCache } from '../lib/report-cache.mjs';
-import { json, readJson, normalizeName, rowDateKey, monthsBetween } from '../lib/blob-store.mjs';
+import { json, readJson, readHistoryRange, normalizeName, rowDateKey } from '../lib/blob-store.mjs';
 
 const GEROT_PATH = 'misscan/gerot.json';
 const HC_PATH = 'misscan/hc.json';
@@ -146,20 +146,8 @@ async function buildReport(request) {
     let withoutHC = 0;
     let identifiedForBlocks = 0;
 
-    const indexedMonths = new Set(
-      Array.isArray(histMeta.months) ? histMeta.months : []
-    );
-    const months = monthsBetween(start, end).filter(
-      month => indexedMonths.size === 0 || indexedMonths.has(month)
-    );
-
-    for (const month of months) {
-      const f = await readJson(
-        `misscan/history/${month}.json`,
-        { rows: [] }
-      );
-
-      for (const row of (f.rows || [])) {
+    const historyRows = await readHistoryRange(start, end, histMeta);
+    for (const row of historyRows) {
         const date = rowDateKey(row);
         if (!date || date < start || date > end) continue;
 
@@ -195,7 +183,6 @@ async function buildReport(request) {
 
         missBlockByDate.get(date)[block]++;
         identifiedForBlocks++;
-      }
     }
 
     const sums = emptyBlocks();
