@@ -1,9 +1,7 @@
 {
   "name": "misscan-control-center",
-  "version": "6.8.0",
+  "version": "7.0.0",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "@vercel/blob": "^2.3.0"
-  }
+  "dependencies": {}
 }
