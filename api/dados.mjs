@@ -115,6 +115,26 @@ function validOperators(raw = '') {
   return [...map.values()];
 }
 
+// Mantém na resposta somente os campos usados pelo dashboard. A LM possui
+// dezenas de colunas e devolver todas elas fazia períodos com mais de um dia
+// ultrapassarem o limite de CPU do Worker gratuito durante o JSON.stringify.
+function compactSourceRow(row = {}) {
+  return {
+    shipment_id: String(row?.shipment_id || '').trim(),
+    lmreceived_date: String(row?.lmreceived_date || ''),
+    lmreceived_station: String(row?.lmreceived_station || ''),
+    socpacked_tonumber: String(row?.socpacked_tonumber || ''),
+    process_fail: String(row?.process_fail || ''),
+    to_mis_status: String(row?.to_mis_status || ''),
+    operator_fail: String(row?.operator_fail || ''),
+    last_status: String(row?.last_status || ''),
+    is_misrouting: String(
+      row?.is_misrouting ?? row?.is_mis_routing ??
+      row?.misrouting ?? row?.mis_routing ?? ''
+    )
+  };
+}
+
 function responsibility(row) {
   const pf = String(row?.process_fail || '').trim();
   const tm = String(row?.to_mis_status || '').trim();
@@ -151,7 +171,7 @@ function choosePackedOwner(ctx) {
 
 function attributeDynamicV613(rows = []) {
   const source = rows.map((row, index) => ({
-    ...row,
+    ...compactSourceRow(row),
     shipment_id_original: String(row?.shipment_id || '').trim(),
     __lm_row_index: index
   }));
