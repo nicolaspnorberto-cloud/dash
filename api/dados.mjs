@@ -347,8 +347,12 @@ export async function GET(request){
 async function buildReport(request) {
   try {
     const url = new URL(request.url);
-    const meta = await readJson(META_PATH, null);
-    const hcFile = await readJson(HC_PATH, { rows: [] });
+    const includeHC = url.searchParams.get('include_hc') !== '0';
+    const metaOnly = url.searchParams.get('meta_only') === '1';
+    const [meta, hcFile] = await Promise.all([
+      readJson(META_PATH, null),
+      includeHC ? readJson(HC_PATH, { rows: [] }) : Promise.resolve({ rows: [] })
+    ]);
 
     if (!meta) {
       return json({ ok:false, error:'Ainda não existe histórico sincronizado.' }, 503);
@@ -359,6 +363,43 @@ async function buildReport(request) {
     }
 
     const period = resolvePeriod(url, meta);
+    const last = new Date(
+      meta?.receivedAt || meta?.updatedAt || meta?.generatedAt || 0
+    );
+    const ageMinutes = Number.isFinite(last.getTime())
+      ? Math.round((Date.now() - last.getTime()) / 60000)
+      : null;
+    const reportMeta = {
+      ...meta,
+      ageMinutes,
+      stale: ageMinutes === null ? true : ageMinutes > 90,
+      periodPreset: period.preset,
+      periodStart: period.from,
+      periodEnd: period.to,
+      periodLabel: `${formatBr(period.from)} a ${formatBr(period.to)}`,
+      historyLabel: `${formatBr(meta.historyStart)} a ${formatBr(meta.historyEnd)}`
+    };
+
+    // Primeira chamada do navegador: carrega somente índice + HC. Os BRs são
+    // buscados em blocos menores para que um período grande nunca derrube o
+    // Worker inteiro por limite de CPU.
+    if (metaOnly) {
+      return json({
+        ok: true,
+        hc: hcFile?.rows || [],
+        misscan: [],
+        rankingPreview: [],
+        meta: {
+          ...reportMeta,
+          metaOnly: true,
+          physicalPeriodRows: 0,
+          returnedMisscanRecords: 0,
+          manualRows: 0,
+          ruleVersion: 'V6.13-DYNAMIC'
+        }
+      });
+    }
+
     const rows = await readHistoryRange(period.from, period.to, meta);
 
     const attributed = attributeDynamicV613(rows);
@@ -366,14 +407,6 @@ async function buildReport(request) {
     attributed.sort((a,b) =>
       String(a.lmreceived_date || '').localeCompare(String(b.lmreceived_date || ''))
     );
-
-    const last = new Date(
-      meta?.receivedAt || meta?.updatedAt || meta?.generatedAt || 0
-    );
-
-    const ageMinutes = Number.isFinite(last.getTime())
-      ? Math.round((Date.now() - last.getTime()) / 60000)
-      : null;
 
     const manualRows = attributed.filter(
       r => validOperators(r.operator_fail)[0]?.key === MANUAL.key
@@ -385,14 +418,7 @@ async function buildReport(request) {
       misscan: attributed,
       rankingPreview: rankingPreview(attributed),
       meta: {
-        ...meta,
-        ageMinutes,
-        stale: ageMinutes === null ? true : ageMinutes > 90,
-        periodPreset: period.preset,
-        periodStart: period.from,
-        periodEnd: period.to,
-        periodLabel: `${formatBr(period.from)} a ${formatBr(period.to)}`,
-        historyLabel: `${formatBr(meta.historyStart)} a ${formatBr(meta.historyEnd)}`,
+        ...reportMeta,
         physicalPeriodRows: rows.length,
         returnedMisscanRecords: attributed.length,
         manualRows,

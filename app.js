@@ -1367,9 +1367,11 @@ function renderAutoRates(){
 
 async function loadAutoRates({silent=true,fresh=false}={}){
   try{
-    const res=await fetch(`/api/taxas?days=${encodeURIComponent(state.rateWindowDays)}${fresh?'&fresh=1':''}`,{cache:'no-store'});
-    let data={};try{data=await res.json()}catch{}
-    if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
+    const {data}=await fetchJsonResilientV68(
+      `/api/taxas?days=${encodeURIComponent(state.rateWindowDays)}${fresh?'&fresh=1':''}`,
+      {cache:'no-store'},
+      3
+    );
     state.autoRates=data.rates||null;
     state.autoRateMeta={
       days:data.days,
@@ -1390,11 +1392,12 @@ async function loadAutoRates({silent=true,fresh=false}={}){
     return true;
   }catch(err){
     console.error('Taxa automática V6.5',err);
-    state.autoRates=null;
-    state.autoRateMeta=null;
-    renderAutoRates();
-    renderForecastTable();
-    renderProjection();
+    if(!state.autoRateMeta){
+      state.autoRates=null;
+      renderAutoRates();
+      renderForecastTable();
+      renderProjection();
+    }
     if(!silent)alert(`Falha ao carregar taxa real automática:
 ${err.message}`);
     return false;
@@ -1502,9 +1505,11 @@ function renderProjection(){
 async function loadCalendarizationAuto({silent=true,fresh=false}={}){
   renderCalendarSourceStatus('loading','Atualizando GEROT...','Lendo Forecast Total diário');
   try{
-    const res=await fetch(`/api/calendarizacao?days=21${fresh?'&fresh=1':''}`,{cache:'no-store'});
-    let data={};try{data=await res.json()}catch{}
-    if(!res.ok||!data.ok)throw new Error(data.error||`Falha (${res.status})`);
+    const {data}=await fetchJsonResilientV68(
+      `/api/calendarizacao?days=21${fresh?'&fresh=1':''}`,
+      {cache:'no-store'},
+      3
+    );
     state.forecastAuto=data.rows||[];
     state.calendarMeta=data.meta||{};
     const updated=state.calendarMeta.receivedAt?new Date(state.calendarMeta.receivedAt).toLocaleString('pt-BR'):'—';
@@ -1518,10 +1523,15 @@ async function loadCalendarizationAuto({silent=true,fresh=false}={}){
     return true;
   }catch(err){
     console.error('Calendarização V6.5',err);
-    state.forecastAuto=[];
-    renderCalendarSourceStatus('error','GEROT indisponível',err.message);
-    renderForecastTable();
-    renderProjection();
+    renderCalendarSourceStatus(
+      'error',
+      state.forecastAuto.length?'Último forecast mantido':'GEROT indisponível',
+      err.message
+    );
+    if(!state.forecastAuto.length){
+      renderForecastTable();
+      renderProjection();
+    }
     if(!silent)alert(`Falha na Calendarização V6.5:
 ${err.message}`);
     return false;
@@ -1529,8 +1539,10 @@ ${err.message}`);
 }
 
 async function refreshCalendarizationV65({silent=true,fresh=false}={}){
-  const calendar=await loadCalendarizationAuto({silent,fresh});
-  const rates=await loadAutoRates({silent,fresh});
+  const [calendar,rates]=await Promise.all([
+    loadCalendarizationAuto({silent,fresh}),
+    loadAutoRates({silent,fresh})
+  ]);
   return calendar===true&&rates===true;
 }
 
@@ -1643,9 +1655,11 @@ async function refreshEvolution({silent=true,fresh=false}={}){
   if(button)button.disabled=true;
   if($('evolutionUpdated'))$('evolutionUpdated').textContent='Atualizando histórico...';
   try{
-    const response=await fetch(`/api/evolucao?weeks=8${fresh?'&fresh=1':''}`,{cache:'no-store',headers:{Accept:'application/json'}});
-    let data={};try{data=await response.json()}catch{}
-    if(!response.ok||!data.ok)throw new Error(data.error||`Falha (${response.status})`);
+    const {data}=await fetchJsonResilientV68(
+      `/api/evolucao?weeks=8${fresh?'&fresh=1':''}`,
+      {cache:'no-store',headers:{Accept:'application/json'}},
+      3
+    );
     state.evolution=data.rows||[];
     state.evolutionWeeks=data.weeks||[];
     state.evolutionMeta=data.meta||{};
@@ -1656,8 +1670,12 @@ async function refreshEvolution({silent=true,fresh=false}={}){
     return true;
   }catch(error){
     console.error('EVOLUCAO_V615_FRONTEND_ERROR',error);
-    if($('evolutionUpdated'))$('evolutionUpdated').textContent='Falha na atualização';
-    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Não foi possível atualizar a matriz: ${error.message}`;
+    if($('evolutionUpdated'))$('evolutionUpdated').textContent=
+      state.evolution.length?'Última matriz mantida':'Falha na atualização';
+    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=
+      state.evolution.length
+        ?`Falha temporária; os últimos dados válidos continuam exibidos. ${error.message}`
+        :`Não foi possível atualizar a matriz: ${error.message}`;
     renderEvolution();
     if(!silent)alert(`Falha ao atualizar a matriz:\n${error.message}`);
     return false;
@@ -1812,6 +1830,132 @@ function sleepV67(ms){
   return new Promise(resolve=>setTimeout(resolve,ms));
 }
 
+async function fetchJsonResilientV68(url,options={},attempts=3){
+  let lastError=null;
+
+  for(let attempt=1;attempt<=attempts;attempt++){
+    try{
+      const response=await fetch(url,options);
+      let data={};
+      try{data=await response.json()}catch{}
+
+      if(response.ok&&data?.ok!==false){
+        return {response,data};
+      }
+
+      const error=new Error(
+        data?.error||`Falha ao carregar dados (${response.status}).`
+      );
+      error.status=response.status;
+      lastError=error;
+
+      if(![429,500,502,503,504].includes(response.status))throw error;
+    }catch(error){
+      lastError=error;
+      const status=Number(error?.status||0);
+      if(status&&![429,500,502,503,504].includes(status))throw error;
+    }
+
+    if(attempt<attempts){
+      await sleepV67(700*attempt+Math.floor(Math.random()*250));
+    }
+  }
+
+  throw lastError||new Error('Falha temporária ao consultar o dashboard.');
+}
+
+function dateKeysBetweenV68(from,to,limit=370){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to))return [];
+  const current=new Date(`${from}T12:00:00Z`);
+  const end=new Date(`${to}T12:00:00Z`);
+  const out=[];
+  while(current<=end&&out.length<limit){
+    out.push(current.toISOString().slice(0,10));
+    current.setUTCDate(current.getUTCDate()+1);
+  }
+  return out;
+}
+
+function dataChunksV68(meta={}){
+  const from=String(meta.periodStart||'');
+  const to=String(meta.periodEnd||'');
+  const range=dateKeysBetweenV68(from,to);
+  const dayStats=meta.dayStats||{};
+  const dayOnly=meta.storageGranularity==='day-v1';
+  const available=new Set(Array.isArray(meta.days)?meta.days:Object.keys(dayStats));
+  const days=dayOnly&&available.size
+    ?range.filter(day=>available.has(day))
+    :range;
+  const chunks=[];
+  let current=null;
+
+  for(const day of days){
+    const estimated=Math.max(1,Number(dayStats?.[day]?.rows||900));
+    if(!current||current.days>=2||current.rows+estimated>1800){
+      if(current)chunks.push(current);
+      current={from:day,to:day,days:1,rows:estimated};
+    }else{
+      current.to=day;
+      current.days++;
+      current.rows+=estimated;
+    }
+  }
+  if(current)chunks.push(current);
+  return chunks;
+}
+
+async function mapLimitV68(items,limit,worker){
+  const output=new Array(items.length);
+  let cursor=0;
+  async function run(){
+    while(cursor<items.length){
+      const index=cursor++;
+      output[index]=await worker(items[index],index);
+    }
+  }
+  await Promise.all(
+    Array.from({length:Math.min(Math.max(1,limit),items.length)},run)
+  );
+  return output;
+}
+
+async function loadLiveDataV68({fresh=false}={}){
+  const baseQuery=periodQuery();
+  const metaUrl=`/api/dados?${baseQuery}&meta_only=1${fresh?'&fresh=1':''}`;
+  const {data:head}=await fetchJsonResilientV68(metaUrl,{
+    headers:{Accept:'application/json'},
+    cache:'no-store'
+  },3);
+
+  const meta=head.meta||{};
+  const chunks=dataChunksV68(meta);
+  const parts=await mapLimitV68(chunks,3,async chunk=>{
+    const query=`from=${encodeURIComponent(chunk.from)}&to=${encodeURIComponent(chunk.to)}&include_hc=0`;
+    const {data}=await fetchJsonResilientV68(`/api/dados?${query}`,{
+      headers:{Accept:'application/json'},
+      cache:'no-store'
+    },3);
+    return data.misscan||[];
+  });
+
+  const misscan=parts.flat().sort((a,b)=>
+    String(a?.lmreceived_date||'').localeCompare(String(b?.lmreceived_date||''))
+  );
+
+  return {
+    ok:true,
+    hc:head.hc||[],
+    misscan,
+    meta:{
+      ...meta,
+      metaOnly:false,
+      physicalPeriodRows:misscan.length,
+      returnedMisscanRecords:misscan.length,
+      requestChunks:chunks.length
+    }
+  };
+}
+
 async function forceRefreshSourcesV67({silent=false}={}){
   if(state.forceRefreshing)return;
   state.forceRefreshing=true;
@@ -1921,9 +2065,11 @@ async function forceRefreshSourcesV67({silent=false}={}){
     if(
       ['DONE','PARTIAL'].includes(finalStatus)
     ){
-      await refreshLiveData({silent:true,fresh:true});
-      await refreshCalendarizationV65({silent:true,fresh:true});
-      await refreshEvolution({silent:true,fresh:true});
+      await Promise.all([
+        refreshLiveData({silent:true,fresh:true}),
+        refreshCalendarizationV65({silent:true,fresh:true}),
+        refreshEvolution({silent:true,fresh:true})
+      ]);
 
       const result=finalRequest?.result||{};
       const lm=result.lm||'';
@@ -2014,17 +2160,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
   setLiveStatus('loading','Atualizando...','Consultando histórico dinâmico da LM');
 
   try{
-    const response=await fetch(`/api/dados?${periodQuery()}${fresh?'&fresh=1':''}`,{
-      headers:{'Accept':'application/json'},
-      cache:'no-store'
-    });
-
-    let data={};
-    try{data=await response.json()}catch{}
-
-    if(!response.ok||!data.ok){
-      throw new Error(data.error||`Falha ao carregar dados (${response.status}).`);
-    }
+    const data=await loadLiveDataV68({fresh});
 
     state.liveMeta=data.meta||{};
     syncPeriodControlsFromMeta();
@@ -2080,10 +2216,16 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     return true;
   }catch(err){
     console.error(err);
-    setLiveStatus('error','Falha na atualização',err.message);
+    setLiveStatus(
+      'error',
+      state.raw.length?'Últimos dados mantidos':'Falha na atualização',
+      err.message
+    );
     if($('dataNote')){
       $('dataNote').textContent=
-        `Não foi possível atualizar automaticamente: ${err.message}`;
+        state.raw.length
+          ?`A atualização encontrou uma falha temporária, mas os últimos ${fmtInt.format(state.raw.length)} BR carregados foram mantidos na tela. ${err.message}`
+          :`Não foi possível atualizar automaticamente: ${err.message}`;
     }
     if(!silent)alert(`Falha na atualização automática:\n${err.message}`);
     return false;
@@ -2094,18 +2236,20 @@ async function refreshLiveData({silent=false,fresh=false}={}){
 }
 
 async function checkSourceRevision(){
-  const response=await fetch('/api/dados?revision=1',{cache:'no-store',headers:{Accept:'application/json'}});
-  const data=await response.json();
-  if(!response.ok||!data.ok)throw new Error(data.error||'Não foi possível conferir as bases.');
+  const {data}=await fetchJsonResilientV68('/api/dados?revision=1',{
+    cache:'no-store',headers:{Accept:'application/json'}
+  },2);
   return data.revision;
 }
 
 async function boot(){
   tabs();loadCalendarPreferences();restorePeriodPreference();
+  const [initialLive,initialCalendar,initialEvolution]=await Promise.all([
+    refreshLiveData({silent:true}),
+    refreshCalendarizationV65({silent:true}),
+    refreshEvolution({silent:true})
+  ]);
   const initialRevision=await checkSourceRevision().catch(()=>'');
-  const initialLive=await refreshLiveData({silent:true,fresh:true});
-  const initialCalendar=await refreshCalendarizationV65({silent:true,fresh:true});
-  const initialEvolution=await refreshEvolution({silent:true,fresh:true});
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV67({silent:false}));
@@ -2124,9 +2268,11 @@ async function boot(){
     blocked:()=>state.liveRefreshing||state.evolutionRefreshing||state.forceRefreshing,
     check:checkSourceRevision,
     refresh:async()=>{
-      const live=await refreshLiveData({silent:true,fresh:true});
-      const calendar=await refreshCalendarizationV65({silent:true,fresh:true});
-      const evolution=await refreshEvolution({silent:true,fresh:true});
+      const [live,calendar,evolution]=await Promise.all([
+        refreshLiveData({silent:true,fresh:true}),
+        refreshCalendarizationV65({silent:true,fresh:true}),
+        refreshEvolution({silent:true,fresh:true})
+      ]);
       return live===true&&calendar===true&&evolution===true;
     },
     onError:error=>setLiveStatus('error','Falha na verificação',error.message)
