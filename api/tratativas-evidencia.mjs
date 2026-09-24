@@ -1,39 +1,180 @@
-const json=(res,status,body)=>{res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.end(JSON.stringify(body));};
-function cfg(){const url=(process.env.SUPABASE_URL||'').replace(/\/$/,'');const key=process.env.SUPABASE_SERVICE_ROLE_KEY||'';return {url,key,ok:!!(url&&key)};}
-function h(key,extra={}){return {apikey:key,Authorization:`Bearer ${key}`,...extra};}
-function safe(v=''){return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_').slice(0,100);}
-async function q(path,opt={}){const c=cfg();if(!c.ok)throw new Error('Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY na Vercel.');return fetch(`${c.url}${path}`,{...opt,headers:{...h(c.key),...(opt.headers||{})}});}
-export default async function handler(req,res){
-  try{
-    const c=cfg();if(!c.ok)throw new Error('Supabase não configurado para evidências.');
-    if(req.method==='GET'){
-      const id=String(req.query?.id||'');
-      if(id){
-        let r=await q(`/rest/v1/misscan_treatment_evidence?select=*&id=eq.${encodeURIComponent(id)}&limit=1`,{method:'GET'});let rows=await r.json();if(!r.ok)throw new Error(rows?.message||'Falha ao consultar evidência');const item=rows?.[0];if(!item)return json(res,404,{ok:false,error:'Arquivo não encontrado'});
-        const out={id:item.id,treatmentId:item.treatment_id,cycle:item.cycle,kind:item.kind,signatureType:item.signature_type,name:item.name,type:item.mime_type,size:item.size,createdAt:item.created_at,storagePath:item.storage_path};
-        if(String(req.query?.includeFile||'')==='1'){
-          r=await q(`/storage/v1/object/misscan-evidencias/${item.storage_path}`,{method:'GET'});if(!r.ok)throw new Error('Falha ao baixar evidência');const buf=Buffer.from(await r.arrayBuffer());out.fileBase64=buf.toString('base64');
-        }
-        return json(res,200,{ok:true,item:out});
-      }
-      const tid=String(req.query?.treatmentId||'');const cycle=Number(req.query?.cycle||0);if(!tid||!cycle)return json(res,400,{ok:false,error:'treatmentId e cycle são obrigatórios'});
-      const r=await q(`/rest/v1/misscan_treatment_evidence?select=*&treatment_id=eq.${encodeURIComponent(tid)}&cycle=eq.${cycle}&order=created_at.desc`,{method:'GET'});const rows=await r.json();if(!r.ok)throw new Error(rows?.message||'Falha ao listar evidências');
-      return json(res,200,{ok:true,items:(rows||[]).map(item=>({id:item.id,treatmentId:item.treatment_id,cycle:item.cycle,kind:item.kind,signatureType:item.signature_type,name:item.name,type:item.mime_type,size:item.size,createdAt:item.created_at,storagePath:item.storage_path}))});
-    }
-    if(req.method!=='POST')return json(res,405,{ok:false,error:'Método não permitido'});
-    const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
-    if(body.action==='delete'){
-      let r=await q(`/rest/v1/misscan_treatment_evidence?select=storage_path&id=eq.${encodeURIComponent(body.id)}&limit=1`,{method:'GET'});let rows=await r.json();const path=rows?.[0]?.storage_path;if(path)await q('/storage/v1/object/misscan-evidencias',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixes:[path]})});
-      r=await q(`/rest/v1/misscan_treatment_evidence?id=eq.${encodeURIComponent(body.id)}`,{method:'DELETE'});if(!r.ok)throw new Error('Falha ao excluir metadado');return json(res,200,{ok:true});
-    }
-    if(body.action!=='save')return json(res,400,{ok:false,error:'Ação inválida'});
-    if(!body.id||!body.treatmentId||!body.cycle||!body.fileBase64)return json(res,400,{ok:false,error:'Dados da evidência incompletos'});
-    const bytes=Buffer.from(body.fileBase64,'base64');
-    if(bytes.length>4*1024*1024)return json(res,413,{ok:false,error:'Arquivo acima de 4 MB. Reduza o arquivo antes de enviar.'});
-    const path=`${safe(body.treatmentId)}/ciclo_${Number(body.cycle)}/${safe(body.id)}_${safe(body.name||'arquivo')}`;
-    let r=await q(`/storage/v1/object/misscan-evidencias/${path}`,{method:'POST',headers:{'Content-Type':body.type||'application/octet-stream','x-upsert':'true'},body:bytes});if(!r.ok){const t=await r.text();throw new Error(t||'Falha no upload ao Storage');}
-    const row={id:String(body.id),treatment_id:String(body.treatmentId),cycle:Number(body.cycle),kind:String(body.kind||'evidence'),signature_type:body.signatureType||null,name:String(body.name||'arquivo'),mime_type:String(body.type||'application/octet-stream'),size:Number(body.size||bytes.length),storage_path:path,created_at:body.createdAt||new Date().toISOString()};
-    r=await q('/rest/v1/misscan_treatment_evidence?on_conflict=id',{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(row)});if(!r.ok){const t=await r.text();throw new Error(t||'Falha ao salvar metadados');}
-    return json(res,200,{ok:true,item:{id:row.id,treatmentId:row.treatment_id,cycle:row.cycle,kind:row.kind,signatureType:row.signature_type,name:row.name,type:row.mime_type,size:row.size,createdAt:row.created_at,storagePath:path}});
-  }catch(err){return json(res,503,{ok:false,error:err.message||String(err)});}
-};
+import { envValue, json, runtimeBinding } from '../lib/blob-store.mjs';
+
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+const CHUNK_CHARS = 500_000;
+let schemaReady = null;
+
+function db() {
+  const value = runtimeBinding('MISSCAN_DB');
+  if (!value) {
+    const error = new Error('Banco compartilhado MISSCAN_DB não configurado.');
+    error.status = 503;
+    throw error;
+  }
+  return value;
+}
+
+async function ensureSchema() {
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      await db().prepare(`
+        CREATE TABLE IF NOT EXISTS misscan_treatment_files (
+          id TEXT PRIMARY KEY,
+          treatment_id TEXT NOT NULL,
+          cycle INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          signature_type TEXT,
+          name TEXT NOT NULL,
+          mime_type TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `).run();
+      await db().prepare(`
+        CREATE TABLE IF NOT EXISTS misscan_treatment_file_chunks (
+          file_id TEXT NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          value TEXT NOT NULL,
+          PRIMARY KEY (file_id, chunk_index)
+        )
+      `).run();
+      await db().prepare(`
+        CREATE INDEX IF NOT EXISTS idx_misscan_treatment_files_cycle
+        ON misscan_treatment_files (treatment_id, cycle, created_at)
+      `).run();
+    })().catch(error => {
+      schemaReady = null;
+      throw error;
+    });
+  }
+  await schemaReady;
+}
+
+function assertWritePin(request) {
+  const expected = envValue('TREATMENT_WRITE_PIN');
+  if (!expected) {
+    const error = new Error('Defina o segredo TREATMENT_WRITE_PIN no Cloudflare para liberar gravações compartilhadas.');
+    error.status = 503;
+    throw error;
+  }
+  const received = String(request.headers.get('x-treatment-pin') || '').trim();
+  if (!received || received !== expected) {
+    const error = new Error('PIN de gravação inválido.');
+    error.status = 401;
+    throw error;
+  }
+}
+
+function itemFromRow(row) {
+  return {
+    id: row.id,
+    treatmentId: row.treatment_id,
+    cycle: Number(row.cycle),
+    kind: row.kind,
+    signatureType: row.signature_type || null,
+    name: row.name,
+    type: row.mime_type,
+    size: Number(row.size || 0),
+    createdAt: row.created_at,
+    shared: true
+  };
+}
+
+async function fileById(id, includeFile) {
+  const row = await db().prepare(`
+    SELECT * FROM misscan_treatment_files WHERE id = ? LIMIT 1
+  `).bind(id).first();
+  if (!row) return null;
+  const item = itemFromRow(row);
+  if (includeFile) {
+    const chunks = await db().prepare(`
+      SELECT value FROM misscan_treatment_file_chunks
+      WHERE file_id = ? ORDER BY chunk_index
+    `).bind(id).all();
+    item.fileBase64 = (chunks.results || []).map(chunk => chunk.value || '').join('');
+  }
+  return item;
+}
+
+export async function GET(request) {
+  await ensureSchema();
+  const url = new URL(request.url);
+  const id = String(url.searchParams.get('id') || '').trim();
+  if (id) {
+    const item = await fileById(id, url.searchParams.get('includeFile') === '1');
+    if (!item) return json({ ok: false, error: 'Arquivo não encontrado.' }, 404);
+    return json({ ok: true, item });
+  }
+  const treatmentId = String(url.searchParams.get('treatmentId') || '').trim();
+  const cycle = Number(url.searchParams.get('cycle') || 0);
+  if (!treatmentId || !cycle) {
+    return json({ ok: false, error: 'treatmentId e cycle são obrigatórios.' }, 400);
+  }
+  const result = await db().prepare(`
+    SELECT * FROM misscan_treatment_files
+    WHERE treatment_id = ? AND cycle = ?
+    ORDER BY created_at DESC
+  `).bind(treatmentId, cycle).all();
+  return json({ ok: true, items: (result.results || []).map(itemFromRow) });
+}
+
+async function deleteFile(id) {
+  await db().batch([
+    db().prepare('DELETE FROM misscan_treatment_file_chunks WHERE file_id = ?').bind(id),
+    db().prepare('DELETE FROM misscan_treatment_files WHERE id = ?').bind(id)
+  ]);
+}
+
+export async function POST(request) {
+  assertWritePin(request);
+  await ensureSchema();
+  const body = await request.json().catch(() => ({}));
+  if (body.action === 'delete') {
+    const id = String(body.id || '').trim();
+    if (!id) return json({ ok: false, error: 'ID obrigatório.' }, 400);
+    await deleteFile(id);
+    return json({ ok: true });
+  }
+  if (body.action !== 'save') return json({ ok: false, error: 'Ação inválida.' }, 400);
+
+  const id = String(body.id || '').trim().slice(0, 240);
+  const treatmentId = String(body.treatmentId || '').trim().slice(0, 240);
+  const cycle = Math.min(3, Math.max(1, Number(body.cycle) || 0));
+  const base64 = String(body.fileBase64 || '').replace(/^data:[^,]+,/, '');
+  const estimatedBytes = Math.floor(base64.length * 3 / 4);
+  if (!id || !treatmentId || !base64) {
+    return json({ ok: false, error: 'Dados da evidência incompletos.' }, 400);
+  }
+  if (estimatedBytes > MAX_FILE_BYTES || Number(body.size || 0) > MAX_FILE_BYTES) {
+    return json({ ok: false, error: 'Arquivo acima de 4 MB. Reduza o arquivo antes de enviar.' }, 413);
+  }
+
+  const now = new Date().toISOString();
+  const createdAt = String(body.createdAt || now);
+  await deleteFile(id);
+  await db().prepare(`
+    INSERT INTO misscan_treatment_files
+      (id, treatment_id, cycle, kind, signature_type, name, mime_type, size, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id,
+    treatmentId,
+    cycle,
+    body.kind === 'signature' ? 'signature' : 'evidence',
+    body.signatureType ? String(body.signatureType).slice(0, 40) : null,
+    String(body.name || 'arquivo').slice(0, 240),
+    String(body.type || 'application/octet-stream').slice(0, 120),
+    Number(body.size || estimatedBytes),
+    createdAt,
+    now
+  ).run();
+  for (let offset = 0, index = 0; offset < base64.length; offset += CHUNK_CHARS, index++) {
+    await db().prepare(`
+      INSERT INTO misscan_treatment_file_chunks (file_id, chunk_index, value)
+      VALUES (?, ?, ?)
+    `).bind(id, index, base64.slice(offset, offset + CHUNK_CHARS)).run();
+  }
+  const item = await fileById(id, false);
+  return json({ ok: true, item });
+}

@@ -7,6 +7,8 @@ import * as refreshSource from '../api/refresh-source.mjs';
 import * as notificar from '../api/notificar.mjs';
 import * as emailQueue from '../api/email-queue.mjs';
 import * as refreshQueue from '../api/refresh-queue.mjs';
+import * as tratativas from '../api/tratativas.mjs';
+import * as tratativasEvidencia from '../api/tratativas-evidencia.mjs';
 import * as operations from '../api/operations.mjs';
 
 const direct = new Map([
@@ -17,7 +19,9 @@ const direct = new Map([
   ['refresh-source', refreshSource],
   ['notificar', notificar],
   ['email-queue', emailQueue],
-  ['refresh-queue', refreshQueue]
+  ['refresh-queue', refreshQueue],
+  ['tratativas', tratativas],
+  ['tratativas-evidencia', tratativasEvidencia]
 ]);
 
 const operationNames = new Set([

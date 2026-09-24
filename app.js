@@ -22,6 +22,9 @@ const state = {
   treatmentFiltered: [],
   treatmentArchive: {},
   treatmentHistoryFilter: '',
+  treatmentLoaded: false,
+  treatmentSharedLoaded: false,
+  treatmentInitialPushDone: false,
   liveMeta: null,
   liveRefreshing: false,
   forceRefreshing: false,
@@ -729,6 +732,7 @@ const TREATMENT_STORAGE='misscanTreatmentProgressV4';
 const TREATMENT_DB='misscanTreatmentEvidenceV4';
 const TREATMENT_STORE='files';
 const TREATMENT_ARCHIVE_STORAGE='misscanTreatmentOffenderArchiveV1';
+const TREATMENT_PIN_SESSION='misscanTreatmentWritePinV1';
 
 function treatmentKey(name=''){return normalizeName(name)||String(name)}
 function nowISO(){return new Date().toISOString()}
@@ -744,6 +748,135 @@ function loadTreatmentArchive(){
 }
 function saveTreatmentArchive(){
   localStorage.setItem(TREATMENT_ARCHIVE_STORAGE,JSON.stringify(state.treatmentArchive||{}));
+}
+
+function treatmentRecordTimestamp(value={}){
+  const candidates=[value.updatedAt,value.lastSeen,value.completedAt];
+  (value.history||[]).forEach(item=>candidates.push(item?.at));
+  [1,2,3].forEach(c=>{
+    candidates.push(value[`dialogue${c}`]?.updatedAt);
+    candidates.push(value[`recycle${c}`]?.updatedAt);
+    candidates.push(value[`recycle${c}`]?.completedAt);
+  });
+  return candidates.filter(Boolean).sort().at(-1)||'';
+}
+
+function uniqueObjects(items=[],keyFn){
+  const map=new Map();
+  items.filter(Boolean).forEach(item=>map.set(keyFn(item),item));
+  return [...map.values()];
+}
+
+function mergeProgressRecord(local={},remote={}){
+  const localNewer=treatmentRecordTimestamp(local)>=treatmentRecordTimestamp(remote);
+  const newer=localNewer?local:remote,older=localNewer?remote:local;
+  const merged={...older,...newer};
+  merged.requiredCycle=Math.max(Number(local.requiredCycle)||1,Number(remote.requiredCycle)||1);
+  merged.history=uniqueObjects([...(local.history||[]),...(remote.history||[])],x=>`${x.at||''}|${x.title||''}|${x.detail||''}`)
+    .sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).slice(0,100);
+  [1,2,3].forEach(c=>{
+    const ld=local[`dialogue${c}`]||{},rd=remote[`dialogue${c}`]||{};
+    const lr=local[`recycle${c}`]||{},rr=remote[`recycle${c}`]||{};
+    merged[`dialogue${c}`]=String(ld.updatedAt||'')>=String(rd.updatedAt||'')?{...rd,...ld}:{...ld,...rd};
+    const recycle=String(lr.completedAt||lr.updatedAt||'')>=String(rr.completedAt||rr.updatedAt||'')?{...rr,...lr}:{...lr,...rr};
+    recycle.signatures={...(lr.signatures||{}),...(rr.signatures||{})};
+    merged[`recycle${c}`]=recycle;
+  });
+  merged.updatedAt=[treatmentRecordTimestamp(local),treatmentRecordTimestamp(remote)].filter(Boolean).sort().at(-1)||nowISO();
+  return merged;
+}
+
+function mergeArchiveRecord(local={},remote={}){
+  const localNewer=treatmentRecordTimestamp(local)>=treatmentRecordTimestamp(remote);
+  const newer=localNewer?local:remote,older=localNewer?remote:local;
+  const merged={...older,...newer};
+  merged.periods=[...new Set([...(local.periods||[]),...(remote.periods||[])].filter(Boolean))];
+  merged.indicators=uniqueObjects([...(local.indicators||[]),...(remote.indicators||[])],x=>`${x.at||''}|${x.periodo||''}|${x.indicador||0}|${x.miss_scan||0}`)
+    .sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-100);
+  merged.firstSeen=[local.firstSeen,remote.firstSeen].filter(Boolean).sort().at(0)||nowISO();
+  merged.lastSeen=[local.lastSeen,remote.lastSeen].filter(Boolean).sort().at(-1)||merged.firstSeen;
+  merged.updatedAt=[treatmentRecordTimestamp(local),treatmentRecordTimestamp(remote)].filter(Boolean).sort().at(-1)||merged.lastSeen;
+  return merged;
+}
+
+function ensureTreatmentLocalLoaded(){
+  if(state.treatmentLoaded)return;
+  loadTreatmentProgress();
+  loadTreatmentArchive();
+  state.treatmentLoaded=true;
+}
+
+async function hydrateSharedTreatments(){
+  ensureTreatmentLocalLoaded();
+  try{
+    const response=await fetch('/api/tratativas',{cache:'no-store',headers:{Accept:'application/json'}});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.ok)throw new Error(data.error||`Falha ao consultar histórico compartilhado (${response.status}).`);
+    Object.entries(data.progress||{}).forEach(([id,value])=>{
+      state.treatmentProgress[id]=mergeProgressRecord(state.treatmentProgress[id]||{},value||{});
+    });
+    Object.entries(data.archive||{}).forEach(([id,value])=>{
+      state.treatmentArchive[id]=mergeArchiveRecord(state.treatmentArchive[id]||{},value||{});
+    });
+    state.treatmentSharedLoaded=true;
+    saveTreatmentProgress();
+    saveTreatmentArchive();
+    renderTreatments();
+    renderGlobalTreatmentHistory();
+    return true;
+  }catch(error){
+    console.warn('TREATMENT_SHARED_READ_FAILED',error);
+    return false;
+  }
+}
+
+function treatmentPin(promptUser=false){
+  let pin=sessionStorage.getItem(TREATMENT_PIN_SESSION)||'';
+  if(!pin&&promptUser){
+    pin=String(prompt('Digite o PIN de gravação das tratativas:')||'').trim();
+    if(pin)sessionStorage.setItem(TREATMENT_PIN_SESSION,pin);
+  }
+  return pin;
+}
+
+async function sharedTreatmentRequest(path,body,{promptPin=true}={}){
+  const pin=treatmentPin(promptPin);
+  if(!pin)throw new Error('Gravação compartilhada cancelada: PIN não informado.');
+  const response=await fetch(path,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-treatment-pin':pin},
+    body:JSON.stringify(body)
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.ok){
+    if(response.status===401)sessionStorage.removeItem(TREATMENT_PIN_SESSION);
+    throw new Error(data.error||`Falha ao salvar no histórico compartilhado (${response.status}).`);
+  }
+  return data;
+}
+
+async function syncTreatmentState(id,{promptPin=true}={}){
+  ensureTreatmentLocalLoaded();
+  // Reconcile with the latest shared copy immediately before writing so two
+  // leaders working at the same time do not silently erase each other's history.
+  await hydrateSharedTreatments();
+  const full=!state.treatmentInitialPushDone;
+  const progress=full?state.treatmentProgress:(state.treatmentProgress[id]?{[id]:state.treatmentProgress[id]}:{});
+  const archive=full?state.treatmentArchive:(state.treatmentArchive[id]?{[id]:state.treatmentArchive[id]}:{});
+  const result=await sharedTreatmentRequest('/api/tratativas',{action:'merge',progress,archive},{promptPin});
+  state.treatmentInitialPushDone=true;
+  state.treatmentSharedLoaded=true;
+  return result;
+}
+
+async function syncTreatmentOrWarn(id){
+  try{
+    await syncTreatmentState(id,{promptPin:true});
+    return true;
+  }catch(error){
+    alert(`O registro foi preservado neste navegador, mas ainda não foi sincronizado para os demais:\n${error.message}`);
+    return false;
+  }
 }
 function mergeTreatmentArchive(rows=[]){
   const stamp=nowISO();
@@ -769,6 +902,7 @@ function mergeTreatmentArchive(rows=[]){
       tipo_hc:row.tipo_hc||old.tipo_hc||'Não cadastrado',
       firstSeen:old.firstSeen||stamp,
       lastSeen:stamp,
+      updatedAt:stamp,
       latestIndicador:Number(row.indicador)||0,
       latestMissScan:Number(row.miss_scan)||0,
       periods:[...periods],
@@ -793,7 +927,7 @@ function progressFor(id){
   return p;
 }
 function addTreatmentHistory(id,title,detail=''){
-  const p=progressFor(id);p.history.unshift({at:nowISO(),title,detail});p.history=p.history.slice(0,100);saveTreatmentProgress();
+  const p=progressFor(id),at=nowISO();p.history.unshift({at,title,detail});p.history=p.history.slice(0,100);p.updatedAt=at;saveTreatmentProgress();
 }
 
 function enrichTreatmentRow(r){
@@ -825,8 +959,7 @@ function loadTreatmentRows(rows){
   state.treatmentSource=(rows||[]).map(enrichTreatmentRow).filter(x=>x.id&&x.colaborador!=='Não identificado');
   // Regra final de exibição: T4 = T2 e T5 = T3, independentemente da origem dos dados.
   state.treatmentSource.forEach(x=>{x.turno=normalizeTurno(x.turno)});
-  loadTreatmentProgress();
-  loadTreatmentArchive();
+  ensureTreatmentLocalLoaded();
   mergeTreatmentArchive(state.treatmentSource.filter(x=>Number(x.indicador)>0.88));
   setupTreatmentFilters();
   renderTreatments();
@@ -915,7 +1048,7 @@ function renderTreatments(){
   renderEvolution();
 }
 
-window.registerRecurrence=id=>{
+window.registerRecurrence=async id=>{
   const row=historyTreatmentRow(id);if(!row)return;
   const p=progressFor(id);
   if(!cycleComplete(p,p.requiredCycle))return alert('Conclua o ciclo atual antes de registrar uma reincidência.');
@@ -923,6 +1056,7 @@ window.registerRecurrence=id=>{
   p.requiredCycle++;
   addTreatmentHistory(id,'Reincidência registrada',`Novo ciclo: ${p.requiredCycle}`);
   saveTreatmentProgress();renderTreatments();
+  await syncTreatmentOrWarn(id);
 };
 
 function modalRow(){return historyTreatmentRow(state.treatmentCurrent)}
@@ -1050,11 +1184,12 @@ async function saveDialogue(){
   }
 
   saveTreatmentProgress();
+  await syncTreatmentOrWarn(row.id);
   closeModal();
   renderTreatments();
 }
 
-function saveRecycleInfo(){
+async function saveRecycleInfo(){
   const row=modalRow();if(!row)return;
   const p=progressFor(row.id),c=state.treatmentCycle,r=p[`recycle${c}`];
   Object.assign(r,{
@@ -1072,6 +1207,7 @@ function saveRecycleInfo(){
     return alert('Informe um e-mail válido para o instrutor.');
   localStorage.setItem('lastTreatmentInstructorEmail',r.instructorEmail);
   r.infoSaved=true;r.updatedAt=nowISO();addTreatmentHistory(row.id,`${c}ª reciclagem — informações salvas`,`${r.responsible} • ${r.topic}`);saveTreatmentProgress();renderRecycleChecklist();
+  await syncTreatmentOrWarn(row.id);
 }
 function recycleRequirements(r){return {info:!!r.infoSaved,evidence:(Number(r.evidenceCount)||0)>0,colab:!!r.signatures?.colaborador,resp:!!r.signatures?.responsavel}}
 function renderRecycleChecklist(){
@@ -1125,6 +1261,7 @@ async function completeRecycle(){
   }
 
   saveTreatmentProgress();
+  await syncTreatmentOrWarn(row.id);
   closeModal();
   renderTreatments();
 }
@@ -1135,18 +1272,90 @@ async function dbDelete(id){const db=await openEvidenceDB();return new Promise((
 async function dbGet(id){const db=await openEvidenceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(TREATMENT_STORE,'readonly'),req=tx.objectStore(TREATMENT_STORE).get(id);req.onsuccess=()=>{db.close();resolve(req.result)};req.onerror=()=>reject(req.error)})}
 async function dbList(treatmentId,cycle){const db=await openEvidenceDB();return new Promise((resolve,reject)=>{const tx=db.transaction(TREATMENT_STORE,'readonly'),req=tx.objectStore(TREATMENT_STORE).index('treatmentCycle').getAll([treatmentId,cycle]);req.onsuccess=()=>{db.close();resolve(req.result||[])};req.onerror=()=>reject(req.error)})}
 
+function blobToBase64(blob){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result||'').split(',').at(-1)||'');
+    reader.onerror=()=>reject(reader.error||new Error('Falha ao ler o arquivo.'));
+    reader.readAsDataURL(blob);
+  });
+}
+function base64ToBlob(base64,type='application/octet-stream'){
+  const binary=atob(base64),parts=[];
+  for(let offset=0;offset<binary.length;offset+=65536){
+    const slice=binary.slice(offset,offset+65536),bytes=new Uint8Array(slice.length);
+    for(let i=0;i<slice.length;i++)bytes[i]=slice.charCodeAt(i);
+    parts.push(bytes);
+  }
+  return new Blob(parts,{type});
+}
+async function saveSharedTreatmentFile(record){
+  if(Number(record.size||record.blob?.size||0)>4*1024*1024)throw new Error('O arquivo ultrapassa 4 MB. Reduza-o antes de compartilhar.');
+  const fileBase64=await blobToBase64(record.blob);
+  return sharedTreatmentRequest('/api/tratativas-evidencia',{
+    action:'save',id:record.id,treatmentId:record.treatmentId,cycle:record.cycle,
+    kind:record.kind,signatureType:record.signatureType||null,name:record.name,
+    type:record.type,size:record.size,createdAt:record.createdAt,fileBase64
+  },{promptPin:true});
+}
+async function listSharedTreatmentFiles(treatmentId,cycle){
+  const query=new URLSearchParams({treatmentId,cycle:String(cycle)});
+  const response=await fetch(`/api/tratativas-evidencia?${query}`,{cache:'no-store',headers:{Accept:'application/json'}});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.ok)throw new Error(data.error||`Falha ao listar arquivos compartilhados (${response.status}).`);
+  return data.items||[];
+}
+
 async function addEvidenceFile(file){
   const row=modalRow();if(!row||!file)return;const c=state.treatmentCycle,id=crypto.randomUUID();
-  await dbPut({id,treatmentId:row.id,cycle:c,kind:'evidence',name:file.name,type:file.type||'application/octet-stream',size:file.size,createdAt:nowISO(),blob:file});
+  const record={id,treatmentId:row.id,cycle:c,kind:'evidence',name:file.name,type:file.type||'application/octet-stream',size:file.size,createdAt:nowISO(),blob:file};
+  await dbPut(record);
   const r=progressFor(row.id)[`recycle${c}`];r.evidenceCount=(Number(r.evidenceCount)||0)+1;addTreatmentHistory(row.id,`Evidência anexada — ${c}ª reciclagem`,file.name);saveTreatmentProgress();await refreshEvidenceList();renderRecycleChecklist();
+  try{
+    await saveSharedTreatmentFile(record);
+    await syncTreatmentState(row.id,{promptPin:false});
+    await refreshEvidenceList();
+  }catch(error){
+    alert(`A evidência foi preservada neste navegador, mas ainda não foi compartilhada:\n${error.message}`);
+  }
 }
 async function refreshEvidenceList(){
-  const row=modalRow();if(!row||state.treatmentMode!=='recycle')return;const items=(await dbList(row.id,state.treatmentCycle)).filter(x=>x.kind==='evidence');
-  $('evidenceBadge').textContent=items.length;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`];r.evidenceCount=items.length;saveTreatmentProgress();
-  $('evidenceList').innerHTML=items.map(x=>`<div class="evidence-item"><div><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.type||'arquivo')} • ${Math.max(1,Math.round((x.size||0)/1024))} KB • ${brDate(x.createdAt)}</small></div><div class="evidence-item-actions"><button onclick="viewTreatmentFile('${x.id}')">Visualizar</button><button onclick="deleteTreatmentFile('${x.id}')">Excluir</button></div></div>`).join('')||'<div class="empty">Nenhuma evidência anexada neste ciclo.</div>';
+  const row=modalRow();if(!row||state.treatmentMode!=='recycle')return;
+  const localItems=await dbList(row.id,state.treatmentCycle);
+  let remoteItems=[];
+  try{remoteItems=await listSharedTreatmentFiles(row.id,state.treatmentCycle)}catch(error){console.warn('TREATMENT_FILES_READ_FAILED',error)}
+  const merged=new Map(remoteItems.map(item=>[item.id,{...item,shared:true}]));
+  localItems.forEach(item=>merged.set(item.id,{...merged.get(item.id),...item,local:true}));
+  const allItems=[...merged.values()];
+  const items=allItems.filter(x=>x.kind==='evidence').sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  $('evidenceBadge').textContent=items.length;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`];r.evidenceCount=items.length;
+  allItems.filter(x=>x.kind==='signature').forEach(x=>{
+    if(x.signatureType)r.signatures[x.signatureType]=true;
+  });
+  saveTreatmentProgress();
+  $('evidenceList').innerHTML=items.map(x=>`<div class="evidence-item"><div><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.type||'arquivo')} • ${Math.max(1,Math.round((x.size||0)/1024))} KB • ${brDate(x.createdAt)}${x.shared?' • compartilhado':' • somente neste navegador'}</small></div><div class="evidence-item-actions"><button onclick="viewTreatmentFile('${x.id}')">Visualizar</button><button onclick="deleteTreatmentFile('${x.id}')">Excluir</button></div></div>`).join('')||'<div class="empty">Nenhuma evidência anexada neste ciclo.</div>';
 }
-window.viewTreatmentFile=async id=>{const x=await dbGet(id);if(!x?.blob)return;const url=URL.createObjectURL(x.blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000)};
-window.deleteTreatmentFile=async id=>{if(!confirm('Excluir este arquivo?'))return;await dbDelete(id);const row=modalRow();if(row)addTreatmentHistory(row.id,'Evidência removida',id);await refreshEvidenceList();renderRecycleChecklist()};
+window.viewTreatmentFile=async id=>{
+  let x=await dbGet(id);
+  if(!x?.blob){
+    const query=new URLSearchParams({id,includeFile:'1'}),response=await fetch(`/api/tratativas-evidencia?${query}`,{cache:'no-store'});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.ok)return alert(data.error||'Não foi possível abrir o arquivo.');
+    x=data.item;x.blob=base64ToBlob(x.fileBase64,x.type);
+    await dbPut({...x,blob:x.blob,fileBase64:undefined});
+  }
+  const url=URL.createObjectURL(x.blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000);
+};
+window.deleteTreatmentFile=async id=>{
+  if(!confirm('Excluir este arquivo para todos os usuários?'))return;
+  try{
+    await sharedTreatmentRequest('/api/tratativas-evidencia',{action:'delete',id},{promptPin:true});
+    await dbDelete(id);
+    const row=modalRow();
+    await refreshEvidenceList();renderRecycleChecklist();
+    if(row){addTreatmentHistory(row.id,'Evidência removida',id);await syncTreatmentState(row.id,{promptPin:false})}
+  }catch(error){alert(`O arquivo não foi excluído:\n${error.message}`)}
+};
 
 let sigCtx=null,sigDrawing=false,sigDirty=false;
 function prepareSignatureCanvas(){
@@ -1159,8 +1368,14 @@ function sigEnd(){sigDrawing=false}
 function clearSignature(){const c=$('signatureCanvas');if(!c||!sigCtx)return;sigCtx.clearRect(0,0,c.width,c.height);sigDirty=false}
 async function saveSignature(){
   const row=modalRow();if(!row||!sigDirty)return alert('Faça a assinatura no campo antes de salvar.');const c=state.treatmentCycle,type=$('signatureType').value,canvas=$('signatureCanvas');
-  const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));const id=`sig-${row.id}-${c}-${type}`;await dbPut({id,treatmentId:row.id,cycle:c,kind:'signature',signatureType:type,name:`assinatura_${type}.png`,type:'image/png',size:blob.size,createdAt:nowISO(),blob});
+  const blob=await new Promise(res=>canvas.toBlob(res,'image/png'));const id=`sig-${row.id}-${c}-${type}`,record={id,treatmentId:row.id,cycle:c,kind:'signature',signatureType:type,name:`assinatura_${type}.png`,type:'image/png',size:blob.size,createdAt:nowISO(),blob};await dbPut(record);
   const r=progressFor(row.id)[`recycle${c}`];r.signatures=r.signatures||{};r.signatures[type]=true;r.signatures[`${type}At`]=nowISO();addTreatmentHistory(row.id,`Assinatura registrada — ${type}`,`${c}ª reciclagem`);saveTreatmentProgress();clearSignature();refreshSignatureStatus();renderRecycleChecklist();
+  try{
+    await saveSharedTreatmentFile(record);
+    await syncTreatmentState(row.id,{promptPin:false});
+  }catch(error){
+    alert(`A assinatura foi preservada neste navegador, mas ainda não foi compartilhada:\n${error.message}`);
+  }
 }
 function refreshSignatureStatus(){
   const row=modalRow();if(!row)return;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`],s=r.signatures||{};
@@ -2166,7 +2381,6 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     syncPeriodControlsFromMeta();
 
     buildHCMap(data.hc||[]);
-    loadTreatmentProgress();
     loadMisscanRows(data.misscan||[]);
     loadTreatmentRows(liveTreatmentRows());
 
@@ -2249,6 +2463,7 @@ async function boot(){
     refreshCalendarizationV65({silent:true}),
     refreshEvolution({silent:true})
   ]);
+  await hydrateSharedTreatments();
   const initialRevision=await checkSourceRevision().catch(()=>'');
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
