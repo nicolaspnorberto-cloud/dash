@@ -9,7 +9,8 @@ import {
 import {
   attributeDynamicV613,
   responsibility,
-  validOperators
+  validOperators,
+  resolvePeriod
 } from './dados.mjs';
 
 const HC_PATH = 'misscan/hc.json';
@@ -103,9 +104,41 @@ async function buildReport(request) {
       return json({ ok: false, error: 'Volume expedido da GEROT ainda não está disponível.' }, 503);
     }
 
-    const end = meta.historyEnd;
-    const requestedStart = addDays(mondayOf(end), -(requestedWeeks - 1) * 7);
-    const start = requestedStart < meta.historyStart ? meta.historyStart : requestedStart;
+    const hasSelectedPeriod = Boolean(
+      url.searchParams.get('preset') ||
+      url.searchParams.get('from') ||
+      url.searchParams.get('to')
+    );
+    const selectedPeriod = hasSelectedPeriod ? resolvePeriod(url, meta) : null;
+    const fallbackEnd = meta.historyEnd;
+    const fallbackStart = addDays(mondayOf(fallbackEnd), -(requestedWeeks - 1) * 7);
+    const rawStart = selectedPeriod?.from || fallbackStart;
+    const rawEnd = selectedPeriod?.to || fallbackEnd;
+    const start = rawStart < meta.historyStart ? meta.historyStart : rawStart;
+    const end = rawEnd > meta.historyEnd ? meta.historyEnd : rawEnd;
+
+    if (start > end) {
+      return json({
+        ok: true,
+        version: '6.17',
+        target: TARGET,
+        weeks: [],
+        rows: [],
+        meta: {
+          periodPreset: selectedPeriod?.preset || 'CUSTOM',
+          periodStart: rawStart,
+          periodEnd: rawEnd,
+          historyStart: meta.historyStart,
+          historyEnd: meta.historyEnd,
+          sourceRows: 0,
+          returnedRows: 0,
+          volumeSource: 'GEROT db_volume_overall • Inter-SOC • SOC_Packed',
+          numeratorSource: 'Matinal/LM • mesma atribuição do ranking V6.13',
+          shareSource: 'BRs do colaborador ÷ total de Miss Scans da semana',
+          generatedAt: new Date().toISOString()
+        }
+      });
+    }
     const sourceRows = await readHistoryRange(start, end, meta);
 
     const volumeByWeek = new Map();
@@ -196,7 +229,7 @@ async function buildReport(request) {
 
     return json({
       ok: true,
-      version: '6.16',
+      version: '6.17',
       target: TARGET,
       weeks: weekKeys.map(week => ({
         week,
@@ -209,6 +242,7 @@ async function buildReport(request) {
       })),
       rows,
       meta: {
+        periodPreset: selectedPeriod?.preset || 'LAST_WEEKS',
         periodStart: start,
         periodEnd: end,
         historyStart: meta.historyStart,

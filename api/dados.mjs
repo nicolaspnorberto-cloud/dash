@@ -336,7 +336,7 @@ function formatBr(dateKey) {
 }
 
 // Reutilizado pela matriz semanal para garantir a mesma atribuição do ranking.
-export { attributeDynamicV613, responsibility, validOperators };
+export { attributeDynamicV613, responsibility, validOperators, resolvePeriod };
 
 const cachedReport=withReportCache(buildReport);
 export async function GET(request){
