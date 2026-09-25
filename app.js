@@ -1833,6 +1833,32 @@ function evolutionHasHistoricalOffense(row){
   return state.evolutionWeeks.some(({week})=>evolutionIsAboveTarget(row.weeks?.[week]));
 }
 
+const EVOLUTION_CACHE_STORAGE='misscanEvolutionSnapshotV616';
+
+function restoreEvolutionSnapshot(){
+  try{
+    const snapshot=JSON.parse(localStorage.getItem(EVOLUTION_CACHE_STORAGE)||'null');
+    if(!Array.isArray(snapshot?.rows)||!Array.isArray(snapshot?.weeks)||!snapshot.weeks.length)return false;
+    state.evolution=snapshot.rows;
+    state.evolutionWeeks=snapshot.weeks;
+    state.evolutionMeta=snapshot.meta||{};
+    state.evolutionTarget=Number.isFinite(Number(snapshot.target))?Number(snapshot.target):0.88;
+    return true;
+  }catch{return false}
+}
+
+function persistEvolutionSnapshot(){
+  try{
+    localStorage.setItem(EVOLUTION_CACHE_STORAGE,JSON.stringify({
+      rows:state.evolution,
+      weeks:state.evolutionWeeks,
+      meta:state.evolutionMeta,
+      target:state.evolutionTarget,
+      savedAt:new Date().toISOString()
+    }));
+  }catch{}
+}
+
 function evolutionMetrics(row){
   const comparable=state.evolutionWeeks.slice(-6).map(w=>w.week);
   const metrics=comparable.map(week=>row.weeks?.[week]);
@@ -1952,15 +1978,19 @@ async function refreshEvolution({silent=true,fresh=false}={}){
   if(button)button.disabled=true;
   if($('evolutionUpdated'))$('evolutionUpdated').textContent='Atualizando histórico...';
   try{
+    const timeoutSignal=typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'
+      ?AbortSignal.timeout(45000)
+      :undefined;
     const {data}=await fetchJsonResilientV68(
       `/api/evolucao?weeks=8${fresh?'&fresh=1':''}`,
-      {cache:'no-store',headers:{Accept:'application/json'}},
+      {cache:'no-store',headers:{Accept:'application/json'},signal:timeoutSignal},
       3
     );
     state.evolution=data.rows||[];
     state.evolutionWeeks=data.weeks||[];
     state.evolutionMeta=data.meta||{};
     state.evolutionTarget=Number.isFinite(Number(data.target))?Number(data.target):0.88;
+    persistEvolutionSnapshot();
     const generated=state.evolutionMeta.generatedAt?new Date(state.evolutionMeta.generatedAt).toLocaleString('pt-BR'):'—';
     if($('evolutionUpdated'))$('evolutionUpdated').textContent=`Atualizado ${generated}`;
     if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Indicador: ${state.evolutionMeta.shareSource||'BRs do colaborador ÷ total de Miss Scans da semana'}. Ofensor somente acima de ${fmtPct(state.evolutionTarget)}. Período ${state.evolutionMeta.periodStart||'—'} a ${state.evolutionMeta.periodEnd||'—'}.`;
@@ -2541,10 +2571,12 @@ async function checkSourceRevision(){
 
 async function boot(){
   tabs();loadCalendarPreferences();restorePeriodPreference();
-  const [initialLive,initialCalendar,initialEvolution]=await Promise.all([
+  const initialEvolution=restoreEvolutionSnapshot();
+  if(initialEvolution)renderEvolution();
+  refreshEvolution({silent:true});
+  const [initialLive,initialCalendar]=await Promise.all([
     refreshLiveData({silent:true}),
-    refreshCalendarizationV65({silent:true}),
-    refreshEvolution({silent:true})
+    refreshCalendarizationV65({silent:true})
   ]);
   await hydrateSharedTreatments();
   const initialRevision=await checkSourceRevision().catch(()=>'');
