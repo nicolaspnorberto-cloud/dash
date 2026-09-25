@@ -4,7 +4,8 @@ import {
   readJson,
   readHistoryRange,
   rowDateKey,
-  normalizeName
+  normalizeName,
+  writeJson
 } from '../lib/blob-store.mjs';
 import {
   attributeDynamicV613,
@@ -15,6 +16,7 @@ import {
 const HC_PATH = 'misscan/hc.json';
 const META_PATH = 'misscan/history-meta.json';
 const GEROT_PATH = 'misscan/gerot.json';
+const CACHE_PATH = 'misscan/evolution-cache.json';
 const TARGET = 0.88;
 
 function addDays(dateKey, days) {
@@ -101,6 +103,31 @@ async function buildReport(request) {
     }
     if (!gerot?.processed?.length) {
       return json({ ok: false, error: 'Volume expedido da GEROT ainda não está disponível.' }, 503);
+    }
+
+    const fresh = url.searchParams.get('fresh') === '1';
+    const sourceKey = [
+      meta?.receivedAt || '',
+      meta?.updatedAt || '',
+      meta?.historyEnd || '',
+      meta?.historyRows || 0,
+      gerot?.receivedAt || '',
+      gerot?.updatedAt || '',
+      gerot?.processed?.length || 0,
+      requestedWeeks
+    ].join('|');
+
+    if (!fresh) {
+      const snapshot = await readJson(CACHE_PATH, null);
+      if (snapshot?.sourceKey === sourceKey && snapshot?.payload?.ok) {
+        return json({
+          ...snapshot.payload,
+          meta: {
+            ...(snapshot.payload.meta || {}),
+            materialized: true
+          }
+        });
+      }
     }
 
     const end = meta.historyEnd;
@@ -194,7 +221,7 @@ async function buildReport(request) {
         a.colaborador.localeCompare(b.colaborador, 'pt-BR');
     });
 
-    return json({
+    const payload = {
       ok: true,
       version: '6.16',
       target: TARGET,
@@ -222,7 +249,19 @@ async function buildReport(request) {
         shareSource: 'BRs do colaborador ÷ total de Miss Scans da semana',
         generatedAt: new Date().toISOString()
       }
-    });
+    };
+
+    try {
+      await writeJson(CACHE_PATH, {
+        sourceKey,
+        savedAt: new Date().toISOString(),
+        payload
+      });
+    } catch (cacheError) {
+      console.warn('EVOLUCAO_SNAPSHOT_WRITE_ERROR', cacheError);
+    }
+
+    return json(payload);
   } catch (error) {
     console.error('EVOLUCAO_V615_ERROR', error);
     return json({ ok: false, error: error?.message || 'Falha ao calcular matriz de evolução.' }, 500);

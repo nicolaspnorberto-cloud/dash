@@ -5,6 +5,7 @@ import {
   readJson,
   readHistoryRange,
   rowDateKey,
+  writeJson,
 } from '../lib/blob-store.mjs';
 
 const HC_PATH = 'misscan/hc.json';
@@ -400,6 +401,30 @@ async function buildReport(request) {
       });
     }
 
+    const fresh = url.searchParams.get('fresh') === '1';
+    const sourceKey = [
+      meta?.receivedAt || '',
+      meta?.updatedAt || '',
+      meta?.historyEnd || '',
+      meta?.historyRows || 0
+    ].join('|');
+    const snapshotPath = `misscan/report-snapshots/${period.from}_${period.to}.json`;
+
+    if (!fresh) {
+      const snapshot = await readJson(snapshotPath, null);
+      if (snapshot?.sourceKey === sourceKey && snapshot?.payload?.ok) {
+        return json({
+          ...snapshot.payload,
+          hc: includeHC ? (hcFile?.rows || []) : [],
+          meta: {
+            ...(snapshot.payload.meta || {}),
+            ...reportMeta,
+            materialized: true
+          }
+        });
+      }
+    }
+
     const rows = await readHistoryRange(period.from, period.to, meta);
 
     const attributed = attributeDynamicV613(rows);
@@ -412,7 +437,7 @@ async function buildReport(request) {
       r => validOperators(r.operator_fail)[0]?.key === MANUAL.key
     ).length;
 
-    return json({
+    const payload = {
       ok: true,
       hc: hcFile?.rows || [],
       misscan: attributed,
@@ -428,7 +453,19 @@ async function buildReport(request) {
         packedToPropagation: true,
         hardcodedOffenders: false
       }
-    });
+    };
+
+    try {
+      await writeJson(snapshotPath, {
+        sourceKey,
+        savedAt: new Date().toISOString(),
+        payload: { ...payload, hc: [] }
+      });
+    } catch (cacheError) {
+      console.warn('MISSCAN_REPORT_SNAPSHOT_WRITE_ERROR', cacheError);
+    }
+
+    return json(payload);
 
   } catch (error) {
     console.error('MISSCAN_DATA_V613_ERROR', error);
