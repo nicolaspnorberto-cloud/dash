@@ -1959,7 +1959,7 @@ async function refreshEvolution({silent=true,fresh=false}={}){
     state.evolutionTarget=Number.isFinite(Number(data.target))?Number(data.target):0.88;
     const generated=state.evolutionMeta.generatedAt?new Date(state.evolutionMeta.generatedAt).toLocaleString('pt-BR'):'—';
     if($('evolutionUpdated'))$('evolutionUpdated').textContent=`Atualizado ${generated}`;
-    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Fonte automática: ${state.evolutionMeta.numeratorSource||'Matinal/LM'} ÷ ${state.evolutionMeta.volumeSource||'volume expedido'}. Ofensor somente acima de ${fmtPct(state.evolutionTarget)}. Período ${state.evolutionMeta.periodStart||'—'} a ${state.evolutionMeta.periodEnd||'—'}.`;
+    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Indicador: ${state.evolutionMeta.shareSource||'BRs do colaborador ÷ total de Miss Scans da semana'}. Ofensor somente acima de ${fmtPct(state.evolutionTarget)}. Período ${state.evolutionMeta.periodStart||'—'} a ${state.evolutionMeta.periodEnd||'—'}.`;
     renderEvolution();
     return true;
   }catch(error){

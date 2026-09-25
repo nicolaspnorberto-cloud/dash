@@ -175,6 +175,7 @@ async function buildReport(request) {
 
     for (const week of weekKeys) {
       const volume = Number(volumeByWeek.get(week) || 0);
+      const weeklyMissScan = Number(misscanByWeek.get(week) || 0);
       const ranked = [...map.values()]
         .filter(item => item.weeks[week]?.missScan > 0)
         .sort((a, b) => b.weeks[week].missScan - a.weeks[week].missScan ||
@@ -183,7 +184,7 @@ async function buildReport(request) {
         const metric = item.weeks[week];
         metric.position = index + 1;
         metric.volume = volume;
-        metric.share = volume > 0 ? metric.missScan / volume * 100 : null;
+        metric.share = weeklyMissScan > 0 ? metric.missScan / weeklyMissScan * 100 : null;
       });
     }
 
@@ -195,7 +196,7 @@ async function buildReport(request) {
 
     return json({
       ok: true,
-      version: '6.15',
+      version: '6.16',
       target: TARGET,
       weeks: weekKeys.map(week => ({
         week,
@@ -218,6 +219,7 @@ async function buildReport(request) {
         unidentified,
         volumeSource: 'GEROT db_volume_overall • Inter-SOC • SOC_Packed',
         numeratorSource: 'Matinal/LM • mesma atribuição do ranking V6.13',
+        shareSource: 'BRs do colaborador ÷ total de Miss Scans da semana',
         generatedAt: new Date().toISOString()
       }
     });
