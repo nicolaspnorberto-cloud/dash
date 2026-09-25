@@ -1949,7 +1949,7 @@ async function refreshEvolution({silent=true,fresh=false}={}){
   if($('evolutionUpdated'))$('evolutionUpdated').textContent='Atualizando histórico...';
   try{
     const {data}=await fetchJsonResilientV68(
-      `/api/evolucao?${periodQuery()}${fresh?'&fresh=1':''}`,
+      `/api/evolucao?weeks=8${fresh?'&fresh=1':''}`,
       {cache:'no-store',headers:{Accept:'application/json'}},
       3
     );
@@ -2043,7 +2043,7 @@ function syncPeriodControlsFromMeta(){
   }
 }
 
-async function applyPeriodFromControls(){
+function applyPeriodFromControls(){
   const preset=$('datePreset').value||'LAST_7';
   state.datePreset=preset;
 
@@ -2059,10 +2059,7 @@ async function applyPeriodFromControls(){
   localStorage.setItem('misscanPeriodFromV61',state.dateFrom||'');
   localStorage.setItem('misscanPeriodToV61',state.dateTo||'');
 
-  await Promise.all([
-    refreshLiveData({silent:false}),
-    refreshEvolution({silent:true,fresh:true})
-  ]);
+  refreshLiveData({silent:false});
 }
 
 function restorePeriodPreference(){
