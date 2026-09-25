@@ -31,6 +31,7 @@ const state = {
   evolution: [],
   evolutionWeeks: [],
   evolutionMeta: null,
+  evolutionTarget: 0.88,
   evolutionRefreshing: false,
   datePreset: 'LAST_7',
   dateFrom: '',
@@ -1822,14 +1823,23 @@ async function refreshCalendarizationV65({silent=true,fresh=false}={}){
 }
 
 // ================= MATRIZ DE EVOLUÇÃO AUTOMÁTICA V6.15 =================
+function evolutionIsAboveTarget(metric){
+  const share=Number(metric?.share);
+  const target=Number(state.evolutionTarget)||0.88;
+  return Number.isFinite(share)&&share>target;
+}
+
 function evolutionMetrics(row){
   const comparable=state.evolutionWeeks.slice(-6).map(w=>w.week);
-  const values=comparable.map(week=>Number(row.weeks?.[week]?.missScan)||0);
-  const presence=values.filter(value=>value>0).length;
-  const total=values.reduce((sum,value)=>sum+value,0);
-  const peak=Math.max(0,...values);
-  const previous=values.slice(0,3).reduce((sum,value)=>sum+value,0);
-  const recent=values.slice(3).reduce((sum,value)=>sum+value,0);
+  const metrics=comparable.map(week=>row.weeks?.[week]);
+  const qualified=metrics.map(metric=>evolutionIsAboveTarget(metric));
+  const rates=metrics.map((metric,index)=>qualified[index]?Number(metric?.share)||0:0);
+  const missScans=metrics.map((metric,index)=>qualified[index]?Number(metric?.missScan)||0:0);
+  const presence=qualified.filter(Boolean).length;
+  const total=missScans.reduce((sum,value)=>sum+value,0);
+  const peak=Math.max(0,...missScans);
+  const previous=rates.slice(0,3).reduce((sum,value)=>sum+value,0);
+  const recent=rates.slice(3).reduce((sum,value)=>sum+value,0);
   const trend=presence<2?'—':recent>previous*1.1?'Piora aparente':recent<previous*.9?'Melhora aparente':'Estável';
   const status=presence>=5?'Crônico':presence>=3?'Recorrente':presence===2?'Intermitente':presence===1?'Pontual':'Sem classificação';
   return {presence,total,peak,trend,status};
@@ -1855,7 +1865,7 @@ function evolutionTreatment(row){
   }
   const latest=state.evolutionWeeks.at(-1)?.week;
   const share=Number(row.weeks?.[latest]?.share);
-  return Number.isFinite(share)&&share>state.treatmentThreshold
+  return Number.isFinite(share)&&share>state.evolutionTarget
     ?'1º Diálogo pendente'
     :'Acompanhar evolução';
 }
@@ -1877,8 +1887,8 @@ function filteredEvolution(){
   const latest=state.evolutionWeeks.at(-1)?.week;
   return state.evolution.filter(row=>{
     const metrics=evolutionMetrics(row);
-    const current=Number(row.weeks?.[latest]?.missScan)||0;
-    const scopeOk=scope==='ALL'||(scope==='CURRENT'&&current>0)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
+    const current=evolutionIsAboveTarget(row.weeks?.[latest]);
+    const scopeOk=(scope==='ALL'&&metrics.presence>0)||(scope==='CURRENT'&&current)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
     const op=evolutionOperation(row);
     const currentTreatment=evolutionTreatment(row);
     return scopeOk
@@ -1887,7 +1897,7 @@ function filteredEvolution(){
       &&(!trend||metrics.trend===trend)
       &&(!treatment||currentTreatment===treatment)
       &&(!search||`${row.colaborador} ${row.opsid} ${row.lider} ${row.setor}`.toLowerCase().includes(search));
-  }).sort((a,b)=>Number(b.weeks?.[latest]?.missScan||0)-Number(a.weeks?.[latest]?.missScan||0)||evolutionMetrics(b).total-evolutionMetrics(a).total||String(a.colaborador).localeCompare(String(b.colaborador),'pt-BR'));
+  }).sort((a,b)=>Number(b.weeks?.[latest]?.share||0)-Number(a.weeks?.[latest]?.share||0)||evolutionMetrics(b).total-evolutionMetrics(a).total||String(a.colaborador).localeCompare(String(b.colaborador),'pt-BR'));
 }
 
 function renderEvolution(){
@@ -1896,7 +1906,7 @@ function renderEvolution(){
   const latest=weeks.at(-1)?.week;
   const rows=filteredEvolution();
   const metrics=rows.map(row=>evolutionMetrics(row));
-  const current=rows.filter(row=>Number(row.weeks?.[latest]?.missScan)>0).length;
+  const current=rows.filter(row=>evolutionIsAboveTarget(row.weeks?.[latest])).length;
   const chronic=metrics.filter(item=>item.status==='Crônico').length;
   const recurrent=metrics.filter(item=>item.status==='Recorrente').length;
   const worse=metrics.filter(item=>item.trend==='Piora aparente').length;
@@ -1908,7 +1918,7 @@ function renderEvolution(){
   $('evolutionRecurrent').textContent=fmtInt.format(recurrent);
   $('evolutionWorse').textContent=fmtInt.format(worse);
   $('evolutionCountLabel').textContent=weeks.length
-    ?`${rows.length} colaborador(es) • ${weeks[0].week} a ${latest}`
+    ?`${rows.length} ofensor(es) acima de ${fmtPct(state.evolutionTarget)} • ${weeks[0].week} a ${latest}`
     :'Aguardando dados semanais...';
 
   $('evolutionHead').innerHTML=`<tr><th>Colaborador</th><th>Operação</th>${weeks.map(w=>`<th>${escapeHtml(w.week)}</th>`).join('')}<th>Aparições</th><th>Tendência</th><th>Status</th><th>Tratativa atual</th></tr>`;
@@ -1946,9 +1956,10 @@ async function refreshEvolution({silent=true,fresh=false}={}){
     state.evolution=data.rows||[];
     state.evolutionWeeks=data.weeks||[];
     state.evolutionMeta=data.meta||{};
+    state.evolutionTarget=Number.isFinite(Number(data.target))?Number(data.target):0.88;
     const generated=state.evolutionMeta.generatedAt?new Date(state.evolutionMeta.generatedAt).toLocaleString('pt-BR'):'—';
     if($('evolutionUpdated'))$('evolutionUpdated').textContent=`Atualizado ${generated}`;
-    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Fonte automática: ${state.evolutionMeta.numeratorSource||'Matinal/LM'} ÷ ${state.evolutionMeta.volumeSource||'volume expedido'}. Período ${state.evolutionMeta.periodStart||'—'} a ${state.evolutionMeta.periodEnd||'—'}.`;
+    if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Fonte automática: ${state.evolutionMeta.numeratorSource||'Matinal/LM'} ÷ ${state.evolutionMeta.volumeSource||'volume expedido'}. Ofensor somente acima de ${fmtPct(state.evolutionTarget)}. Período ${state.evolutionMeta.periodStart||'—'} a ${state.evolutionMeta.periodEnd||'—'}.`;
     renderEvolution();
     return true;
   }catch(error){
