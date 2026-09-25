@@ -1829,6 +1829,10 @@ function evolutionIsAboveTarget(metric){
   return Number.isFinite(share)&&share>target;
 }
 
+function evolutionHasHistoricalOffense(row){
+  return state.evolutionWeeks.some(({week})=>evolutionIsAboveTarget(row.weeks?.[week]));
+}
+
 function evolutionMetrics(row){
   const comparable=state.evolutionWeeks.slice(-6).map(w=>w.week);
   const metrics=comparable.map(week=>row.weeks?.[week]);
@@ -1878,7 +1882,7 @@ function evolutionTone(value=''){
 }
 
 function filteredEvolution(){
-  const scope=$('evolutionScope')?.value||'CURRENT';
+  const scope=$('evolutionScope')?.value||'ALL';
   const operation=$('evolutionOperation')?.value||'';
   const status=$('evolutionStatus')?.value||'';
   const trend=$('evolutionTrend')?.value||'';
@@ -1888,7 +1892,7 @@ function filteredEvolution(){
   return state.evolution.filter(row=>{
     const metrics=evolutionMetrics(row);
     const current=evolutionIsAboveTarget(row.weeks?.[latest]);
-    const scopeOk=(scope==='ALL'&&metrics.presence>0)||(scope==='CURRENT'&&current)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
+    const scopeOk=(scope==='ALL'&&evolutionHasHistoricalOffense(row))||(scope==='CURRENT'&&current)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
     const op=evolutionOperation(row);
     const currentTreatment=evolutionTreatment(row);
     return scopeOk
@@ -2587,7 +2591,7 @@ async function boot(){
   ['evolutionScope','evolutionOperation','evolutionStatus','evolutionTrend','evolutionTreatment'].forEach(id=>$(id)?.addEventListener('change',renderEvolution));
   $('evolutionSearch')?.addEventListener('input',renderEvolution);
   $('evolutionResetBtn')?.addEventListener('click',()=>{
-    $('evolutionScope').value='CURRENT';
+    $('evolutionScope').value='ALL';
     $('evolutionOperation').value='';
     $('evolutionStatus').value='';
     $('evolutionTrend').value='';
