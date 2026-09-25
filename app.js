@@ -1871,6 +1871,8 @@ function filteredEvolution(){
   const scope=$('evolutionScope')?.value||'CURRENT';
   const operation=$('evolutionOperation')?.value||'';
   const status=$('evolutionStatus')?.value||'';
+  const trend=$('evolutionTrend')?.value||'';
+  const treatment=$('evolutionTreatment')?.value||'';
   const search=String($('evolutionSearch')?.value||'').trim().toLowerCase();
   const latest=state.evolutionWeeks.at(-1)?.week;
   return state.evolution.filter(row=>{
@@ -1878,7 +1880,13 @@ function filteredEvolution(){
     const current=Number(row.weeks?.[latest]?.missScan)||0;
     const scopeOk=scope==='ALL'||(scope==='CURRENT'&&current>0)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
     const op=evolutionOperation(row);
-    return scopeOk&&(!operation||op===operation)&&(!status||metrics.status===status)&&(!search||`${row.colaborador} ${row.opsid} ${row.lider} ${row.setor}`.toLowerCase().includes(search));
+    const currentTreatment=evolutionTreatment(row);
+    return scopeOk
+      &&(!operation||op===operation)
+      &&(!status||metrics.status===status)
+      &&(!trend||metrics.trend===trend)
+      &&(!treatment||currentTreatment===treatment)
+      &&(!search||`${row.colaborador} ${row.opsid} ${row.lider} ${row.setor}`.toLowerCase().includes(search));
   }).sort((a,b)=>Number(b.weeks?.[latest]?.missScan||0)-Number(a.weeks?.[latest]?.missScan||0)||evolutionMetrics(b).total-evolutionMetrics(a).total||String(a.colaborador).localeCompare(String(b.colaborador),'pt-BR'));
 }
 
@@ -2565,12 +2573,14 @@ async function boot(){
   $('treatResetBtn').addEventListener('click',()=>{$('treatmentThreshold').value='0.88';$('treatTurnoFilter').value='';$('treatSetorFilter').value='';$('treatStatusFilter').value='';$('treatSearch').value='';renderTreatments()});
 
   // Matriz de evolução V6.15
-  ['evolutionScope','evolutionOperation','evolutionStatus'].forEach(id=>$(id)?.addEventListener('change',renderEvolution));
+  ['evolutionScope','evolutionOperation','evolutionStatus','evolutionTrend','evolutionTreatment'].forEach(id=>$(id)?.addEventListener('change',renderEvolution));
   $('evolutionSearch')?.addEventListener('input',renderEvolution);
   $('evolutionResetBtn')?.addEventListener('click',()=>{
     $('evolutionScope').value='CURRENT';
     $('evolutionOperation').value='';
     $('evolutionStatus').value='';
+    $('evolutionTrend').value='';
+    $('evolutionTreatment').value='';
     $('evolutionSearch').value='';
     renderEvolution();
   });

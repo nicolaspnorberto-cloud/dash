@@ -51,7 +51,7 @@
 .evolution-filter-panel{margin-bottom:16px}
 .evolution-filter-grid{
   display:grid;
-  grid-template-columns:190px 170px 170px minmax(240px,1fr) auto;
+  grid-template-columns:minmax(170px,1.1fr) repeat(3,minmax(135px,.85fr)) minmax(190px,1.15fr) minmax(220px,1.4fr) auto;
   gap:12px;
   align-items:end;
 }
@@ -78,6 +78,7 @@
 .evolution-danger{background:#ffe7eb;color:#c92443}.evolution-good{background:#e5f8ee;color:#148155}.evolution-warning{background:#fff2d2;color:#9c6700}.evolution-neutral{background:#edf3f8;color:#536b82}
 .evolution-action{max-width:190px;white-space:normal;line-height:1.25}
 .evolution-table-footer{display:flex;justify-content:space-between;gap:12px;padding:12px 16px;background:#fbfdff;color:#71869b;font-size:11px}
+@media(max-width:1450px) and (min-width:1051px){.evolution-filter-grid{grid-template-columns:repeat(3,1fr)}.evolution-search{grid-column:span 2}}
 @media(max-width:1050px){.evolution-filter-grid{grid-template-columns:1fr 1fr}.evolution-search{grid-column:1/-1}.evolution-kpi-grid{grid-template-columns:repeat(2,1fr)}.evolution-hero{align-items:flex-start;flex-direction:column}.evolution-source-card{width:100%;min-width:0}}
 @media(max-width:620px){.evolution-filter-grid,.evolution-kpi-grid{grid-template-columns:1fr}.evolution-toolbar,.evolution-table-footer{align-items:flex-start;flex-direction:column}}
 *{box-sizing:border-box}
