@@ -1834,7 +1834,6 @@ function evolutionHasHistoricalOffense(row){
 }
 
 function evolutionMetrics(row){
-  const allMetrics=state.evolutionWeeks.map(({week})=>row.weeks?.[week]);
   const comparable=state.evolutionWeeks.slice(-6).map(w=>w.week);
   const metrics=comparable.map(week=>row.weeks?.[week]);
   const qualified=metrics.map(metric=>evolutionIsAboveTarget(metric));
@@ -1842,13 +1841,12 @@ function evolutionMetrics(row){
   const missScans=metrics.map((metric,index)=>qualified[index]?Number(metric?.missScan)||0:0);
   const presence=qualified.filter(Boolean).length;
   const total=missScans.reduce((sum,value)=>sum+value,0);
-  const missScanTotal=allMetrics.reduce((sum,metric)=>sum+(Number(metric?.missScan)||0),0);
   const peak=Math.max(0,...missScans);
   const previous=rates.slice(0,3).reduce((sum,value)=>sum+value,0);
   const recent=rates.slice(3).reduce((sum,value)=>sum+value,0);
   const trend=presence<2?'—':recent>previous*1.1?'Piora aparente':recent<previous*.9?'Melhora aparente':'Estável';
   const status=presence>=5?'Crônico':presence>=3?'Recorrente':presence===2?'Intermitente':presence===1?'Pontual':'Sem classificação';
-  return {presence,total,missScanTotal,peak,trend,status};
+  return {presence,total,peak,trend,status};
 }
 
 function evolutionOperation(row){
@@ -1903,7 +1901,7 @@ function filteredEvolution(){
       &&(!trend||metrics.trend===trend)
       &&(!treatment||currentTreatment===treatment)
       &&(!search||`${row.colaborador} ${row.opsid} ${row.lider} ${row.setor}`.toLowerCase().includes(search));
-  }).sort((a,b)=>Number(b.weeks?.[latest]?.share||0)-Number(a.weeks?.[latest]?.share||0)||evolutionMetrics(b).missScanTotal-evolutionMetrics(a).missScanTotal||String(a.colaborador).localeCompare(String(b.colaborador),'pt-BR'));
+  }).sort((a,b)=>Number(b.weeks?.[latest]?.share||0)-Number(a.weeks?.[latest]?.share||0)||evolutionMetrics(b).total-evolutionMetrics(a).total||String(a.colaborador).localeCompare(String(b.colaborador),'pt-BR'));
 }
 
 function renderEvolution(){
@@ -1927,7 +1925,7 @@ function renderEvolution(){
     ?`${rows.length} ofensor(es) acima de ${fmtPct(state.evolutionTarget)} • ${weeks[0].week} a ${latest}`
     :'Aguardando dados semanais...';
 
-  $('evolutionHead').innerHTML=`<tr><th>Colaborador</th><th>Operação</th>${weeks.map(w=>`<th>${escapeHtml(w.week)}</th>`).join('')}<th>Aparições Miss Scan</th><th>Tendência</th><th>Status</th><th>Tratativa atual</th></tr>`;
+  $('evolutionHead').innerHTML=`<tr><th>Colaborador</th><th>Operação</th>${weeks.map(w=>`<th>${escapeHtml(w.week)}</th>`).join('')}<th>Aparições</th><th>Tendência</th><th>Status</th><th>Tratativa atual</th></tr>`;
   $('evolutionBody').innerHTML=rows.map(row=>{
     const item=evolutionMetrics(row);
     const weekCells=weeks.map(week=>{
@@ -1939,7 +1937,7 @@ function renderEvolution(){
       <td><div class="evolution-name">${escapeHtml(row.colaborador)}</div><div class="evolution-sub">${escapeHtml(row.opsid||'Sem OpsID')} • ${escapeHtml(row.turno)} • ${escapeHtml(row.lider)}</div></td>
       <td><span class="evolution-pill ${evolutionOperation(row)==='EXPEDIÇÃO'?'evolution-neutral':'evolution-warning'}">${escapeHtml(evolutionOperation(row))}</span></td>
       ${weekCells}
-      <td class="evolution-week"><strong>${fmtInt.format(item.missScanTotal)}</strong><span>${item.presence} sem. acima do target</span></td>
+      <td><strong>${item.presence}</strong></td>
       <td><span class="evolution-pill ${evolutionTone(item.trend)}">${escapeHtml(item.trend)}</span></td>
       <td><span class="evolution-pill ${evolutionTone(item.status)}">${escapeHtml(item.status)}</span></td>
       <td><span class="evolution-pill evolution-action ${evolutionTone(action)}">${escapeHtml(action)}</span></td>
@@ -1995,7 +1993,7 @@ function exportEvolution(){
       out[`${week}_percentual`]=row.weeks?.[week]?.share??'';
       out[`${week}_volume_expedido`]=row.weeks?.[week]?.volume??'';
     });
-    return {...out,aparicoes_miss_scan:metrics.missScanTotal,semanas_acima_target:metrics.presence,total_acima_target:metrics.total,pico_acima_target:metrics.peak,tendencia:metrics.trend,status:metrics.status,tratativa_atual:evolutionTreatment(row)};
+    return {...out,aparicoes:metrics.presence,total:metrics.total,pico:metrics.peak,tendencia:metrics.trend,status:metrics.status,tratativa_atual:evolutionTreatment(row)};
   });
   exportCSV(rows,'matriz_evolucao_ofensores_mg4.csv');
 }
