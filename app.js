@@ -1064,7 +1064,7 @@ function showModal(){const m=$('treatmentModal');m.classList.add('open');m.setAt
 function closeModal(){const m=$('treatmentModal');m.classList.remove('open');m.setAttribute('aria-hidden','true');document.body.style.overflow='';state.treatmentCurrent=null;state.treatmentMode=null}
 function modalHeader(row,cycle,label){$('modalEyebrow').textContent=`${label} • CICLO ${cycle}`;$('modalTitle').textContent=row.colaborador;$('modalMeta').textContent=`Indicador ${fmtPct(row.indicador)} • ${row.turno} • ${row.setor} • Líder: ${row.lider}`}
 
-window.openDialogue=(id,cycle)=>{
+window.openDialogue=async(id,cycle)=>{
   const row=historyTreatmentRow(id);if(!row)return;
   state.treatmentCurrent=id;state.treatmentMode='dialogue';state.treatmentCycle=cycle;
   const d=progressFor(id)[`dialogue${cycle}`]||{};
@@ -1074,7 +1074,9 @@ window.openDialogue=(id,cycle)=>{
   $('dialogueResponsible').value=d.responsible||'';
   $('dialogueInstructorEmail').value=d.instructorEmail||localStorage.getItem('lastTreatmentInstructorEmail')||'';
   $('dialogueNotes').value=d.notes||'';
+  $('dialogueEvidenceFile').value='';
   showModal();
+  await refreshDialogueEvidenceStatus();
 };
 
 window.openRecycle=async(id,cycle)=>{
@@ -1137,6 +1139,36 @@ function emailRecipientsDescription(row,instructorEmail){
   return list.join(' • ')||'nenhum destinatário válido';
 }
 
+async function refreshDialogueEvidenceStatus(){
+  const row=modalRow();
+  if(!row||state.treatmentMode!=='dialogue')return [];
+  const c=state.treatmentCycle,d=progressFor(row.id)[`dialogue${c}`];
+  const items=(await mergedTreatmentFiles(row.id,c))
+    .filter(item=>item.kind==='dialogue-evidence')
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  d.evidenceCount=items.length;
+  d.evidenceId=items[0]?.id||'';
+  d.evidenceName=items[0]?.name||'';
+  saveTreatmentProgress();
+  $('dialogueEvidenceStatus').innerHTML=items.map(item=>`<div class="evidence-item"><div><strong>${escapeHtml(item.name)}</strong><small>Foto do diálogo • ${Math.max(1,Math.round((item.size||0)/1024))} KB • ${brDate(item.createdAt)}${item.shared?' • compartilhada':' • somente neste navegador'}</small></div><div class="evidence-item-actions"><button onclick="viewTreatmentFile('${item.id}')">Visualizar</button><button onclick="deleteTreatmentFile('${item.id}')">Excluir</button></div></div>`).join('')||'<div class="empty">Nenhuma foto anexada. A foto é obrigatória para concluir o diálogo.</div>';
+  return items;
+}
+
+function showPendingDialogueEvidence(file){
+  if(!file)return refreshDialogueEvidenceStatus();
+  if(!String(file.type||'').startsWith('image/')){
+    $('dialogueEvidenceFile').value='';
+    alert('Selecione uma foto nos formatos JPG, PNG ou WEBP.');
+    return refreshDialogueEvidenceStatus();
+  }
+  if(file.size>4*1024*1024){
+    $('dialogueEvidenceFile').value='';
+    alert('A foto ultrapassa 4 MB. Reduza o arquivo antes de anexar.');
+    return refreshDialogueEvidenceStatus();
+  }
+  $('dialogueEvidenceStatus').innerHTML=`<div class="evidence-item"><div><strong>${escapeHtml(file.name)}</strong><small>Foto selecionada • ${Math.max(1,Math.round(file.size/1024))} KB • será enviada ao salvar</small></div></div>`;
+}
+
 async function saveDialogue(){
   const row=modalRow();if(!row)return;
   const p=progressFor(row.id),c=state.treatmentCycle,d=p[`dialogue${c}`];
@@ -1146,12 +1178,34 @@ async function saveDialogue(){
   d.instructorEmail=$('dialogueInstructorEmail').value.trim().toLowerCase();
   d.notes=$('dialogueNotes').value.trim();
 
-  if(!d.date||!d.responsible||!d.notes||!d.instructorEmail)
-    return alert('Preencha data, instrutor/responsável, e-mail do instrutor e registro do diálogo.');
+  if(!d.date||!d.responsible||!d.instructorEmail)
+    return alert('Preencha data, instrutor/responsável e e-mail do instrutor.');
   if(!isValidTreatmentEmail(d.instructorEmail))
     return alert('Informe um e-mail válido para o instrutor.');
 
+  const selectedPhoto=$('dialogueEvidenceFile').files?.[0]||null;
+  const existingPhotos=await mergedTreatmentFiles(row.id,c);
+  const hasExistingPhoto=existingPhotos.some(item=>item.kind==='dialogue-evidence');
+  if(!selectedPhoto&&!hasExistingPhoto)
+    return alert('Anexe a foto do diálogo realizado pelo líder. A foto é obrigatória para salvar a evidência.');
+
   localStorage.setItem('lastTreatmentInstructorEmail',d.instructorEmail);
+
+  let photoSyncError=null;
+  if(selectedPhoto){
+    const evidenceId=crypto.randomUUID();
+    const record={
+      id:evidenceId,treatmentId:row.id,cycle:c,kind:'dialogue-evidence',
+      name:selectedPhoto.name,type:selectedPhoto.type||'image/jpeg',size:selectedPhoto.size,
+      createdAt:nowISO(),blob:selectedPhoto
+    };
+    await dbPut(record);
+    d.evidenceId=evidenceId;
+    d.evidenceName=selectedPhoto.name;
+    d.evidenceCount=(Number(d.evidenceCount)||0)+1;
+    addTreatmentHistory(row.id,`Foto anexada — ${c}º diálogo`,selectedPhoto.name);
+    try{await saveSharedTreatmentFile(record)}catch(error){photoSyncError=error}
+  }
 
   d.done=true;
   d.updatedAt=nowISO();
@@ -1165,7 +1219,7 @@ async function saveDialogue(){
       cycle:c,
       instructorName:d.responsible,
       instructorEmail:d.instructorEmail,
-      details:{date:d.date,notes:d.notes}
+      details:{date:d.date,notes:d.notes||'Evidência fotográfica anexada.',evidenceName:d.evidenceName||''}
     });
     d.emailQueued=true;
     d.emailSent=false;
@@ -1185,6 +1239,7 @@ async function saveDialogue(){
 
   saveTreatmentProgress();
   await syncTreatmentOrWarn(row.id);
+  if(photoSyncError)alert(`O diálogo foi salvo neste navegador, mas a foto ainda não foi compartilhada:\n${photoSyncError.message}`);
   closeModal();
   renderTreatments();
 }
@@ -1305,6 +1360,14 @@ async function listSharedTreatmentFiles(treatmentId,cycle){
   if(!response.ok||!data.ok)throw new Error(data.error||`Falha ao listar arquivos compartilhados (${response.status}).`);
   return data.items||[];
 }
+async function mergedTreatmentFiles(treatmentId,cycle){
+  const localItems=await dbList(treatmentId,cycle);
+  let remoteItems=[];
+  try{remoteItems=await listSharedTreatmentFiles(treatmentId,cycle)}catch(error){console.warn('TREATMENT_FILES_READ_FAILED',error)}
+  const merged=new Map(remoteItems.map(item=>[item.id,{...item,shared:true}]));
+  localItems.forEach(item=>merged.set(item.id,{...merged.get(item.id),...item,local:true}));
+  return [...merged.values()];
+}
 
 async function addEvidenceFile(file){
   const row=modalRow();if(!row||!file)return;const c=state.treatmentCycle,id=crypto.randomUUID();
@@ -1321,12 +1384,7 @@ async function addEvidenceFile(file){
 }
 async function refreshEvidenceList(){
   const row=modalRow();if(!row||state.treatmentMode!=='recycle')return;
-  const localItems=await dbList(row.id,state.treatmentCycle);
-  let remoteItems=[];
-  try{remoteItems=await listSharedTreatmentFiles(row.id,state.treatmentCycle)}catch(error){console.warn('TREATMENT_FILES_READ_FAILED',error)}
-  const merged=new Map(remoteItems.map(item=>[item.id,{...item,shared:true}]));
-  localItems.forEach(item=>merged.set(item.id,{...merged.get(item.id),...item,local:true}));
-  const allItems=[...merged.values()];
+  const allItems=await mergedTreatmentFiles(row.id,state.treatmentCycle);
   const items=allItems.filter(x=>x.kind==='evidence').sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   $('evidenceBadge').textContent=items.length;const r=progressFor(row.id)[`recycle${state.treatmentCycle}`];r.evidenceCount=items.length;
   allItems.filter(x=>x.kind==='signature').forEach(x=>{
@@ -1349,10 +1407,12 @@ window.viewTreatmentFile=async id=>{
 window.deleteTreatmentFile=async id=>{
   if(!confirm('Excluir este arquivo para todos os usuários?'))return;
   try{
+    const mode=state.treatmentMode;
     await sharedTreatmentRequest('/api/tratativas-evidencia',{action:'delete',id},{promptPin:true});
     await dbDelete(id);
     const row=modalRow();
-    await refreshEvidenceList();renderRecycleChecklist();
+    if(mode==='dialogue')await refreshDialogueEvidenceStatus();
+    else{await refreshEvidenceList();renderRecycleChecklist()}
     if(row){addTreatmentHistory(row.id,'Evidência removida',id);await syncTreatmentState(row.id,{promptPin:false})}
   }catch(error){alert(`O arquivo não foi excluído:\n${error.message}`)}
 };
@@ -2534,6 +2594,7 @@ async function boot(){
   $('closeTreatmentModal').addEventListener('click',closeModal);
   $('treatmentModal').addEventListener('click',e=>{if(e.target===$('treatmentModal'))closeModal()});
   $('saveDialogueBtn').addEventListener('click',saveDialogue);
+  $('dialogueEvidenceFile').addEventListener('change',e=>showPendingDialogueEvidence(e.target.files?.[0]||null));
   $('saveRecycleInfoBtn').addEventListener('click',saveRecycleInfo);
   $('completeRecycleBtn').addEventListener('click',completeRecycle);
   $('evidenceFile').addEventListener('change',async e=>{const f=e.target.files[0];if(f)await addEvidenceFile(f);e.target.value=''});

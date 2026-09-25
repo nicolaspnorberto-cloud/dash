@@ -152,6 +152,9 @@ export async function POST(request) {
 
   const now = new Date().toISOString();
   const createdAt = String(body.createdAt || now);
+  const kind = ['evidence', 'signature', 'dialogue-evidence'].includes(body.kind)
+    ? body.kind
+    : 'evidence';
   await deleteFile(id);
   await db().prepare(`
     INSERT INTO misscan_treatment_files
@@ -161,7 +164,7 @@ export async function POST(request) {
     id,
     treatmentId,
     cycle,
-    body.kind === 'signature' ? 'signature' : 'evidence',
+    kind,
     body.signatureType ? String(body.signatureType).slice(0, 40) : null,
     String(body.name || 'arquivo').slice(0, 240),
     String(body.type || 'application/octet-stream').slice(0, 120),

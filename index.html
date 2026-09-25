@@ -549,11 +549,20 @@
             <label>Data<input id="dialogueDate" type="date" /></label>
             <label>Instrutor / responsável<input id="dialogueResponsible" type="text" placeholder="Nome de quem realizou o diálogo" /></label>
             <label class="span-2">E-mail do instrutor<input id="dialogueInstructorEmail" type="email" placeholder="nome@shopee.com" /></label>
-            <label class="span-2">Registro do diálogo<textarea id="dialogueNotes" rows="6" placeholder="Descreva o diálogo de performance, orientação e combinados..."></textarea></label>
+            <div class="span-2 evidence-upload-zone dialogue-photo-zone">
+              <div>
+                <strong>Foto do diálogo realizado pelo líder *</strong>
+                <p>A foto é a evidência obrigatória. Formatos: JPG, PNG ou WEBP, até 4 MB.</p>
+              </div>
+              <label class="treat-upload-btn" for="dialogueEvidenceFile">Anexar foto</label>
+              <input id="dialogueEvidenceFile" type="file" accept="image/png,image/jpeg,image/webp" capture="environment" hidden />
+            </div>
+            <div id="dialogueEvidenceStatus" class="span-2 evidence-list"></div>
+            <label class="span-2">Registro do diálogo (opcional)<textarea id="dialogueNotes" rows="4" placeholder="Se necessário, descreva orientações e combinados..."></textarea></label>
           </div>
           <div class="email-notice">Ao concluir, o líder do colaborador e o instrutor receberão um e-mail automático.</div>
           <div class="modal-actions">
-            <button id="saveDialogueBtn" class="primary-btn">Salvar e marcar realizado</button>
+            <button id="saveDialogueBtn" class="primary-btn">Salvar foto e marcar realizado</button>
           </div>
         </div>
 
