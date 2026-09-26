@@ -1012,8 +1012,12 @@ function recycleLabel(r){
 }
 function recycleButton(row,c){
   const p=progressFor(row.id),r=p[`recycle${c}`],enabled=c<=p.requiredCycle && !!p[`dialogue${c}`]?.done;
-  if(!enabled)return `<button class="step-btn disabled" disabled>—</button>`;
   const [label,cls]=recycleLabel(r);
+  const hasRecord=!!r.done||!!r.infoSaved||Number(r.evidenceCount||0)>0||!!r.signatures?.colaborador||!!r.signatures?.responsavel;
+  // A célula deve refletir uma reciclagem registrada pela coluna Ações mesmo
+  // quando o diálogo ainda está pendente. O bloqueio permanece apenas para
+  // iniciar uma reciclagem nova pelo fluxo principal.
+  if(!enabled&&!hasRecord)return `<button class="step-btn disabled" disabled>—</button>`;
   return `<button class="step-btn ${cls}" onclick="openRecycle('${row.id}',${c})">${label}</button>`;
 }
 
