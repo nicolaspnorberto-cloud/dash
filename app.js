@@ -722,7 +722,7 @@ function historyTreatmentActionsHtml(id){
   const p=progressFor(id),c=p.requiredCycle,d=p[`dialogue${c}`]||{},r=p[`recycle${c}`]||{};
   return `<div class="history-treatment-actions">
     <button class="mini-action" onclick="openDialogue('${id}',${c})">${d.done?'Diálogo realizado':'Realizar diálogo'}</button>
-    <button class="mini-action" ${!d.done?'disabled':''} onclick="openRecycle('${id}',${c})">${r.done?'Reciclagem realizada':'Realizar reciclagem'}</button>
+    <button class="mini-action" onclick="openRecycle('${id}',${c})">${r.done?'Reciclagem realizada':'Realizar reciclagem'}</button>
     <button class="mini-action" ${!cycleComplete(p,c)||c>=3?'disabled':''} onclick="registerRecurrence('${id}')">+ Reincidência</button>
   </div>`;
 }
