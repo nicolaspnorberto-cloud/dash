@@ -60,7 +60,19 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname.startsWith('/api/')) return await routeApi(request);
-      return env.ASSETS.fetch(request);
+      const asset = await env.ASSETS.fetch(request);
+      const response = new Response(asset.body, asset);
+
+      // O dashboard é aberto por vários computadores e alguns navegadores
+      // mantinham o HTML/JavaScript antigo por horas. Revalidar os arquivos da
+      // aplicação garante que todos recebam a mesma versão após um deploy.
+      if (url.pathname === '/' || url.pathname.endsWith('.html')) {
+        response.headers.set('cache-control', 'no-store, max-age=0, must-revalidate');
+      } else if (/\.(?:js|css)$/i.test(url.pathname)) {
+        response.headers.set('cache-control', 'no-cache, max-age=0, must-revalidate');
+      }
+
+      return response;
     } catch (error) {
       console.error('WORKER_REQUEST_ERROR', error);
       return json({
