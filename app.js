@@ -1094,7 +1094,20 @@ window.openRecycle=async(id,cycle)=>{
   $('recycleCause').value=r.cause||'';
   $('recycleOrientation').value=r.orientation||'';
   $('recycleNotes').value=r.notes||'';
-  await refreshEvidenceList();refreshSignatureStatus();renderTreatmentHistory();renderRecycleChecklist();prepareSignatureCanvas();showModal();
+  // Abre a reciclagem imediatamente. A consulta de evidências pode depender
+  // do IndexedDB e da API compartilhada; ela nunca deve impedir o clique de
+  // abrir o modal nos computadores dos líderes.
+  showModal();
+  refreshSignatureStatus();renderTreatmentHistory();renderRecycleChecklist();
+  requestAnimationFrame(prepareSignatureCanvas);
+  try{
+    await refreshEvidenceList();
+    renderRecycleChecklist();
+  }catch(error){
+    console.warn('RECYCLE_EVIDENCE_INITIAL_LOAD_FAILED',error);
+    $('evidenceBadge').textContent=Number(r.evidenceCount)||0;
+    $('evidenceList').innerHTML='<div class="empty">A reciclagem foi aberta. As evidências poderão ser carregadas novamente nesta aba.</div>';
+  }
 };
 
 
