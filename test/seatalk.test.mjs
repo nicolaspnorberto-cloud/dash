@@ -85,8 +85,7 @@ test('sendSeatalkText resolve o formato atual da lista de grupos do SeaTalk', as
     if (url.includes('/messaging/v2/group_chat/info')) {
       return new Response(JSON.stringify({
         code: 0,
-        group_id: 'group-current',
-        group_name: 'TESTE BOT'
+        group: { group_name: 'TESTE BOT' }
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }
     return new Response(JSON.stringify({ code: 0, message_id: 'message-current' }), {
