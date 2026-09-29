@@ -8,6 +8,9 @@
   "observability": {
     "enabled": false
   },
+  "triggers": {
+    "crons": ["0 16 * * *"]
+  },
   "assets": {
     "directory": ".",
     "binding": "ASSETS",

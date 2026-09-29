@@ -11,6 +11,7 @@ import * as tratativas from '../api/tratativas.mjs';
 import * as tratativasEvidencia from '../api/tratativas-evidencia.mjs';
 import * as seatalk from '../api/seatalk.mjs';
 import * as operations from '../api/operations.mjs';
+import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
 
 const direct = new Map([
   ['dados', dados],
@@ -82,5 +83,14 @@ export default {
         error: error?.message || 'Falha interna no dashboard.'
       }, Number(error?.status || 500));
     }
+  },
+
+  async scheduled(_event, env, executionCtx) {
+    configureRuntimeEnv(env, new Request('https://dash.nicolas-pnorberto.workers.dev/'));
+    executionCtx.waitUntil(
+      sendDailyDialogueReminder().catch(error => {
+        console.error('SEATALK_DAILY_DIALOGUE_REMINDER_ERROR', error);
+      })
+    );
   }
 };

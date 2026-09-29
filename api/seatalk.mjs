@@ -4,6 +4,7 @@ import {
   seatalkConfigured,
   sendSeatalkText
 } from '../lib/seatalk.mjs';
+import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
 
 function assertWritePin(request) {
   const expected = envValue('TREATMENT_WRITE_PIN');
@@ -37,6 +38,9 @@ export async function POST(request) {
     if (action === 'status') {
       const group = await resolveSeatalkGroup();
       return json({ ok: true, configured: true, group: group.name });
+    }
+    if (action === 'daily-dialogues') {
+      return json(await sendDailyDialogueReminder({ force: true }));
     }
     if (action !== 'test') {
       return json({ ok: false, error: 'Ação inválida.' }, 400);
