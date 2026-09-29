@@ -58,6 +58,52 @@ test('sendSeatalkText autentica, resolve o grupo e envia texto', async () => {
   assert.equal(calls[2].options.headers.Authorization, 'Bearer token');
 });
 
+test('sendSeatalkText resolve o formato atual da lista de grupos do SeaTalk', async () => {
+  configureRuntimeEnv({
+    SEATALK_APP_ID: 'app-id-current',
+    SEATALK_APP_SECRET: 'app-secret-current',
+    SEATALK_GROUP_NAME: 'TESTE BOT'
+  });
+  resetSeatalkCachesForTests();
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.endsWith('/auth/app_access_token')) {
+      return new Response(JSON.stringify({
+        code: 0,
+        app_access_token: 'token-current',
+        expire: Math.floor(Date.now() / 1000) + 3600
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.includes('/messaging/v2/group_chat/joined')) {
+      return new Response(JSON.stringify({
+        code: 0,
+        next_cursor: '',
+        joined_group_chats: { group_id: ['group-current'] }
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.includes('/messaging/v2/group_chat/info')) {
+      return new Response(JSON.stringify({
+        code: 0,
+        group_id: 'group-current',
+        group_name: 'TESTE BOT'
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ code: 0, message_id: 'message-current' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  const result = await sendSeatalkText('Teste do formato atual', { fetchImpl });
+  assert.equal(result.ok, true);
+  assert.equal(result.group, 'TESTE BOT');
+  assert.equal(calls.length, 4);
+  assert.match(calls[2].url, /group_chat\/info\?group_id=group-current/);
+  const sent = JSON.parse(calls[3].options.body);
+  assert.equal(sent.group_id, 'group-current');
+});
+
 test('treatmentMessage contém os campos operacionais principais', () => {
   const message = treatmentMessage({
     eventType: 'DIALOGO',
