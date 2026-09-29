@@ -53,4 +53,5 @@ test('mensagem apresenta cobrança, líder e total sem quantidade de pacotes', (
 test('mensagem confirma quando não existem pendências', () => {
   const messages = dialogueReminderMessages([], { dateKey: '2026-09-29' });
   assert.match(messages[0], /Não há diálogos de performance pendentes/);
+  assert.match(messages[0], /Período analisado: D-1/);
 });
