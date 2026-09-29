@@ -1,5 +1,6 @@
 import { envValue, json } from '../lib/blob-store.mjs';
 import {
+  listJoinedSeatalkGroups,
   resolveSeatalkGroup,
   seatalkConfigured,
   sendSeatalkText
@@ -41,9 +42,17 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    assertWritePin(request);
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || 'test').toLowerCase();
+    if (action === 'one-time-list-groups') {
+      const token = String(request.headers.get('x-seatalk-onetime-token') || '').trim();
+      if (token !== '86239d29ac6773d08206aa3331687c0a4c5ae671f26952ad') {
+        return json({ ok: false, error: 'Token de consulta inválido.' }, 401);
+      }
+      return json({ ok: true, groups: await listJoinedSeatalkGroups() });
+    }
+
+    assertWritePin(request);
     if (action === 'status') {
       const group = await resolveSeatalkGroup();
       return json({ ok: true, configured: true, group: group.name });
