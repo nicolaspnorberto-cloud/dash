@@ -36,18 +36,28 @@ test('lista somente T2 acima do target, com líder e diálogo pendente', () => {
   assert.equal(rows[0].leader, 'Líder A');
 });
 
-test('mensagem apresenta cobrança, líder e total sem quantidade de pacotes', () => {
-  const messages = dialogueReminderMessages([{
-    id: 'PESSOA TESTE', collaborator: 'PESSOA TESTE', cycle: 2,
-    indicator: 1.24, missScan: 12, turn: 'T2', sector: 'Outbound', leader: 'Líder Teste'
-  }], { dateKey: '2026-09-29', periodLabel: '23/09/2026 a 29/09/2026' });
+test('mensagem agrupa por líder e orienta o envio do PDF', () => {
+  const messages = dialogueReminderMessages([
+    {
+      id: 'PESSOA TESTE', collaborator: 'PESSOA TESTE', cycle: 2,
+      indicator: 1.24, missScan: 12, turn: 'T2', sector: 'Outbound', leader: 'Líder Teste'
+    },
+    {
+      id: 'OUTRA PESSOA', collaborator: 'OUTRA PESSOA', cycle: 1,
+      indicator: 1.02, missScan: 10, turn: 'T2', sector: 'Inbound', leader: 'Líder Teste'
+    }
+  ], { dateKey: '2026-09-29', periodLabel: '28/09/2026 a 28/09/2026' });
   assert.equal(messages.length, 1);
   assert.match(messages[0], /PESSOA TESTE/);
-  assert.match(messages[0], /2º diálogo pendente/);
+  assert.match(messages[0], /OUTRA PESSOA/);
+  assert.equal((messages[0].match(/👤 Líder: Líder Teste/g) || []).length, 1);
+  assert.match(messages[0], /2º diálogo/);
   assert.match(messages[0], /Líder: Líder Teste/);
   assert.match(messages[0], /somente colaboradores do turno T2 com líder identificado/);
-  assert.match(messages[0], /Total: 1 colaborador/);
+  assert.match(messages[0], /enviar o PDF juntamente com o nome do colaborador/);
+  assert.match(messages[0], /Total: 2 diálogo\(s\) pendente\(s\)/);
   assert.doesNotMatch(messages[0], /Miss Scan:/);
+  assert.doesNotMatch(messages[0], /registrar.*dashboard/i);
 });
 
 test('mensagem confirma quando não existem pendências', () => {
