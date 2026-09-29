@@ -39,17 +39,9 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    assertWritePin(request);
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || 'test').toLowerCase();
-    if (action === 'one-time-official-test') {
-      const token = String(request.headers.get('x-seatalk-onetime-token') || '').trim();
-      if (token !== 'ad5b35ee21eefff00e3ed5263c6fe72b26c960d0ae23efc8') {
-        return json({ ok: false, error: 'Token de teste inválido.' }, 401);
-      }
-      return json(await sendDailyDialogueReminder({ force: false }));
-    }
-
-    assertWritePin(request);
     if (action === 'status') {
       const group = await resolveSeatalkGroup();
       return json({ ok: true, configured: true, group: group.name });
