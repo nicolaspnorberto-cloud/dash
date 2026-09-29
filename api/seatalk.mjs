@@ -1,8 +1,8 @@
 import { envValue, json } from '../lib/blob-store.mjs';
 import {
-  listJoinedSeatalkGroups,
   resolveSeatalkGroup,
   seatalkConfigured,
+  seatalkDestinationName,
   sendSeatalkText
 } from '../lib/seatalk.mjs';
 import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
@@ -27,6 +27,7 @@ export async function GET() {
     ok: true,
     configured: seatalkConfigured(),
     route: '/api/seatalk',
+    destination: seatalkDestinationName(),
     dailyReminder: {
       enabled: true,
       start: '13:00',
@@ -44,14 +45,6 @@ export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || 'test').toLowerCase();
-    if (action === 'one-time-list-groups') {
-      const token = String(request.headers.get('x-seatalk-onetime-token') || '').trim();
-      if (token !== '86239d29ac6773d08206aa3331687c0a4c5ae671f26952ad') {
-        return json({ ok: false, error: 'Token de consulta inválido.' }, 401);
-      }
-      return json({ ok: true, groups: await listJoinedSeatalkGroups() });
-    }
-
     assertWritePin(request);
     if (action === 'status') {
       const group = await resolveSeatalkGroup();
