@@ -9,6 +9,7 @@ import * as emailQueue from '../api/email-queue.mjs';
 import * as refreshQueue from '../api/refresh-queue.mjs';
 import * as tratativas from '../api/tratativas.mjs';
 import * as tratativasEvidencia from '../api/tratativas-evidencia.mjs';
+import * as seatalk from '../api/seatalk.mjs';
 import * as operations from '../api/operations.mjs';
 
 const direct = new Map([
@@ -21,7 +22,8 @@ const direct = new Map([
   ['email-queue', emailQueue],
   ['refresh-queue', refreshQueue],
   ['tratativas', tratativas],
-  ['tratativas-evidencia', tratativasEvidencia]
+  ['tratativas-evidencia', tratativasEvidencia],
+  ['seatalk', seatalk]
 ]);
 
 const operationNames = new Set([
@@ -35,7 +37,7 @@ const operationNames = new Set([
   'sync'
 ]);
 
-async function routeApi(request) {
+async function routeApi(request, executionCtx) {
   const url = new URL(request.url);
   const match = /^\/api\/([^/]+)\/?$/.exec(url.pathname);
   if (!match) return json({ ok: false, error: 'Rota de API não encontrada.' }, 404);
@@ -51,15 +53,15 @@ async function routeApi(request) {
     response.headers.set('Allow', Object.keys(module).filter(key => /^[A-Z]+$/.test(key)).join(', '));
     return response;
   }
-  return handler(request);
+  return handler(request, executionCtx);
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, executionCtx) {
     configureRuntimeEnv(env, request);
     const url = new URL(request.url);
     try {
-      if (url.pathname.startsWith('/api/')) return await routeApi(request);
+      if (url.pathname.startsWith('/api/')) return await routeApi(request, executionCtx);
       const asset = await env.ASSETS.fetch(request);
       const response = new Response(asset.body, asset);
 

@@ -5,6 +5,7 @@ import {
   normalizeName,
   isShopeeEmail
 } from '../lib/blob-store.mjs';
+import { notifySeatalkTreatment, seatalkConfigured } from '../lib/seatalk.mjs';
 
 const QUEUE_PATH = 'misscan/email-queue.json';
 
@@ -27,7 +28,7 @@ export async function GET() {
   });
 }
 
-export async function POST(request) {
+export async function POST(request, executionCtx) {
   try {
     const payload = await request.json();
     const eventType = String(payload?.eventType || '').toUpperCase();
@@ -132,11 +133,22 @@ export async function POST(request) {
       items: trimQueue(items)
     });
 
+    const seatalkEnabled = seatalkConfigured();
+    if (seatalkEnabled) {
+      const notification = notifySeatalkTreatment(item).catch(error => {
+        console.error('SEATALK_TREATMENT_NOTIFICATION_ERROR', error);
+        return { ok: false, error: error?.message || 'Falha no alerta do SeaTalk.' };
+      });
+      if (typeof executionCtx?.waitUntil === 'function') executionCtx.waitUntil(notification);
+      else await notification;
+    }
+
     return json({
       ok: true,
       queued: true,
       queueId: item.id,
       recipients,
+      seatalkQueued: seatalkEnabled,
       message: 'E-mail registrado na fila automática.'
     });
   } catch (error) {
