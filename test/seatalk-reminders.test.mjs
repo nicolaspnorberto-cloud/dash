@@ -13,7 +13,7 @@ function misscan(name, area = 'Packed TO') {
   };
 }
 
-test('lista somente pessoas acima do target com diálogo pendente', () => {
+test('lista somente T2 acima do target, com líder e diálogo pendente', () => {
   const misscanRows = [
     ...Array.from({ length: 3 }, () => misscan('PESSOA PENDENTE')),
     ...Array.from({ length: 2 }, () => misscan('PESSOA REALIZADA')),
@@ -30,11 +30,10 @@ test('lista somente pessoas acima do target com diálogo pendente', () => {
     }
   });
 
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0].collaborator, 'BASE OPERACIONAL');
-  assert.equal(rows[1].collaborator, 'PESSOA PENDENTE');
-  assert.equal(rows[1].turn, 'T2');
-  assert.equal(rows[1].leader, 'Líder A');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].collaborator, 'PESSOA PENDENTE');
+  assert.equal(rows[0].turn, 'T2');
+  assert.equal(rows[0].leader, 'Líder A');
 });
 
 test('mensagem apresenta cobrança, líder e total sem quantidade de pacotes', () => {
@@ -46,6 +45,7 @@ test('mensagem apresenta cobrança, líder e total sem quantidade de pacotes', (
   assert.match(messages[0], /PESSOA TESTE/);
   assert.match(messages[0], /2º diálogo pendente/);
   assert.match(messages[0], /Líder: Líder Teste/);
+  assert.match(messages[0], /somente colaboradores do turno T2 com líder identificado/);
   assert.match(messages[0], /Total: 1 colaborador/);
   assert.doesNotMatch(messages[0], /Miss Scan:/);
 });
