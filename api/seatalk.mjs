@@ -26,6 +26,13 @@ export async function GET() {
     ok: true,
     configured: seatalkConfigured(),
     route: '/api/seatalk',
+    dailyReminder: {
+      enabled: true,
+      time: '13:00',
+      timezone: 'America/Sao_Paulo',
+      target: 0.88,
+      preset: 'LAST_7'
+    },
     message: 'Integração de alertas do SeaTalk.'
   });
 }
