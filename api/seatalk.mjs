@@ -1,4 +1,4 @@
-import { envValue, json, readJson, writeJson } from '../lib/blob-store.mjs';
+import { envValue, json } from '../lib/blob-store.mjs';
 import {
   resolveSeatalkGroup,
   seatalkConfigured,
@@ -39,32 +39,9 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    assertWritePin(request);
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || 'test').toLowerCase();
-    if (action === 'one-time-test') {
-      const token = String(request.headers.get('x-seatalk-onetime-token') || '').trim();
-      if (token !== '8e0fdf521d35f39c9ff6ff9667695266aba43ada83d03b60') {
-        return json({ ok: false, error: 'Token de teste inválido.' }, 401);
-      }
-
-      const statePath = 'misscan/seatalk-onetime-test.json';
-      const state = await readJson(statePath, null);
-      if (state?.sentAt) {
-        return json({ ok: false, error: 'O teste único já foi enviado.', sentAt: state.sentAt }, 409);
-      }
-
-      const result = await sendSeatalkText(
-        '🐕 Fiscal de Misscan MG4\n\n✅ Teste concluído: o dashboard está conectado ao grupo TESTE BOT.\n\nAs cobranças automáticas de diálogos serão enviadas diariamente às 13h00.'
-      );
-      await writeJson(statePath, {
-        sentAt: new Date().toISOString(),
-        group: result?.group || 'TESTE BOT',
-        messageId: result?.messageId || ''
-      });
-      return json(result);
-    }
-
-    assertWritePin(request);
     if (action === 'status') {
       const group = await resolveSeatalkGroup();
       return json({ ok: true, configured: true, group: group.name });
