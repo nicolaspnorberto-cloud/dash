@@ -28,7 +28,9 @@ export async function GET() {
     route: '/api/seatalk',
     dailyReminder: {
       enabled: true,
-      time: '13:00',
+      start: '13:00',
+      end: '23:00',
+      frequency: 'HOURLY_UNTIL_EVIDENCED',
       timezone: 'America/Sao_Paulo',
       target: 0.88,
       preset: 'YESTERDAY'
