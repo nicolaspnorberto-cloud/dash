@@ -23,6 +23,7 @@ function assertWritePin(request) {
 }
 
 export async function GET() {
+  // Public status confirms the active reminder destination after each deploy.
   return json({
     ok: true,
     configured: seatalkConfigured(),
