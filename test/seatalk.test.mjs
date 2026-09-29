@@ -23,7 +23,7 @@ test('sendSeatalkText autentica, resolve o grupo e envia texto', async () => {
   configureRuntimeEnv({
     SEATALK_APP_ID: 'app-id',
     SEATALK_APP_SECRET: 'app-secret',
-    SEATALK_GROUP_NAME: 'TESTE BOT'
+    SEATALK_OFFICIAL_GROUP_NAME: 'TESTE BOT'
   });
   resetSeatalkCachesForTests();
   const calls = [];
@@ -62,7 +62,7 @@ test('sendSeatalkText resolve o formato atual da lista de grupos do SeaTalk', as
   configureRuntimeEnv({
     SEATALK_APP_ID: 'app-id-current',
     SEATALK_APP_SECRET: 'app-secret-current',
-    SEATALK_GROUP_NAME: 'TESTE BOT'
+    SEATALK_OFFICIAL_GROUP_NAME: 'TESTE BOT'
   });
   resetSeatalkCachesForTests();
   const calls = [];
