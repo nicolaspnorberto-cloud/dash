@@ -31,7 +31,7 @@ export async function GET() {
       time: '13:00',
       timezone: 'America/Sao_Paulo',
       target: 0.88,
-      preset: 'LAST_7'
+      preset: 'YESTERDAY'
     },
     message: 'Integração de alertas do SeaTalk.'
   });
