@@ -48,14 +48,16 @@ test('mensagem agrupa por líder e orienta o envio do PDF', () => {
     }
   ], { dateKey: '2026-09-29', periodLabel: '28/09/2026 a 28/09/2026' });
   assert.equal(messages.length, 1);
+  assert.match(messages[0], /\*\*FISCAL DE MISSCAN — DIÁLOGOS PENDENTES\*\*/);
   assert.match(messages[0], /PESSOA TESTE/);
   assert.match(messages[0], /OUTRA PESSOA/);
-  assert.equal((messages[0].match(/👤 Líder: Líder Teste/g) || []).length, 1);
+  assert.equal((messages[0].match(/👤 \*\*Líder: Líder Teste\*\*/g) || []).length, 1);
+  assert.match(messages[0], /1\. PESSOA TESTE/);
+  assert.match(messages[0], /2\. OUTRA PESSOA/);
   assert.match(messages[0], /2º diálogo/);
   assert.match(messages[0], /Líder: Líder Teste/);
-  assert.match(messages[0], /somente colaboradores do turno T2 com líder identificado/);
   assert.match(messages[0], /enviar o PDF juntamente com o nome do colaborador/);
-  assert.match(messages[0], /Total: 2 diálogo\(s\) pendente\(s\)/);
+  assert.match(messages[0], /\*\*Total: 2 diálogos pendentes\.\*\*/);
   assert.doesNotMatch(messages[0], /Miss Scan:/);
   assert.doesNotMatch(messages[0], /registrar.*dashboard/i);
 });
@@ -63,5 +65,5 @@ test('mensagem agrupa por líder e orienta o envio do PDF', () => {
 test('mensagem confirma quando não existem pendências', () => {
   const messages = dialogueReminderMessages([], { dateKey: '2026-09-29' });
   assert.match(messages[0], /Não há diálogos de performance pendentes/);
-  assert.match(messages[0], /Período analisado: D-1/);
+  assert.match(messages[0], /Referência: \*\*D-1\*\*/);
 });
