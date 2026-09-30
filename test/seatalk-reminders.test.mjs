@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildDialogueStatusRows,
   buildPendingDialogueRows,
+  dialogueClosingMessage,
   dialogueReminderMessages
 } from '../lib/seatalk-reminders.mjs';
 
@@ -52,6 +54,30 @@ test('remove da cobrança quem possui diálogo D-0 na base oficial', () => {
   });
 
   assert.deepEqual(rows.map(row => row.collaborator), ['PESSOA AINDA PENDENTE']);
+});
+
+test('fechamento separa realizados e faltantes', () => {
+  const misscanRows = [
+    ...Array.from({ length: 3 }, () => misscan('PESSOA REALIZADA', 'Packed TO', 'Ops430970')),
+    ...Array.from({ length: 2 }, () => misscan('PESSOA PENDENTE', 'Packed TO', 'Ops999999')),
+    ...Array.from({ length: 95 }, () => misscan('BASE OPERACIONAL', 'Packed TO', 'Ops111111'))
+  ];
+  const rows = buildDialogueStatusRows({
+    misscan: misscanRows,
+    hc: [
+      { norm: 'PESSOA REALIZADA', turno: 'T2', lider_nome: 'Líder A' },
+      { norm: 'PESSOA PENDENTE', turno: 'T2', lider_nome: 'Líder B' }
+    ],
+    completedOpsIds: ['430970']
+  });
+  const message = dialogueClosingMessage(rows, { periodLabel: 'D-1 | 28/09/2026' });
+
+  assert.match(message, /FECHAMENTO DE DIÁLOGOS/);
+  assert.match(message, /Realizados \(1\)/);
+  assert.match(message, /Faltantes \(1\)/);
+  assert.match(message, /PESSOA REALIZADA/);
+  assert.match(message, /PESSOA PENDENTE/);
+  assert.match(message, /Total previsto: 2 \| Realizados: 1 \| Faltantes: 1/);
 });
 
 test('mensagem agrupa por líder e orienta o envio do PDF', () => {

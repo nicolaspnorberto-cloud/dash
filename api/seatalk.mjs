@@ -32,8 +32,9 @@ export async function GET() {
     dailyReminder: {
       enabled: true,
       start: '13:00',
-      end: '22:00',
-      frequency: 'HOURLY_UNTIL_EVIDENCED',
+      end: '23:00',
+      frequency: 'HOURLY_UNTIL_22_AND_CLOSING_AT_23',
+      closingReport: '23:00',
       timezone: 'America/Sao_Paulo',
       target: 0.88,
       preset: 'YESTERDAY'
