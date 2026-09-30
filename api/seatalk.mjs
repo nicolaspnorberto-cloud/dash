@@ -32,7 +32,7 @@ export async function GET() {
     dailyReminder: {
       enabled: true,
       start: '13:00',
-      end: '23:00',
+      end: '22:00',
       frequency: 'HOURLY_UNTIL_EVIDENCED',
       timezone: 'America/Sao_Paulo',
       target: 0.88,
