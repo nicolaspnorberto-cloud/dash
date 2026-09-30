@@ -5,9 +5,9 @@ import {
   dialogueReminderMessages
 } from '../lib/seatalk-reminders.mjs';
 
-function misscan(name, area = 'Packed TO') {
+function misscan(name, area = 'Packed TO', opsid = 'Ops1') {
   return {
-    operator_fail: `[Ops1]${name}`,
+    operator_fail: `[${opsid}]${name}`,
     process_fail: area,
     to_mis_status: ''
   };
@@ -34,6 +34,24 @@ test('lista somente T2 acima do target, com líder e diálogo pendente', () => {
   assert.equal(rows[0].collaborator, 'PESSOA PENDENTE');
   assert.equal(rows[0].turn, 'T2');
   assert.equal(rows[0].leader, 'Líder A');
+});
+
+test('remove da cobrança quem possui diálogo D-0 na base oficial', () => {
+  const misscanRows = [
+    ...Array.from({ length: 3 }, () => misscan('PESSOA REALIZADA HOJE', 'Packed TO', 'Ops430790')),
+    ...Array.from({ length: 2 }, () => misscan('PESSOA AINDA PENDENTE', 'Packed TO', 'Ops999999')),
+    ...Array.from({ length: 95 }, () => misscan('BASE OPERACIONAL', 'Packed TO', 'Ops111111'))
+  ];
+  const rows = buildPendingDialogueRows({
+    misscan: misscanRows,
+    hc: [
+      { norm: 'PESSOA REALIZADA HOJE', turno: 'T2', lider_nome: 'Líder A' },
+      { norm: 'PESSOA AINDA PENDENTE', turno: 'T2', lider_nome: 'Líder A' }
+    ],
+    completedOpsIds: ['430790']
+  });
+
+  assert.deepEqual(rows.map(row => row.collaborator), ['PESSOA AINDA PENDENTE']);
 });
 
 test('mensagem agrupa por líder e orienta o envio do PDF', () => {
