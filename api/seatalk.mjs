@@ -37,7 +37,16 @@ export async function GET() {
       closingReport: '23:00',
       timezone: 'America/Sao_Paulo',
       target: 0.88,
-      preset: 'YESTERDAY'
+      preset: 'YESTERDAY',
+      recurrence: 'NEXT_DAILY_OCCURRENCE',
+      treatmentFlow: [
+        '1º diálogo',
+        '1ª reciclagem',
+        '2º diálogo',
+        '2ª reciclagem',
+        '3º diálogo',
+        '3ª reciclagem'
+      ]
     },
     message: 'Integração de alertas do SeaTalk.'
   });
