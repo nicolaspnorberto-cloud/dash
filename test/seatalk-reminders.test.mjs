@@ -56,6 +56,42 @@ test('remove da cobrança quem possui diálogo D-0 na base oficial', () => {
   assert.deepEqual(rows.map(row => row.collaborator), ['PESSOA AINDA PENDENTE']);
 });
 
+test('nova ocorrência após diálogo realizado avança para a primeira reciclagem', () => {
+  const misscanRows = [
+    ...Array.from({ length: 3 }, () => misscan('PESSOA REINCIDENTE', 'Packed TO', 'Ops430970')),
+    ...Array.from({ length: 97 }, () => misscan('BASE OPERACIONAL', 'Packed TO', 'Ops111111'))
+  ];
+  const rows = buildDialogueStatusRows({
+    misscan: misscanRows,
+    hc: [
+      { norm: 'PESSOA REINCIDENTE', turno: 'T2', lider_nome: 'Líder A' }
+    ],
+    dialogueCompletions: { OPS430970: ['2026-09-29'] },
+    occurrenceDate: '2026-09-29'
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].done, false);
+  assert.equal(rows[0].actionType, 'recycle');
+  assert.equal(rows[0].actionCycle, 1);
+  assert.equal(rows[0].actionLabel, '1ª reciclagem');
+});
+
+test('diálogo feito depois da ocorrência encerra somente aquela ocorrência', () => {
+  const rows = buildDialogueStatusRows({
+    misscan: [
+      ...Array.from({ length: 3 }, () => misscan('PESSOA TRATADA', 'Packed TO', 'Ops430970')),
+      ...Array.from({ length: 97 }, () => misscan('BASE OPERACIONAL', 'Packed TO', 'Ops111111'))
+    ],
+    hc: [{ norm: 'PESSOA TRATADA', turno: 'T2', lider_nome: 'Líder A' }],
+    dialogueCompletions: { OPS430970: ['2026-09-29'] },
+    occurrenceDate: '2026-09-28'
+  });
+
+  assert.equal(rows[0].done, true);
+  assert.equal(rows[0].completedActionLabel, '1º diálogo');
+});
+
 test('fechamento separa realizados e faltantes', () => {
   const misscanRows = [
     ...Array.from({ length: 3 }, () => misscan('PESSOA REALIZADA', 'Packed TO', 'Ops430970')),
@@ -72,7 +108,7 @@ test('fechamento separa realizados e faltantes', () => {
   });
   const message = dialogueClosingMessage(rows, { periodLabel: 'D-1 | 28/09/2026' });
 
-  assert.match(message, /FECHAMENTO DE DIÁLOGOS/);
+  assert.match(message, /FECHAMENTO DE TRATATIVAS/);
   assert.match(message, /Realizados \(1\)/);
   assert.match(message, /Faltantes \(1\)/);
   assert.match(message, /PESSOA REALIZADA/);
@@ -92,7 +128,7 @@ test('mensagem agrupa por líder e orienta o envio do PDF', () => {
     }
   ], { dateKey: '2026-09-29', periodLabel: '28/09/2026 a 28/09/2026' });
   assert.equal(messages.length, 1);
-  assert.match(messages[0], /\*\*FISCAL DE MISSCAN — DIÁLOGOS PENDENTES\*\*/);
+  assert.match(messages[0], /\*\*FISCAL DE MISSCAN — TRATATIVAS PENDENTES\*\*/);
   assert.match(messages[0], /PESSOA TESTE/);
   assert.match(messages[0], /OUTRA PESSOA/);
   assert.equal((messages[0].match(/👤 \*\*Líder: Líder Teste\*\*/g) || []).length, 1);
@@ -101,7 +137,7 @@ test('mensagem agrupa por líder e orienta o envio do PDF', () => {
   assert.match(messages[0], /2º diálogo/);
   assert.match(messages[0], /Líder: Líder Teste/);
   assert.match(messages[0], /enviar o PDF juntamente com o nome do colaborador/);
-  assert.match(messages[0], /\*\*Total: 2 diálogos pendentes\.\*\*/);
+  assert.match(messages[0], /\*\*Total: 2 tratativas pendentes\.\*\*/);
   assert.doesNotMatch(messages[0], /Miss Scan:/);
   assert.doesNotMatch(messages[0], /registrar.*dashboard/i);
 });
