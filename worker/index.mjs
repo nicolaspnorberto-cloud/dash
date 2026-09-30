@@ -30,6 +30,7 @@ const direct = new Map([
 const operationNames = new Set([
   'operations',
   'calendar-sync',
+  'dialogues-sync',
   'gerot-sync',
   'history-reset',
   'ping',
