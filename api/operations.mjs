@@ -7,6 +7,7 @@ import * as ping from '../lib/operations/ping.mjs';
 import * as production from '../lib/operations/producao-sync.mjs';
 import * as snapshot from '../lib/operations/snapshot-sync.mjs';
 import * as sync from '../lib/operations/sync.mjs';
+import * as dialogues from '../lib/operations/dialogues-sync.mjs';
 import { json } from '../lib/blob-store.mjs';
 
 const routes = new Map([
@@ -16,7 +17,8 @@ const routes = new Map([
   ['ping', ping],
   ['producao-sync', production],
   ['snapshot-sync', snapshot],
-  ['sync', sync]
+  ['sync', sync],
+  ['dialogues-sync', dialogues]
 ]);
 
 async function dispatch(request, method) {
