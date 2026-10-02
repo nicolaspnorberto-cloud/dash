@@ -1,0 +1,34 @@
+[
+  {
+    "shipment_id": "TEST_A#LM000001",
+    "lmreceived_date": "2026-10-01",
+    "lmreceived_station": "",
+    "socpacked_tonumber": "",
+    "process_fail": "Packed TO",
+    "to_mis_status": "",
+    "operator_fail": "[OPS123]PESSOA TESTE",
+    "last_status": "",
+    "is_misrouting": "",
+    "shipment_id_original": "TEST_A",
+    "__lm_row_index": 0,
+    "operator_fail_original": "[Ops123]PESSOA TESTE",
+    "attribution_rule_version": "V6.13-DYNAMIC",
+    "attribution_source": "EXPEDICAO_SINGLE_OPERATOR"
+  },
+  {
+    "shipment_id": "TEST_B#LM000002",
+    "lmreceived_date": "2026-10-02",
+    "lmreceived_station": "",
+    "socpacked_tonumber": "",
+    "process_fail": "Extra Parcel",
+    "to_mis_status": "",
+    "operator_fail": "[OPS456]OUTRA PESSOA",
+    "last_status": "",
+    "is_misrouting": "",
+    "shipment_id_original": "TEST_B",
+    "__lm_row_index": 1,
+    "operator_fail_original": "[Ops456]OUTRA PESSOA",
+    "attribution_rule_version": "V6.13-DYNAMIC",
+    "attribution_source": "EXTRA_SINGLE_OPERATOR"
+  }
+]

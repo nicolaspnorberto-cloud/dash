@@ -38,6 +38,8 @@ const state = {
   dateTo: ''
 };
 
+const liveLoads = MisscanDateLoader.createLatest();
+const liveBlockCache = MisscanDateLoader.createCache();
 const $ = id => document.getElementById(id);
 const fmtInt = new Intl.NumberFormat('pt-BR');
 const fmtPct = v => Number.isFinite(v)
@@ -2094,17 +2096,25 @@ function syncPeriodControlsFromMeta(){
   }
 }
 
+function cancelLivePeriodEdit(){
+  liveLoads.cancel();
+  state.liveRefreshing=false;
+  if($('refreshDataBtn'))$('refreshDataBtn').disabled=state.forceRefreshing;
+  setLiveStatus('ok','Período selecionado','Clique em Aplicar período para carregar as datas escolhidas');
+}
+
 function applyPeriodFromControls(){
   const preset=$('datePreset').value||'LAST_7';
-  state.datePreset=preset;
-
   if(preset==='CUSTOM'){
     const from=$('dateFrom').value;
     const to=$('dateTo').value;
     if(!from||!to) return alert('Informe data inicial e data final.');
-    state.dateFrom=from;
-    state.dateTo=to;
+    state.dateFrom=from<=to?from:to;
+    state.dateTo=from<=to?to:from;
+    $('dateFrom').value=state.dateFrom;
+    $('dateTo').value=state.dateTo;
   }
+  state.datePreset=preset;
 
   localStorage.setItem('misscanPeriodPresetV61',state.datePreset);
   localStorage.setItem('misscanPeriodFromV61',state.dateFrom||'');
@@ -2175,38 +2185,8 @@ function sleepV67(ms){
   return new Promise(resolve=>setTimeout(resolve,ms));
 }
 
-async function fetchJsonResilientV68(url,options={},attempts=3){
-  let lastError=null;
-
-  for(let attempt=1;attempt<=attempts;attempt++){
-    try{
-      const response=await fetch(url,options);
-      let data={};
-      try{data=await response.json()}catch{}
-
-      if(response.ok&&data?.ok!==false){
-        return {response,data};
-      }
-
-      const error=new Error(
-        data?.error||`Falha ao carregar dados (${response.status}).`
-      );
-      error.status=response.status;
-      lastError=error;
-
-      if(![429,500,502,503,504].includes(response.status))throw error;
-    }catch(error){
-      lastError=error;
-      const status=Number(error?.status||0);
-      if(status&&![429,500,502,503,504].includes(status))throw error;
-    }
-
-    if(attempt<attempts){
-      await sleepV67(700*attempt+Math.floor(Math.random()*250));
-    }
-  }
-
-  throw lastError||new Error('Falha temporária ao consultar o dashboard.');
+async function fetchJsonResilientV68(url,options={},attempts=2){
+  return MisscanDateLoader.fetchJson(url,options,Math.min(attempts,2));
 }
 
 function dateKeysBetweenV68(from,to,limit=370){
@@ -2224,7 +2204,11 @@ function dateKeysBetweenV68(from,to,limit=370){
 function dataChunksV68(meta={}){
   const from=String(meta.periodStart||'');
   const to=String(meta.periodEnd||'');
-  const range=dateKeysBetweenV68(from,to);
+  // Mantém o período escolhido no cabeçalho, mas consulta apenas o histórico disponível.
+  const start=meta.historyStart&&meta.historyStart>from?meta.historyStart:from;
+  const end=meta.historyEnd&&meta.historyEnd<to?meta.historyEnd:to;
+  const range=dateKeysBetweenV68(start,end,730);
+  if(range.length===730&&range.at(-1)<end)throw new Error('Selecione um período de até 730 dias.');
   const dayStats=meta.dayStats||{};
   const dayOnly=meta.storageGranularity==='day-v1';
   const available=new Set(Array.isArray(meta.days)?meta.days:Object.keys(dayStats));
@@ -2264,22 +2248,32 @@ async function mapLimitV68(items,limit,worker){
   return output;
 }
 
-async function loadLiveDataV68({fresh=false}={}){
-  const baseQuery=periodQuery();
+async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
   const metaUrl=`/api/dados?${baseQuery}&meta_only=1${fresh?'&fresh=1':''}`;
   const {data:head}=await fetchJsonResilientV68(metaUrl,{
     headers:{Accept:'application/json'},
-    cache:'no-store'
-  },3);
+    cache:'no-store',signal
+  },2);
 
+  if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
   const meta=head.meta||{};
+  liveBlockCache.useRevision(JSON.stringify([meta.receivedAt,meta.updatedAt,meta.historyEnd,meta.historyRows]));
   const chunks=dataChunksV68(meta);
+  let completed=0;
   const parts=await mapLimitV68(chunks,3,async chunk=>{
+    if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
+    const key=`${chunk.from}_${chunk.to}`;
+    const cached=!fresh?liveBlockCache.get(key):null;
+    if(cached!==null){completed++;return cached;}
     const query=`from=${encodeURIComponent(chunk.from)}&to=${encodeURIComponent(chunk.to)}&include_hc=0`;
-    const {data}=await fetchJsonResilientV68(`/api/dados?${query}`,{
+    const {data}=await fetchJsonResilientV68(`/api/dados?${query}${fresh?'&fresh=1':''}`,{
       headers:{Accept:'application/json'},
-      cache:'no-store'
-    },3);
+      cache:'no-store',signal
+    },2);
+    if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
+    liveBlockCache.put(key,data.misscan||[]);
+    completed++;
+    setLiveStatus('loading','Carregando período...',`${completed}/${chunks.length} blocos carregados`);
     return data.misscan||[];
   });
 
@@ -2497,7 +2491,11 @@ async function forceRefreshSourcesV67({silent=false}={}){
 }
 
 async function refreshLiveData({silent=false,fresh=false}={}){
-  if(state.liveRefreshing)return;
+  // A seleção mais recente substitui a anterior, inclusive durante o boot.
+  const load=liveLoads.begin();
+  const query=periodQuery();
+  let timedOut=false;
+  const deadline=setTimeout(()=>{timedOut=true;load.cancel();},120000);
   state.liveRefreshing=true;
 
   const btn=$('refreshDataBtn');
@@ -2505,7 +2503,8 @@ async function refreshLiveData({silent=false,fresh=false}={}){
   setLiveStatus('loading','Atualizando...','Consultando histórico dinâmico da LM');
 
   try{
-    const data=await loadLiveDataV68({fresh});
+    const data=await loadLiveDataV68({fresh,signal:load.signal,baseQuery:query});
+    if(!load.current())return false;
 
     state.liveMeta=data.meta||{};
     syncPeriodControlsFromMeta();
@@ -2559,6 +2558,8 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     }
     return true;
   }catch(err){
+    if(!load.current()||(err.name==='AbortError'&&!timedOut))return false;
+    if(timedOut)err=new Error('O período não terminou de carregar em 2 minutos. Tente um intervalo menor.');
     console.error(err);
     setLiveStatus(
       'error',
@@ -2574,8 +2575,12 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     if(!silent)alert(`Falha na atualização automática:\n${err.message}`);
     return false;
   }finally{
-    state.liveRefreshing=false;
-    if(btn)btn.disabled=false;
+    clearTimeout(deadline);
+    load.cancel();
+    if(load.current()){
+      state.liveRefreshing=false;
+      if(btn)btn.disabled=state.forceRefreshing;
+    }
   }
 }
 
@@ -2590,13 +2595,6 @@ async function boot(){
   tabs();loadCalendarPreferences();restorePeriodPreference();
   const initialEvolution=restoreEvolutionSnapshot();
   if(initialEvolution)renderEvolution();
-  refreshEvolution({silent:true});
-  const [initialLive,initialCalendar]=await Promise.all([
-    refreshLiveData({silent:true}),
-    refreshCalendarizationV65({silent:true})
-  ]);
-  await hydrateSharedTreatments();
-  const initialRevision=await checkSourceRevision().catch(()=>'');
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
   $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
   $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV67({silent:false}));
@@ -2604,30 +2602,13 @@ async function boot(){
   $('datePreset').addEventListener('change',()=>{
     state.datePreset=$('datePreset').value;
     if(state.datePreset!=='CUSTOM') applyPeriodFromControls();
+    else cancelLivePeriodEdit();
   });
   ['dateFrom','dateTo'].forEach(id=>$(id).addEventListener('change',()=>{
     $('datePreset').value='CUSTOM';
     state.datePreset='CUSTOM';
+    cancelLivePeriodEdit();
   }));
-  const refreshController=MisscanRefreshPolicy.create({
-    revision:initialLive&&initialCalendar&&initialEvolution?initialRevision:'',
-    visible:()=>!document.hidden,
-    blocked:()=>state.liveRefreshing||state.evolutionRefreshing||state.forceRefreshing,
-    check:checkSourceRevision,
-    refresh:async()=>{
-      const [live,calendar,evolution]=await Promise.all([
-        refreshLiveData({silent:true,fresh:true}),
-        refreshCalendarizationV65({silent:true,fresh:true}),
-        refreshEvolution({silent:true,fresh:true})
-      ]);
-      return live===true&&calendar===true&&evolution===true;
-    },
-    onError:error=>setLiveStatus('error','Falha na verificação',error.message)
-  });
-  setInterval(()=>refreshController.tick(),5*60*1000);
-  document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden)refreshController.tick();
-  });
   document.querySelectorAll('.rank-pill').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.rank-pill').forEach(x=>x.classList.toggle('active',x===b));state.rankArea=b.dataset.rank;renderRanking()}));
 
 
@@ -2683,5 +2664,32 @@ async function boot(){
     updateRateWindowButtons();
     loadAutoRates({silent:false});
   }));
+  refreshEvolution({silent:true});
+  const [initialLive,initialCalendar]=await Promise.all([
+    refreshLiveData({silent:true}),
+    refreshCalendarizationV65({silent:true})
+  ]);
+  await hydrateSharedTreatments();
+  const initialRevision=await checkSourceRevision().catch(()=>'');
+  const refreshController=MisscanRefreshPolicy.create({
+    revision:initialLive&&initialCalendar&&initialEvolution?initialRevision:'',
+    visible:()=>!document.hidden,
+    blocked:()=>state.liveRefreshing||state.evolutionRefreshing||state.forceRefreshing,
+    check:checkSourceRevision,
+    refresh:async()=>{
+      const [live,calendar,evolution]=await Promise.all([
+        refreshLiveData({silent:true,fresh:true}),
+        refreshCalendarizationV65({silent:true,fresh:true}),
+        refreshEvolution({silent:true,fresh:true})
+      ]);
+      return live===true&&calendar===true&&evolution===true;
+    },
+    onError:error=>setLiveStatus('error','Falha na verificação',error.message)
+  });
+  setInterval(()=>refreshController.tick(),5*60*1000);
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden)refreshController.tick();
+  });
+
 }
 boot();

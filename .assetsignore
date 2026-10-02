@@ -9,3 +9,5 @@
 !misscan.json
 !historico_prod.json
 !tratativas.json
+
+!date-loader.js
