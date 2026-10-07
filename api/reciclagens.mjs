@@ -14,7 +14,7 @@ async function pullRoster(){
 }
 export async function GET(){
   try {const db=await schema();let roster=await readJson(ROSTER,null),sourceError='';
-    if(!roster)try{roster=await pullRoster();}catch(e){sourceError=e.message;}
+    if(!roster)sourceError='Aguardando a primeira sincronização privada da COPPIT - ABS pelo Apps Script.';
     const result=await db.prepare('SELECT payload FROM misscan_training_events ORDER BY created_at DESC').all();
     return json({ok:true,roster:roster||{rows:[],source:ABS_SOURCE},sourceError,events:(result.results||[]).map(r=>JSON.parse(r.payload))});
   }catch(e){return json({ok:false,error:e.message},e.status||500);}
