@@ -96,3 +96,14 @@ function sincronizarPresencaFiscalABS_(ss, token) {
   PropertiesService.getScriptProperties().setProperty('ABS_PRESENCA_LAST_SYNC',result.updatedAt);
   return result;
 }
+
+/** Diagnóstico somente leitura: nunca envia mensagem ao grupo. */
+function validarPresencaFiscalABS() {
+  var response = UrlFetchApp.fetch('https://dash.nicolas-pnorberto.workers.dev/api/seatalk', {muteHttpExceptions:true});
+  var result = JSON.parse(response.getContentText());
+  if(response.getResponseCode() !== 200 || !result.ok || !result.dailyReminder.presence.required || !result.presenceSync.available) {
+    throw new Error('Presença do fiscal não está pronta: '+JSON.stringify(result.presenceSync || {}));
+  }
+  Logger.log('Fiscal validado: presença ABS de '+result.presenceSync.dateKey+' disponível; sincronizada em '+result.presenceSync.generatedAt+'. Cobrança exige presença confirmada por OPSID.');
+  return result.presenceSync;
+}
