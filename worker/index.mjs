@@ -3,6 +3,7 @@ import * as dados from '../api/dados.mjs';
 import * as taxas from '../api/taxas.mjs';
 import * as calendarizacao from '../api/calendarizacao.mjs';
 import * as evolucao from '../api/evolucao.mjs';
+import * as reciclagens from '../api/reciclagens.mjs';
 import * as refreshSource from '../api/refresh-source.mjs';
 import * as notificar from '../api/notificar.mjs';
 import * as emailQueue from '../api/email-queue.mjs';
@@ -18,6 +19,7 @@ const direct = new Map([
   ['taxas', taxas],
   ['calendarizacao', calendarizacao],
   ['evolucao', evolucao],
+  ['reciclagens', reciclagens],
   ['refresh-source', refreshSource],
   ['notificar', notificar],
   ['email-queue', emailQueue],

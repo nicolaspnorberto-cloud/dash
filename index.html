@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mis-Scan Control Center</title>
   <link rel="stylesheet" href="styles.css?v=7.0.23" />
+  <link rel="stylesheet" href="training.css?v=7.1.0" />
 
   <style>
     .row-action-stack{display:flex;gap:6px;flex-wrap:wrap;min-width:150px}
@@ -54,6 +55,7 @@
     <button class="tab" data-tab="tratativas">Tratativas</button>
     <button class="tab" data-tab="evolucao">Evolução</button>
     <button class="tab" data-tab="calendarizacao">Calendarização</button>
+    <button class="tab" data-tab="reciclagens">Reciclagens</button>
   </nav>
 
 
@@ -91,6 +93,7 @@
   </section>
 
   <main>
+    <section id="reciclagens" class="view"></section>
     <section id="produtividade" class="view active">
       <div class="filter-panel">
         <div class="filter-grid filter-grid-wide">
@@ -664,5 +667,6 @@
   <script src="refresh-policy.js?v=7.0.22"></script>
   <script src="date-loader.js?v=7.0.22"></script>
   <script src="app.js?v=7.0.23"></script>
+  <script src="training.js?v=7.1.0"></script>
 </body>
 </html>
