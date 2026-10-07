@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mis-Scan Control Center</title>
-  <link rel="stylesheet" href="styles.css?v=7.0.22" />
+  <link rel="stylesheet" href="styles.css?v=7.0.23" />
 
   <style>
     .row-action-stack{display:flex;gap:6px;flex-wrap:wrap;min-width:150px}
@@ -300,6 +300,14 @@
               <option value="">Todas</option>
               <option value="ESTEIRA">Esteira</option>
               <option value="EXPEDIÇÃO">Expedição</option>
+            </select>
+          </label>
+          <label>Turno
+            <select id="evolutionTurno">
+              <option value="">Todos</option>
+              <option value="T1">T1</option>
+              <option value="T2">T2 (inclui T4)</option>
+              <option value="T3">T3 (inclui T5)</option>
             </select>
           </label>
           <label>Status
@@ -655,6 +663,6 @@
   <footer>Mis-Scan Control Center • V6.15 • LM + GEROT + Evolução semanal + Tratativas</footer>
   <script src="refresh-policy.js?v=7.0.22"></script>
   <script src="date-loader.js?v=7.0.22"></script>
-  <script src="app.js?v=7.0.22"></script>
+  <script src="app.js?v=7.0.23"></script>
 </body>
 </html>

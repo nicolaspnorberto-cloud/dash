@@ -51,7 +51,7 @@
 .evolution-filter-panel{margin-bottom:16px}
 .evolution-filter-grid{
   display:grid;
-  grid-template-columns:minmax(170px,1.1fr) repeat(3,minmax(135px,.85fr)) minmax(190px,1.15fr) minmax(220px,1.4fr) auto;
+  grid-template-columns:minmax(170px,1.1fr) repeat(4,minmax(115px,.85fr)) minmax(190px,1.15fr) minmax(220px,1.4fr) auto;
   gap:12px;
   align-items:end;
 }
