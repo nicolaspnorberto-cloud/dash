@@ -50,7 +50,8 @@ test('remove da cobrança quem possui diálogo D-0 na base oficial', () => {
       { norm: 'PESSOA REALIZADA HOJE', turno: 'T2', lider_nome: 'Líder A' },
       { norm: 'PESSOA AINDA PENDENTE', turno: 'T2', lider_nome: 'Líder A' }
     ],
-    completedOpsIds: ['430790']
+    completedOpsIds: ['430790'],
+    occurrenceDate: '2026-09-28'
   });
 
   assert.deepEqual(rows.map(row => row.collaborator), ['PESSOA AINDA PENDENTE']);
@@ -104,7 +105,8 @@ test('fechamento separa realizados e faltantes', () => {
       { norm: 'PESSOA REALIZADA', turno: 'T2', lider_nome: 'Líder A' },
       { norm: 'PESSOA PENDENTE', turno: 'T2', lider_nome: 'Líder B' }
     ],
-    completedOpsIds: ['430970']
+    completedOpsIds: ['430970'],
+    occurrenceDate: '2026-09-28'
   });
   const message = dialogueClosingMessage(rows, { periodLabel: 'D-1 | 28/09/2026' });
 
@@ -113,7 +115,7 @@ test('fechamento separa realizados e faltantes', () => {
   assert.match(message, /Faltantes \(1\)/);
   assert.match(message, /PESSOA REALIZADA/);
   assert.match(message, /PESSOA PENDENTE/);
-  assert.match(message, /Total previsto: 2 \| Realizados: 1 \| Faltantes: 1/);
+  assert.match(message, /Total acompanhado: 2 \| Realizados: 1 \| Pendentes com presença confirmada: 1 \| Aguardando presença: 0/);
 });
 
 test('mensagem agrupa por líder e orienta o envio do PDF', () => {

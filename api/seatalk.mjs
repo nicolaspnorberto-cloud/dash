@@ -1,4 +1,5 @@
-import { envValue, json } from '../lib/blob-store.mjs';
+import { envValue, json, readJson } from '../lib/blob-store.mjs';
+import { PRESENCE_PATH, selectPresentTreatments } from '../lib/abs-presence.mjs';
 import {
   resolveSeatalkGroup,
   seatalkConfigured,
@@ -23,12 +24,15 @@ function assertWritePin(request) {
 }
 
 export async function GET() {
+  const presence = await readJson(PRESENCE_PATH, null);
+  const presenceHealth = selectPresentTreatments([], presence);
   // Public status confirms the active reminder destination after each deploy.
   return json({
     ok: true,
     configured: seatalkConfigured(),
     route: '/api/seatalk',
     destination: seatalkDestinationName(),
+    presenceSync: { available: presenceHealth.available, dateKey: presence?.dateKey || '', generatedAt: presence?.generatedAt || '', reason: presenceHealth.reason || '' },
     dailyReminder: {
       enabled: true,
       start: '13:00',
@@ -39,6 +43,7 @@ export async function GET() {
       target: 0.88,
       preset: 'YESTERDAY',
       recurrence: 'NEXT_DAILY_OCCURRENCE',
+      presence: { required: true, source: 'ABS', identity: 'OPSID', date: 'TODAY_SAO_PAULO', maxAgeMinutes: 60, unconfirmed: 'SKIP_CHARGE' },
       treatmentFlow: [
         '1º diálogo',
         '1ª reciclagem',

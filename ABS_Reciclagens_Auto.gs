@@ -44,9 +44,55 @@ function sincronizarABSReciclagens() {
     });
     var result;try{result=JSON.parse(response.getContentText());}catch(e){throw new Error('Resposta inválida do dashboard. HTTP '+response.getResponseCode());}
     if(response.getResponseCode()>=300||!result.ok)throw new Error(result.error||'Falha ao sincronizar ABS.');
+    var presenceResult = sincronizarPresencaFiscalABS_(ss, token);
     props.setProperty('ABS_RECICLAGENS_LAST_SYNC',result.updatedAt);
     props.setProperty('ABS_RECICLAGENS_RECORDS',String(result.records));
     Logger.log('ABS sincronizado: '+result.records+' colaboradores; '+result.updatedAt);
-    return result;
+    return {roster:result,presence:presenceResult};
   } finally {lock.releaseLock();}
+}
+
+/** Usa a data efetiva do cabeçalho, nunca a posição fixa do dia do mês. */
+function sincronizarPresencaFiscalABS_(ss, token) {
+  var source = {spreadsheetId:'1ltU2eLkym-ERSNyzvFsK0EyvKZT5kKUiHcY6PNiOxR8',sheetId:1890690219,sheet:'ABS'};
+  var sheet = ss.getSheetByName(source.sheet);
+  if (!sheet || sheet.getSheetId() !== source.sheetId) throw new Error('Aba ABS de presença não encontrada.');
+  var day = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  var width = sheet.getLastColumn();
+  var dates = sheet.getRange(4,1,1,width).getValues()[0];
+  var labels = sheet.getRange(4,1,1,width).getDisplayValues()[0];
+  if (String(labels[14]).trim().toLowerCase() !== 'ops id') throw new Error('Coluna Ops ID do ABS alterada.');
+  var dateCols = [];
+  dates.forEach(function(value,index) {
+    // As datas diárias ficam depois da coluna de referência U.
+    if(index >= 21 && value instanceof Date && Utilities.formatDate(value, 'America/Sao_Paulo','yyyy-MM-dd') === day) dateCols.push(index+1);
+  });
+  if(dateCols.length !== 1) throw new Error('Data atual ausente ou duplicada no cabeçalho ABS. Presença anterior não será atualizada.');
+  var disabledIndex = labels.map(function(v){return String(v).trim().toLowerCase();}).indexOf('desligado');
+  if(disabledIndex < 0) throw new Error('Coluna Desligado do ABS não encontrada.');
+  var count = sheet.getLastRow()-4;
+  if(count < 1 || count > 10000) throw new Error('Quantidade de linhas de presença inválida.');
+  // Somente identificação e presença; CPF e outros dados pessoais não são enviados.
+  var names=sheet.getRange(5,3,count,1).getDisplayValues();
+  var ids=sheet.getRange(5,15,count,1).getDisplayValues();
+  var codes=sheet.getRange(5,dateCols[0],count,1).getDisplayValues();
+  var disabled=sheet.getRange(5,disabledIndex+1,count,1).getDisplayValues();
+  var seen={},rows=[];
+  for(var i=0;i<count;i++) {
+    if(!String(names[i][0]||'').trim()) continue;
+    var id=String(ids[i][0]||'').trim().toUpperCase();
+    if(!/^OPS\d+$/.test(id) || seen[id]) throw new Error('OPSID inválido ou duplicado na presença ABS: linha '+(i+5));
+    seen[id]=true;
+    var disabledValue=String(disabled[i][0]||'').trim().toLowerCase();
+    // Qualquer marca não reconhecida nesta coluna impede confirmação de presença.
+    rows.push({opsid:id,status:String(codes[i][0]||'').trim(),disabled: !['','não','nao','false','0'].includes(disabledValue)});
+  }
+  var response = UrlFetchApp.fetch('https://dash.nicolas-pnorberto.workers.dev/api/presence-sync', {
+    method:'post',contentType:'application/json',headers:{'X-Sync-Token':token},
+    payload:JSON.stringify({source:source,dateKey:day,generatedAt:new Date().toISOString(),rows:rows}),muteHttpExceptions:true
+  });
+  var result;try{result=JSON.parse(response.getContentText());}catch(e){throw new Error('Resposta inválida da presença: HTTP '+response.getResponseCode());}
+  if(response.getResponseCode()>=300||!result.ok)throw new Error(result.error||'Falha ao sincronizar presença.');
+  PropertiesService.getScriptProperties().setProperty('ABS_PRESENCA_LAST_SYNC',result.updatedAt);
+  return result;
 }
