@@ -9,7 +9,7 @@
     "enabled": false
   },
   "triggers": {
-    "crons": ["0 * * * *"]
+    "crons": ["0 0-1,16-23 * * *"]
   },
   "assets": {
     "directory": ".",

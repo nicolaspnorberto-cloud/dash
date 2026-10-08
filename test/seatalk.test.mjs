@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { configureRuntimeEnv } from '../lib/blob-store.mjs';
 import {
+  seatalkWindowOpen,
+  notifySeatalkTreatment,
   collectGroups,
   resetSeatalkCachesForTests,
   sendSeatalkText,
@@ -19,7 +21,8 @@ test('collectGroups encontra grupos em respostas aninhadas', () => {
   ]);
 });
 
-test('sendSeatalkText autentica, resolve o grupo e envia texto', async () => {
+test('sendSeatalkText autentica, resolve o grupo e envia texto', async (t) => {
+  t.mock.timers.enable({apis:['Date'], now:new Date('2026-10-08T17:00:00Z')});
   configureRuntimeEnv({
     SEATALK_APP_ID: 'app-id',
     SEATALK_APP_SECRET: 'app-secret',
@@ -58,7 +61,8 @@ test('sendSeatalkText autentica, resolve o grupo e envia texto', async () => {
   assert.equal(calls[2].options.headers.Authorization, 'Bearer token');
 });
 
-test('sendSeatalkText resolve o formato atual da lista de grupos do SeaTalk', async () => {
+test('sendSeatalkText resolve o formato atual da lista de grupos do SeaTalk', async (t) => {
+  t.mock.timers.enable({apis:['Date'], now:new Date('2026-10-08T17:00:00Z')});
   configureRuntimeEnv({
     SEATALK_APP_ID: 'app-id-current',
     SEATALK_APP_SECRET: 'app-secret-current',
@@ -120,4 +124,41 @@ test('treatmentMessage contém os campos operacionais principais', () => {
   assert.match(message, /COLABORADOR TESTE/);
   assert.match(message, /Miss Scan: 12/);
   assert.match(message, /29\/09\/2026/);
+});
+
+
+test('janela de Brasília bloqueia às 23h e durante a madrugada', () => {
+  for (const [stamp, expected] of [
+    ['2026-10-08T15:59:59Z', false], ['2026-10-08T16:00:00Z', true],
+    ['2026-10-09T01:59:59Z', true], ['2026-10-09T02:00:00Z', false],
+    ['2026-10-09T02:30:00Z', false], ['2026-10-09T03:00:00Z', false]
+  ]) assert.equal(seatalkWindowOpen(new Date(stamp)), expected, stamp);
+});
+
+test('nenhum envio ou autenticação após o corte; T3 nunca vai ao grupo T2', async (t) => {
+  t.mock.timers.enable({apis:['Date'], now:new Date('2026-10-09T02:00:00Z')});
+  let calls=0;
+  const fetchImpl=()=>{calls++;throw new Error('Não deveria transmitir');};
+  assert.equal((await sendSeatalkText('Teste',{fetchImpl})).reason,'outside-t2-window');
+  assert.equal((await notifySeatalkTreatment({turno:'T3'},{fetchImpl})).reason,'outside-t2-shift');
+  const {sendDailyDialogueReminder}=await import('../lib/seatalk-reminders.mjs');
+  assert.equal((await sendDailyDialogueReminder({force:true})).reason,'outside-t2-window');
+  assert.equal(calls,0);
+});
+
+test('autenticação que cruza 23h não transmite mensagem', async (t) => {
+  t.mock.timers.enable({apis:['Date'], now:new Date('2026-10-09T01:59:59Z')});
+  configureRuntimeEnv({SEATALK_APP_ID:'crossing',SEATALK_APP_SECRET:'test',SEATALK_OFFICIAL_GROUP_ID:'test-group'});
+  resetSeatalkCachesForTests();
+  let messages=0;
+  const fetchImpl=async (url)=>{
+    if(url.endsWith('/auth/app_access_token')) {
+      t.mock.timers.setTime(new Date('2026-10-09T02:00:01Z').getTime());
+      return Response.json({code:0,app_access_token:'test-token',expire:3600});
+    }
+    if(url.endsWith('/messaging/v2/group_chat')) messages++;
+    return Response.json({code:0,group:{group_name:'TEST'}});
+  };
+  assert.equal((await sendSeatalkText('Teste',{fetchImpl})).reason,'outside-t2-window');
+  assert.equal(messages,0);
 });
