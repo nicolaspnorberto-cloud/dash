@@ -1,6 +1,7 @@
 import { envValue, json, readJson } from '../lib/blob-store.mjs';
 import { PRESENCE_PATH, selectPresentTreatments } from '../lib/abs-presence.mjs';
 import {
+  SEATALK_PAUSED,
   resolveSeatalkGroup,
   seatalkConfigured,
   seatalkDestinationName,
@@ -30,11 +31,12 @@ export async function GET() {
   return json({
     ok: true,
     configured: seatalkConfigured(),
+    paused: SEATALK_PAUSED,
     route: '/api/seatalk',
     destination: seatalkDestinationName(),
     presenceSync: { available: presenceHealth.available, dateKey: presence?.dateKey || '', generatedAt: presence?.generatedAt || '', reason: presenceHealth.reason || '' },
     dailyReminder: {
-      enabled: true,
+      enabled: !SEATALK_PAUSED,
       start: '13:00',
       end: '23:00',
       frequency: 'HOURLY_UNTIL_22_AND_CLOSING_AT_23',
@@ -53,7 +55,7 @@ export async function GET() {
         '3ª reciclagem'
       ]
     },
-    message: 'Integração de alertas do SeaTalk.'
+    message: SEATALK_PAUSED ? 'Robô de MIS SCAN pausado por solicitação da operação.' : 'Integração de alertas do SeaTalk.'
   });
 }
 
