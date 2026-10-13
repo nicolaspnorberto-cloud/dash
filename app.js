@@ -2527,12 +2527,21 @@ async function forceRefreshSourcesV67({silent=false}={}){
   }
 }
 
+function livePeriodDeadlineMs(query=''){
+  const params=new URLSearchParams(query);
+  if(params.get('preset')==='ALL')return 600000;
+  const from=params.get('from'),to=params.get('to');
+  const days=from&&to?Math.abs(new Date(to+'T12:00:00Z')-new Date(from+'T12:00:00Z'))/86400000+1:0;
+  return days>31?600000:params.get('preset')==='LAST_30'||days>7?300000:120000;
+}
+
 async function refreshLiveData({silent=false,fresh=false}={}){
   // A seleção mais recente substitui a anterior, inclusive durante o boot.
   const load=liveLoads.begin();
   const query=periodQuery();
   let timedOut=false;
-  const deadline=setTimeout(()=>{timedOut=true;load.cancel();},120000);
+  const deadlineMs=livePeriodDeadlineMs(query);
+  const deadline=setTimeout(()=>{timedOut=true;load.cancel();},deadlineMs);
   state.liveRefreshing=true;
 
   const btn=$('refreshDataBtn');
@@ -2596,7 +2605,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     return true;
   }catch(err){
     if(!load.current()||(err.name==='AbortError'&&!timedOut))return false;
-    if(timedOut)err=new Error('O período não terminou de carregar em 2 minutos. Tente um intervalo menor.');
+    if(timedOut)err=new Error(`O período não terminou de carregar em ${deadlineMs/60000} minutos. Clique em Aplicar período para retomar os blocos já recebidos.`);
     console.error(err);
     setLiveStatus(
       'error',
