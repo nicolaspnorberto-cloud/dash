@@ -8,7 +8,7 @@ const loader = globalThis.MisscanDateLoader;
 function appContext() {
   const elements = new Map();
   const context = vm.createContext({
-    window: {}, MisscanDateLoader: loader, Intl, Map, Set, Date, Number, String, Math,
+    window: {}, URLSearchParams, MisscanDateLoader: loader, Intl, Map, Set, Date, Number, String, Math,
     AbortController, DOMException, setTimeout, clearTimeout, console,
     document: { getElementById: id => {
       if (!elements.has(id)) elements.set(id, { value: '', textContent: '', disabled: false, classList: { remove() {}, add() {} } });
@@ -180,4 +180,12 @@ test('bloco lento recupera por dia sem perder registros nem entregar resultado p
   assert.equal(result.misscan.length,2);
   assert.equal(calls.length,5);
   assert.deepEqual(Array.from(result.misscan,x=>x.shipment_id),['2026-10-10','2026-10-11']);
+});
+
+test('histórico completo e recortes longos não são interrompidos pelo prazo de dois minutos',()=>{
+ const {run}=appContext();
+ assert.equal(run("livePeriodDeadlineMs('preset=ALL')"),600000);
+ assert.equal(run("livePeriodDeadlineMs('preset=LAST_30')"),300000);
+ assert.equal(run("livePeriodDeadlineMs('preset=LAST_7')"),120000);
+ assert.equal(run("livePeriodDeadlineMs('from=2026-07-28&to=2026-10-12')"),600000);
 });
