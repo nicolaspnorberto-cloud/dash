@@ -340,6 +340,10 @@ export { attributeDynamicV613, responsibility, validOperators };
 
 const cachedReport=withReportCache(buildReport);
 export async function GET(request){
+  if(new URL(request.url).searchParams.get('hc_only')==='1'){
+    try{const file=await readJson(HC_PATH,{rows:[]});return json({ok:true,hc:file?.rows||[]});}
+    catch(error){return json({ok:false,error:error.message},503);}
+  }
   if(new URL(request.url).searchParams.get('revision')==='1')return sourceRevision(request);
   return cachedReport(request);
 }
