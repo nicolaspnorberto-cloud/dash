@@ -142,6 +142,7 @@ test('reabrir período reutiliza blocos; atualização explícita ignora cache e
   const urls = [];
   context.fakeFetch = async url => {
     urls.push(url);
+    if(url.includes('hc_only=1'))return {data:{hc:[{colaborador:'TESTE'}]}};
     if (url.includes('meta_only=1')) return { data: { hc: [], meta: {
       periodStart: '2026-10-01', periodEnd: '2026-10-01',
       historyStart: '2026-10-01', historyEnd: '2026-10-01',
@@ -155,6 +156,8 @@ test('reabrir período reutiliza blocos; atualização explícita ignora cache e
   const first = await run('loadLiveDataV68()');
   const second = await run('loadLiveDataV68()');
   assert.equal(first.misscan.length, 1);
+  assert.equal(first.hc[0].colaborador,'TESTE');
+  assert.ok(urls.find(u=>u.includes('meta_only')).includes('include_hc=0'));
   assert.equal(second.misscan.length, 1);
   assert.equal(blockCalls, 1);
   await run('loadLiveDataV68({fresh:true})');
@@ -167,6 +170,7 @@ test('bloco lento recupera por dia sem perder registros nem entregar resultado p
   const calls=[];
   context.fetchJsonResilientV68=async url=>{
     calls.push(url);
+    if(url.includes('hc_only'))return {data:{hc:[]}};
     if(url.includes('meta_only'))return {data:{hc:[],meta:{periodStart:'2026-10-10',periodEnd:'2026-10-11',periodLabel:'10/10 a 11/10',historyStart:'2026-10-10',historyEnd:'2026-10-11',storageGranularity:'day-v1',days:['2026-10-10','2026-10-11'],dayStats:{'2026-10-10':{rows:10},'2026-10-11':{rows:10}}}}};
     if(url.includes('from=2026-10-10&to=2026-10-11'))throw new Error('A consulta demorou demais');
     const day=url.includes('from=2026-10-10')?'2026-10-10':'2026-10-11';
@@ -174,6 +178,6 @@ test('bloco lento recupera por dia sem perder registros nem entregar resultado p
   };
   const result=await run("loadLiveDataV68({baseQuery:'preset=ALL'})");
   assert.equal(result.misscan.length,2);
-  assert.equal(calls.length,4);
+  assert.equal(calls.length,5);
   assert.deepEqual(Array.from(result.misscan,x=>x.shipment_id),['2026-10-10','2026-10-11']);
 });
