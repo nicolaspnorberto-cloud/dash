@@ -2263,7 +2263,7 @@ async function mapLimitV68(items,limit,worker){
 }
 
 async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
-  const metaUrl=`/api/dados?${baseQuery}&meta_only=1${fresh?'&fresh=1':''}`;
+  const metaUrl=`/api/dados?${baseQuery}&meta_only=1&include_hc=0${fresh?'&fresh=1':''}`;
   const {data:head}=await fetchJsonResilientV68(metaUrl,{
     headers:{Accept:'application/json'},
     cache:'no-store',signal
@@ -2278,6 +2278,9 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
   }
   setLiveStatus('loading','Carregando período...','Histórico identificado. Consultando registros.');
   liveBlockCache.useRevision(JSON.stringify([meta.receivedAt,meta.updatedAt,meta.historyEnd,meta.historyRows]));
+  const {data:hcData}=await fetchJsonResilientV68(`/api/dados?hc_only=1${fresh?'&fresh=1':''}`,{
+    headers:{Accept:'application/json'},cache:'no-store',signal
+  },2);
   const chunks=dataChunksV68(meta);
   let completed=0;
   const parts=await mapLimitV68(chunks,3,async chunk=>{
@@ -2317,7 +2320,7 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
 
   return {
     ok:true,
-    hc:head.hc||[],
+    hc:hcData.hc||[],
     misscan,
     meta:{
       ...meta,
