@@ -2271,6 +2271,12 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
 
   if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
   const meta=head.meta||{};
+  if(!state.raw.length){
+    if($('periodSummary'))$('periodSummary').textContent=meta.periodLabel||'Período identificado';
+    if($('dateFrom'))$('dateFrom').value=meta.periodStart||'';
+    if($('dateTo'))$('dateTo').value=meta.periodEnd||'';
+  }
+  setLiveStatus('loading','Carregando período...','Histórico identificado. Consultando registros.');
   liveBlockCache.useRevision(JSON.stringify([meta.receivedAt,meta.updatedAt,meta.historyEnd,meta.historyRows]));
   const chunks=dataChunksV68(meta);
   let completed=0;
@@ -2280,10 +2286,24 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
     const cached=!fresh?liveBlockCache.get(key):null;
     if(cached!==null){completed++;return cached;}
     const query=`from=${encodeURIComponent(chunk.from)}&to=${encodeURIComponent(chunk.to)}&include_hc=0`;
-    const {data}=await fetchJsonResilientV68(`/api/dados?${query}${fresh?'&fresh=1':''}`,{
-      headers:{Accept:'application/json'},
-      cache:'no-store',signal
-    },2);
+    let data;
+    try {
+      ({data}=await fetchJsonResilientV68(`/api/dados?${query}${fresh?'&fresh=1':''}`,{
+        headers:{Accept:'application/json'},cache:'no-store',signal
+      },2));
+    } catch(error) {
+      if(signal?.aborted||chunk.from===chunk.to||error?.status&&![429,500,502,503,504].includes(error.status))throw error;
+      // Uma resposta grande ou lenta não impede a recuperação por dias menores.
+      setLiveStatus('loading','Recuperando consulta...',`Reconsultando ${chunk.from} a ${chunk.to} por dia`);
+      const rows=[];
+      for(const day of dateKeysBetweenV68(chunk.from,chunk.to,3)){
+        const {data:part}=await fetchJsonResilientV68(`/api/dados?from=${day}&to=${day}&include_hc=0${fresh?'&fresh=1':''}`,{
+          headers:{Accept:'application/json'},cache:'no-store',signal
+        },1);
+        rows.push(...(part.misscan||[]));
+      }
+      data={misscan:rows};
+    }
     if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
     liveBlockCache.put(key,data.misscan||[]);
     completed++;
@@ -2580,6 +2600,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
       state.raw.length?'Últimos dados mantidos':'Falha na atualização',
       err.message
     );
+    if(!state.raw.length&&$('periodSummary'))$('periodSummary').textContent='Falha ao carregar o período — clique em Aplicar período para tentar novamente';
     if($('dataNote')){
       $('dataNote').textContent=
         state.raw.length
