@@ -161,3 +161,19 @@ test('reabrir período reutiliza blocos; atualização explícita ignora cache e
   assert.equal(blockCalls, 2);
   assert.ok(urls.at(-1).includes('fresh=1'));
 });
+
+test('bloco lento recupera por dia sem perder registros nem entregar resultado parcial', async () => {
+  const {context,run}=appContext();
+  const calls=[];
+  context.fetchJsonResilientV68=async url=>{
+    calls.push(url);
+    if(url.includes('meta_only'))return {data:{hc:[],meta:{periodStart:'2026-10-10',periodEnd:'2026-10-11',periodLabel:'10/10 a 11/10',historyStart:'2026-10-10',historyEnd:'2026-10-11',storageGranularity:'day-v1',days:['2026-10-10','2026-10-11'],dayStats:{'2026-10-10':{rows:10},'2026-10-11':{rows:10}}}}};
+    if(url.includes('from=2026-10-10&to=2026-10-11'))throw new Error('A consulta demorou demais');
+    const day=url.includes('from=2026-10-10')?'2026-10-10':'2026-10-11';
+    return {data:{misscan:[{shipment_id:day,lmreceived_date:day}]}};
+  };
+  const result=await run("loadLiveDataV68({baseQuery:'preset=ALL'})");
+  assert.equal(result.misscan.length,2);
+  assert.equal(calls.length,4);
+  assert.deepEqual(Array.from(result.misscan,x=>x.shipment_id),['2026-10-10','2026-10-11']);
+});
