@@ -40,7 +40,7 @@ globalThis.MisscanDateLoader = {
     };
   },
   async fetchJson(url, options = {}, attempts = 2, {
-    fetcher = fetch, timeoutMs = 20000,
+    fetcher = fetch, timeoutMs = 40000,
     retryDelay = ms => new Promise(resolve => setTimeout(resolve, ms))
   } = {}) {
     let lastError;
