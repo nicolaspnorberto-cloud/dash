@@ -162,6 +162,7 @@ function buildHCMap(records){
   });
 
   state.hcMap=hcMap;
+  state.hcOpsMap=new Map(normalized.filter(r=>r.opsid).map(r=>[String(r.opsid).toUpperCase(),r]));
 }
 
 function parseHCUpload(text){
@@ -191,6 +192,7 @@ function parseHCUpload(text){
 }
 
 function responsibility(r){
+  if(r.official_aggregate===true)return r.official_area;
   const pf=String(r.process_fail||'').trim();
   const tm=String(r.to_mis_status||'').trim();
   if(pf==='Packed TO') return 'EXPEDIÇÃO';
@@ -221,7 +223,7 @@ function enrich(r){
   const multi=operators.length>1;
   const single=operators.length===1?parseSingleOperator(operators[0]):{opsid:'',name:'',norm:'',invalid:true};
   const identified=!multi && operators.length===1 && !single.invalid;
-  const hc=identified?state.hcMap.get(single.norm):null;
+  const hc=identified?(state.hcOpsMap?.get(String(single.opsid).toUpperCase())||state.hcMap.get(single.norm)):null;
   let hcStatus='Não aplicável', turno='Não identificado', setor='Não identificado', liderNome='Não identificado', liderEmail='Não identificado', tipoHC='Não identificado';
   if(identified && hc){
     hcStatus=hc.ambiguous?'Ambíguo':'OK'; turno=hc.turno; setor=hc.setor; liderNome=hc.lider_nome; liderEmail=hc.lider_email; tipoHC='Fixo';
@@ -449,7 +451,7 @@ function loadMisscanRows(rows){
   state.sourceRows=rows.length;
 
   // V6.13: BR único com operator_fail oficial, sem herança por Whole TO.
-  const canonical=canonicalizeAndAttributeV612(rows);
+  const canonical=rows.some(r=>r.official_aggregate===true)?rows:canonicalizeAndAttributeV612(rows);
   const scoped=scopeRowsToLivePeriodV612(canonical);
   const enriched=scoped.map(enrich);
 
@@ -513,9 +515,13 @@ function applyFilters(){
   renderAll();
 }
 
+function rowWeight(r){return r.official_aggregate===true?Math.max(0,Number(r.official_count)||0):1;}
+function rowTotal(rows){return rows.reduce((sum,r)=>sum+rowWeight(r),0);}
+function addMetric(set,row){if(row.official_aggregate===true)set.officialTotal=(set.officialTotal||0)+rowWeight(row);else if(row.shipment_id)set.add(String(row.shipment_id).trim());}
+function metricCount(set){return set.size+(set.officialTotal||0);}
 function countBy(field,data=state.filtered){
   const m=new Map();
-  data.forEach(r=>{const k=r[field]||'NA';m.set(k,(m.get(k)||0)+1)});
+  data.forEach(r=>{const k=r[field]||'NA';m.set(k,(m.get(k)||0)+rowWeight(r))});
   return [...m.entries()].sort((a,b)=>b[1]-a[1]);
 }
 
@@ -561,7 +567,7 @@ function ranking(){
     }
 
     const x=m.get(key);
-    if(r.shipment_id)x.br.add(String(r.shipment_id).trim());
+    addMetric(x.br,r);
     if(r.socpacked_tonumber)x.to.add(String(r.socpacked_tonumber).trim());
 
     [
@@ -571,18 +577,18 @@ function ranking(){
       ['lideres',r.lider_nome],
       ['tipos',r.tipo_hc]
     ].forEach(([prop,val])=>{
-      x[prop].set(val,(x[prop].get(val)||0)+1);
+      x[prop].set(val,(x[prop].get(val)||0)+rowWeight(r));
     });
   });
 
-  return [...m.values()].sort((a,b)=>b.br.size-a.br.size);
+  return [...m.values()].sort((a,b)=>metricCount(b.br)-metricCount(a.br));
 }
 
 function renderRanking(){
   const rows=ranking().slice(0,80);
   $('rankingBody').innerHTML=rows.map((x,i)=>{
     const area=dominant(x.areas),cls=area==='ESTEIRA'?'tag-esteira':area==='EXPEDIÇÃO'?'tag-expedicao':'tag-na';
-    return `<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td><strong>${fmtInt.format(x.br.size)}</strong></td><td>${fmtInt.format(x.to.size)}</td><td>${escapeHtml(dominant(x.turnos))}</td><td>${escapeHtml(dominant(x.setores))}</td><td>${escapeHtml(dominant(x.lideres))}</td><td>${escapeHtml(dominant(x.tipos))}</td><td><span class="tag ${cls}">${escapeHtml(area)}</span></td></tr>`;
+    return `<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td><strong>${fmtInt.format(metricCount(x.br))}</strong></td><td>${state.liveMeta?.official?'—':fmtInt.format(x.to.size)}</td><td>${escapeHtml(dominant(x.turnos))}</td><td>${escapeHtml(dominant(x.setores))}</td><td>${escapeHtml(dominant(x.lideres))}</td><td>${escapeHtml(dominant(x.tipos))}</td><td><span class="tag ${cls}">${escapeHtml(area)}</span></td></tr>`;
   }).join('')||'<tr><td colspan="10" class="empty">Sem ofensores identificados para exibir.</td></tr>';
 }
 
@@ -591,16 +597,16 @@ function hcPendingRows(){
   state.filtered.filter(r=>r.identificacao==='IDENTIFICADO'&&r.hc_status!=='OK').forEach(r=>{
     const key=normalizeName(r.operator_name)||r.operator_original;
     if(!m.has(key))m.set(key,{name:r.operator_name,opsid:r.opsid,br:new Set(),status:r.hc_status,turno:r.turno,setor:r.setor,lider:r.lider_nome});
-    m.get(key).br.add(r.shipment_id);
+    addMetric(m.get(key).br,r);
   });
-  return [...m.values()].sort((a,b)=>b.br.size-a.br.size);
+  return [...m.values()].sort((a,b)=>metricCount(b.br)-metricCount(a.br));
 }
 
 function renderPending(){
   const body=$('pendingBody');
   if(!body)return;
   const rows=hcPendingRows();
-  body.innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td>${fmtInt.format(x.br.size)}</td><td><span class="tag ${x.status==='Ambíguo'?'tag-ambiguous':'tag-pending'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.turno)}</td><td>${escapeHtml(x.setor)}</td><td>${escapeHtml(x.lider)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Nenhuma pendência de HC nos filtros atuais.</td></tr>';
+  body.innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td>${fmtInt.format(metricCount(x.br))}</td><td><span class="tag ${x.status==='Ambíguo'?'tag-ambiguous':'tag-pending'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.turno)}</td><td>${escapeHtml(x.setor)}</td><td>${escapeHtml(x.lider)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Nenhuma pendência de HC nos filtros atuais.</td></tr>';
 }
 
 function leaderSummary(){
@@ -608,31 +614,29 @@ function leaderSummary(){
   state.filtered.filter(r=>r.identificacao==='IDENTIFICADO'&&r.lider_nome&&!['Não cadastrado','Não identificado'].includes(r.lider_nome)).forEach(r=>{
     const key=r.lider_nome;
     if(!m.has(key))m.set(key,{leader:key,br:new Set(),to:new Set(),ops:new Set(),esteira:new Set(),exp:new Set(),turnos:new Set()});
-    const x=m.get(key);x.br.add(r.shipment_id);if(r.socpacked_tonumber)x.to.add(r.socpacked_tonumber);x.ops.add(normalizeName(r.operator_name));x.turnos.add(r.turno);
-    if(r.responsabilidade==='ESTEIRA')x.esteira.add(r.shipment_id);if(r.responsabilidade==='EXPEDIÇÃO')x.exp.add(r.shipment_id);
+    const x=m.get(key);addMetric(x.br,r);if(r.socpacked_tonumber)x.to.add(r.socpacked_tonumber);x.ops.add(normalizeName(r.operator_name));x.turnos.add(r.turno);
+    if(r.responsabilidade==='ESTEIRA')addMetric(x.esteira,r);if(r.responsabilidade==='EXPEDIÇÃO')addMetric(x.exp,r);
   });
-  return [...m.values()].sort((a,b)=>b.br.size-a.br.size);
+  return [...m.values()].sort((a,b)=>metricCount(b.br)-metricCount(a.br));
 }
 
 function renderLeaders(){
   const body=$('leaderBody');
   if(!body)return;
   const rows=leaderSummary();
-  body.innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.leader)}</strong></td><td>${fmtInt.format(x.br.size)}</td><td>${fmtInt.format(x.to.size)}</td><td>${fmtInt.format(x.ops.size)}</td><td>${fmtInt.format(x.esteira.size)}</td><td>${fmtInt.format(x.exp.size)}</td><td>${escapeHtml([...x.turnos].sort().join(', '))}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Sem liderança para exibir.</td></tr>';
+  body.innerHTML=rows.map((x,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(x.leader)}</strong></td><td>${fmtInt.format(metricCount(x.br))}</td><td>${state.liveMeta?.official?'—':fmtInt.format(x.to.size)}</td><td>${fmtInt.format(x.ops.size)}</td><td>${fmtInt.format(metricCount(x.esteira))}</td><td>${fmtInt.format(metricCount(x.exp))}</td><td>${escapeHtml([...x.turnos].sort().join(', '))}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Sem liderança para exibir.</td></tr>';
 }
 
 function renderKPIs(){
   const scoped=scopeRowsToLivePeriodV612(state.filtered);
-  const total=new Set(
-    scoped.map(r=>String(r.shipment_id||'').trim()).filter(Boolean)
-  ).size;
+  const total=state.liveMeta?.official?rowTotal(scoped):new Set(scoped.map(r=>String(r.shipment_id||'').trim()).filter(Boolean)).size;
   const areas=Object.fromEntries(countBy('responsabilidade',scoped));
   const est=areas.ESTEIRA||0,exp=areas['EXPEDIÇÃO']||0;
-  const unidentified=scoped.filter(r=>r.identificacao==='NÃO IDENTIFICADO').length;
+  const unidentified=rowTotal(scoped.filter(r=>r.identificacao==='NÃO IDENTIFICADO'));
   const tos=new Set(scoped.map(r=>r.socpacked_tonumber).filter(Boolean));
   const operators=new Set(scoped.filter(r=>r.identificacao==='IDENTIFICADO').map(r=>r.opsid||normalizeName(r.operator_name)).filter(Boolean));
   const pending=hcPendingRows().length;
-  $('kBR').textContent=fmtInt.format(total);$('kTO').textContent=fmtInt.format(tos.size);$('kEsteira').textContent=fmtInt.format(est);$('kExpedicao').textContent=fmtInt.format(exp);$('kUnidentified').textContent=fmtInt.format(unidentified);$('kOperators').textContent=fmtInt.format(operators.size);$('kHCPending').textContent=fmtInt.format(pending);
+  $('kBR').textContent=fmtInt.format(total);$('kTO').textContent=state.liveMeta?.official?'—':fmtInt.format(tos.size);$('kEsteira').textContent=fmtInt.format(est);$('kExpedicao').textContent=fmtInt.format(exp);$('kUnidentified').textContent=fmtInt.format(unidentified);$('kOperators').textContent=fmtInt.format(operators.size);$('kHCPending').textContent=fmtInt.format(pending);
   $('pEsteira').textContent=total?fmtPct(est/total*100):'—';$('pExpedicao').textContent=total?fmtPct(exp/total*100):'—';$('pUnidentified').textContent=total?fmtPct(unidentified/total*100):'—';
   const dates=scoped.map(r=>String(r.lmreceived_date||'').slice(0,10)).filter(Boolean).sort();
   $('kDate').textContent=dates.length?`${dates[0].split('-').reverse().join('/')} ${dates.at(-1)!==dates[0]?'→ '+dates.at(-1).split('-').reverse().join('/'):''}`:'sem data';
@@ -648,6 +652,7 @@ function renderAll(){
   renderBars('statusBars',countBy('last_status'),10);
   renderBars('stationBars',countBy('lmreceived_station'),10);
   renderRanking();renderTreatments();renderProjection();
+  if(state.liveMeta?.official){$('dataNote').textContent=`Fonte oficial MG4: ${fmtInt.format(rowTotal(state.filtered))} Miss Scans no recorte. Turnos, setores e líderes: Base de HC 26 da Matinal. Dados agregados; BR, TO, destino e status não disponíveis nesta fonte.`;return;}
   const duplicateNote=state.sourceRows-state.raw.length;
   $('dataNote').textContent=`${fmtInt.format(state.filtered.length)} de ${fmtInt.format(state.raw.length)} BR únicos exibidos • ${fmtInt.format(state.sourceRows)} linhas de origem${duplicateNote>0?` • ${duplicateNote} duplicidade(s) de BR consolidada(s)`:''}. Regras: Packed TO = Expedição • Extra Parcel = Esteira • Whole TO/NA herda o único operator_fail válido do TO • 2+ operadores no mesmo BR = não identificado.`;
 }
@@ -660,11 +665,11 @@ function exportCSV(rows,filename){
 }
 
 function exportFiltered(){
-  exportCSV(state.filtered.map(r=>({shipment_id:r.shipment_id,socpacked_tonumber:r.socpacked_tonumber,process_fail:r.process_fail,to_mis_status:r.to_mis_status,responsabilidade:r.responsabilidade,operator_fail:r.operator_original,operator_fail_efetivo:r.operator_fail,regra_atribuicao:r.attribution_source,identificacao:r.identificacao,colaborador:r.operator_name,opsid:r.opsid,turno:r.turno,setor:r.setor,lider:r.lider_nome,tipo_hc:r.tipo_hc,hc_status:r.hc_status,destino:r.lmreceived_station,last_status:r.last_status})),'misscan_tratado_filtrado.csv');
+  exportCSV(state.filtered.map(r=>({quantidade:rowWeight(r),fonte:r.official_aggregate?'OUT_05 MG4':'LM',data:r.lmreceived_date,shipment_id:r.shipment_id,socpacked_tonumber:r.socpacked_tonumber,process_fail:r.process_fail,to_mis_status:r.to_mis_status,responsabilidade:r.responsabilidade,operator_fail:r.operator_original,operator_fail_efetivo:r.operator_fail,regra_atribuicao:r.attribution_source,identificacao:r.identificacao,colaborador:r.operator_name,opsid:r.opsid,turno:r.turno,setor:r.setor,lider:r.lider_nome,tipo_hc:r.tipo_hc,hc_status:r.hc_status,destino:r.lmreceived_station,last_status:r.last_status})),'misscan_tratado_filtrado.csv');
 }
 
 function exportPending(){
-  exportCSV(hcPendingRows().map(x=>({colaborador:x.name,opsid:x.opsid,br:x.br.size,status_hc:x.status,turno:x.turno,setor:x.setor,lider:x.lider})),'pendencias_base_hc.csv');
+  exportCSV(hcPendingRows().map(x=>({colaborador:x.name,opsid:x.opsid,br:metricCount(x.br),status_hc:x.status,turno:x.turno,setor:x.setor,lider:x.lider})),'pendencias_base_hc.csv');
 }
 
 
@@ -936,7 +941,7 @@ function addTreatmentHistory(id,title,detail=''){
 function enrichTreatmentRow(r){
   const name=String(r.colaborador||r.Colaborador||r.nome||r.Nome||'').trim();
   const norm=treatmentKey(name);
-  const hc=state.hcMap.get(norm);
+  const hc=state.hcOpsMap?.get(String(r.opsid||'').toUpperCase())||state.hcMap.get(norm);
   let rawInd=r.indicador??r.Indicador??r.share??r.Share??r['Indicador (%)']??0;
   if(typeof rawInd==='string')rawInd=rawInd.replace('%','').replace(',','.').trim();
   const indicator=Number(rawInd)||0;
@@ -2159,8 +2164,8 @@ function setLiveStatus(mode,text,detail=''){
 }
 
 function liveTreatmentRows(){
-  const identified=state.raw.filter(r=>r.identificacao==='IDENTIFICADO' && r.responsabilidade!=='NA');
-  const total=identified.length||1;
+  const identified=state.raw.filter(r=>r.identificacao==='IDENTIFICADO' && (r.official_aggregate||r.responsabilidade!=='NA'));
+  const total=(state.liveMeta?.official?rowTotal(state.raw):rowTotal(identified))||1;
   const groups=new Map();
 
   identified.forEach(r=>{
@@ -2169,14 +2174,15 @@ function liveTreatmentRows(){
     if(!groups.has(id)){
       groups.set(id,{
         colaborador:r.operator_name,
+        opsid:r.opsid,
         miss_scan:0,
         areaCounts:{},
         periodo:state.liveMeta?.periodLabel||'Janela automática'
       });
     }
     const g=groups.get(id);
-    g.miss_scan++;
-    g.areaCounts[r.responsabilidade]=(g.areaCounts[r.responsabilidade]||0)+1;
+    g.miss_scan+=rowWeight(r);
+    g.areaCounts[r.responsabilidade]=(g.areaCounts[r.responsabilidade]||0)+rowWeight(r);
   });
 
   return [...groups.values()].map(g=>{
@@ -2185,6 +2191,7 @@ function liveTreatmentRows(){
 
     return {
       colaborador:g.colaborador,
+      opsid:g.opsid,
       miss_scan:g.miss_scan,
       indicador:g.miss_scan/total*100,
       operacao,
@@ -2271,6 +2278,10 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
 
   if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
   const meta=head.meta||{};
+  if(meta.official){
+    const {data}=await fetchJsonResilientV68(`/api/dados?${baseQuery}&include_hc=1`,{headers:{Accept:'application/json'},cache:'no-store',signal},2);
+    return data;
+  }
   if(!state.raw.length){
     if($('periodSummary'))$('periodSummary').textContent=meta.periodLabel||'Período identificado';
     if($('dateFrom'))$('dateFrom').value=meta.periodStart||'';
@@ -2576,7 +2587,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
 
     if($('misscanSourceInfo')){
       $('misscanSourceInfo').textContent=
-        `${fmtInt.format((data.misscan||[]).length)} BR • LM`;
+        `${fmtInt.format(rowTotal(data.misscan||[]))} Miss Scans • ${state.liveMeta?.official?'Oficial MG4':'LM'}`;
     }
 
     if($('dataWindowInfo')){
@@ -2600,7 +2611,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
         ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
         : '';
       $('dataNote').textContent=
-        `Histórico LM V6.13. ${fmtInt.format(state.raw.length)} BR únicos oficiais no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
+        `Histórico LM V6.13. ${fmtInt.format(rowTotal(state.raw))} Miss Scans no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
     return true;
   }catch(err){
