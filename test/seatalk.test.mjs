@@ -162,3 +162,15 @@ test('autenticação que cruza 23h não transmite mensagem', async (t) => {
   assert.equal((await sendSeatalkText('Teste',{fetchImpl})).reason,'outside-t2-window');
   assert.equal(messages,0);
 });
+
+test('T3 tem janela independente e permite somente o fechamento às 05h30',()=>{
+ const local=s=>new Date('2026-10-14T'+s+'-03:00');
+ assert.equal(seatalkWindowOpen(local('21:29:00'),{turn:'T3'}),false);
+ assert.equal(seatalkWindowOpen(local('21:30:00'),{turn:'T3'}),true);
+ assert.equal(seatalkWindowOpen(local('23:30:00'),{turn:'T3'}),true);
+ assert.equal(seatalkWindowOpen(local('23:30:00')),false);
+ assert.equal(seatalkWindowOpen(local('05:29:00'),{turn:'T3'}),true);
+ assert.equal(seatalkWindowOpen(local('05:30:00'),{turn:'T3'}),false);
+ assert.equal(seatalkWindowOpen(local('05:30:00'),{turn:'T3',closing:true}),true);
+ assert.equal(seatalkWindowOpen(local('05:31:00'),{turn:'T3',closing:true}),false);
+});
