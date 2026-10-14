@@ -88,3 +88,16 @@ test('mesmo envio forçado sem ABS válido retorna sem enviar SeaTalk',async t=>
     assert.equal(result.reason,'presence-unavailable-or-stale');
   } finally {globalThis.fetch=oldFetch;}
 });
+
+test('T3 mantém presença do início da noite após meia-noite, com leitura ABS recente',()=>{
+  const stamp=new Date('2026-10-14T06:30:00Z');
+  const body={source:PRESENCE_SOURCE,dateKey:'2026-10-14',generatedAt:stamp.toISOString(),rows:[{opsid:'OPS1',status:'F',disabled:false}],previousDay:{dateKey:'2026-10-13',rows:[{opsid:'OPS1',status:'P',disabled:false}]}};
+  const validated=validatePresence(body,stamp);
+  const night=selectPresentTreatments([treatment('OPS1')],validated,{now:stamp,dateKey:'2026-10-13'});
+  assert.equal(night.available,true);
+  assert.equal(night.eligible.length,1);
+  const daytime=selectPresentTreatments([treatment('OPS1')],validated,{now:stamp,dateKey:'2026-10-14'});
+  assert.equal(daytime.eligible.length,0);
+  assert.throws(()=>validatePresence({...body,previousDay:{...body.previousDay,dateKey:'2026-10-12'}},stamp));
+  assert.equal(selectPresentTreatments([treatment('OPS1')],validated,{now:new Date(stamp.getTime()+3600001),dateKey:'2026-10-13'}).available,false);
+});
