@@ -97,7 +97,7 @@ export default {
   async scheduled(_event, env, executionCtx) {
     configureRuntimeEnv(env, new Request('https://dash.nicolas-pnorberto.workers.dev/'));
     executionCtx.waitUntil(
-      Promise.all([sendDailyDialogueReminder(),sendDailyDialogueReminder({turn:'T3'})]).catch(error => {
+      sendDailyDialogueReminder({turn:String(_event.cron||'').startsWith('30 ')?'T3':'T2'}).catch(error => {
         console.error('SEATALK_DAILY_DIALOGUE_REMINDER_ERROR', error);
       })
     );
