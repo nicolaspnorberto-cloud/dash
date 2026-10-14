@@ -62,9 +62,12 @@ function sincronizarPresencaFiscalABS_(ss, token) {
   var dates = sheet.getRange(4,1,1,width).getValues()[0];
   var labels = sheet.getRange(4,1,1,width).getDisplayValues()[0];
   if (String(labels[14]).trim().toLowerCase() !== 'ops id') throw new Error('Coluna Ops ID do ABS alterada.');
+  var previousDate=Utilities.formatDate(new Date(Date.now()-86400000),'America/Sao_Paulo','yyyy-MM-dd');
+  var previousCols=[];
   var dateCols = [];
   dates.forEach(function(value,index) {
     // As datas diárias ficam depois da coluna de referência U.
+    if(index >= 21 && value instanceof Date && Utilities.formatDate(value,'America/Sao_Paulo','yyyy-MM-dd') === previousDate) previousCols.push(index+1);
     if(index >= 21 && value instanceof Date && Utilities.formatDate(value, 'America/Sao_Paulo','yyyy-MM-dd') === day) dateCols.push(index+1);
   });
   if(dateCols.length !== 1) throw new Error('Data atual ausente ou duplicada no cabeçalho ABS. Presença anterior não será atualizada.');
@@ -77,6 +80,8 @@ function sincronizarPresencaFiscalABS_(ss, token) {
   var ids=sheet.getRange(5,15,count,1).getDisplayValues();
   var codes=sheet.getRange(5,dateCols[0],count,1).getDisplayValues();
   var disabled=sheet.getRange(5,disabledIndex+1,count,1).getDisplayValues();
+  var previousCodes=previousCols.length===1?sheet.getRange(5,previousCols[0],count,1).getDisplayValues():null;
+  var previousRows=[];
   var seen={},rows=[];
   for(var i=0;i<count;i++) {
     if(!String(names[i][0]||'').trim()) continue;
@@ -85,11 +90,12 @@ function sincronizarPresencaFiscalABS_(ss, token) {
     seen[id]=true;
     var disabledValue=String(disabled[i][0]||'').trim().toLowerCase();
     // Qualquer marca não reconhecida nesta coluna impede confirmação de presença.
+    if(previousCodes)previousRows.push({opsid:id,status:String(previousCodes[i][0]||'').trim(),disabled: !['','não','nao','false','0'].includes(disabledValue)});
     rows.push({opsid:id,status:String(codes[i][0]||'').trim(),disabled: !['','não','nao','false','0'].includes(disabledValue)});
   }
   var response = UrlFetchApp.fetch('https://dash.nicolas-pnorberto.workers.dev/api/presence-sync', {
     method:'post',contentType:'application/json',headers:{'X-Sync-Token':token},
-    payload:JSON.stringify({source:source,dateKey:day,generatedAt:new Date().toISOString(),rows:rows}),muteHttpExceptions:true
+    payload:JSON.stringify({source:source,dateKey:day,generatedAt:new Date().toISOString(),rows:rows,previousDay:previousCodes?{dateKey:previousDate,rows:previousRows}:null}),muteHttpExceptions:true
   });
   var result;try{result=JSON.parse(response.getContentText());}catch(e){throw new Error('Resposta inválida da presença: HTTP '+response.getResponseCode());}
   if(response.getResponseCode()>=300||!result.ok)throw new Error(result.error||'Falha ao sincronizar presença.');
