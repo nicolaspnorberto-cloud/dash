@@ -1,3 +1,4 @@
+import {OFFICIAL_PATH} from '../lib/official-source.mjs';
 import { withReportCache } from '../lib/report-cache.mjs';
 import { sourceRevision } from '../lib/source-revision.mjs';
 import {
@@ -136,6 +137,7 @@ function compactSourceRow(row = {}) {
 }
 
 function responsibility(row) {
+  if(row?.official_aggregate===true)return row.official_area;
   const pf = String(row?.process_fail || '').trim();
   const tm = String(row?.to_mis_status || '').trim();
   if (pf === 'Packed TO') return 'EXPEDIÇÃO';
@@ -340,6 +342,15 @@ export { attributeDynamicV613, responsibility, validOperators };
 
 const cachedReport=withReportCache(buildReport);
 export async function GET(request){
+  const official=await readJson(OFFICIAL_PATH,null);
+  if(official){
+    const url=new URL(request.url);
+    if(url.searchParams.get('hc_only')==='1')return json({ok:true,hc:official.hc});
+    if(url.searchParams.get('revision')==='1')return json({ok:true,revision:official.meta.updatedAt});
+    const period=resolvePeriod(url,official.meta);
+    const selected=url.searchParams.get('meta_only')==='1'?[]:official.rows.filter(r=>r.lmreceived_date>=period.from&&r.lmreceived_date<=period.to);
+    return json({ok:true,hc:url.searchParams.get('include_hc')==='0'?[]:official.hc,misscan:selected,meta:{...official.meta,periodStart:period.from,periodEnd:period.to,periodPreset:period.preset,periodLabel:`${formatBr(period.from)} a ${formatBr(period.to)}`,historyLabel:`${formatBr(official.meta.historyStart)} a ${formatBr(official.meta.historyEnd)}`,returnedMisscanRecords:selected.reduce((n,r)=>n+r.official_count,0)}});
+  }
   if(new URL(request.url).searchParams.get('hc_only')==='1'){
     try{const file=await readJson(HC_PATH,{rows:[]});return json({ok:true,hc:file?.rows||[]});}
     catch(error){return json({ok:false,error:error.message},503);}
