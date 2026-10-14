@@ -1,3 +1,4 @@
+import {OFFICIAL_PATH,officialWeight} from '../lib/official-source.mjs';
 import { withReportCache } from '../lib/report-cache.mjs';
 import {
   json,
@@ -94,9 +95,10 @@ async function buildReport(request) {
   try {
     const url = new URL(request.url);
     const requestedWeeks = Math.max(6, Math.min(16, Number(url.searchParams.get('weeks') || 8)));
-    const meta = await readJson(META_PATH, null);
+    const official=await readJson(OFFICIAL_PATH,null);
+    const meta = official?.meta || await readJson(META_PATH, null);
     const gerot = await readJson(GEROT_PATH, null);
-    const hcFile = await readJson(HC_PATH, { rows: [] });
+    const hcFile = official?{rows:official.hc}:await readJson(HC_PATH, { rows: [] });
 
     if (!meta?.historyStart || !meta?.historyEnd) {
       return json({ ok: false, error: 'Histórico da LM ainda não está disponível.' }, 503);
@@ -133,7 +135,7 @@ async function buildReport(request) {
     const end = meta.historyEnd;
     const requestedStart = addDays(mondayOf(end), -(requestedWeeks - 1) * 7);
     const start = requestedStart < meta.historyStart ? meta.historyStart : requestedStart;
-    const sourceRows = await readHistoryRange(start, end, meta);
+    const sourceRows = official?official.rows.filter(r=>r.lmreceived_date>=start&&r.lmreceived_date<=end):await readHistoryRange(start, end, meta);
 
     const volumeByWeek = new Map();
     const volumeDaysByWeek = new Map();
@@ -150,7 +152,7 @@ async function buildReport(request) {
       if (volume > 0) volumeDaysByWeek.get(week).add(date);
     }
 
-    const attributed = attributeDynamicV613(sourceRows);
+    const attributed = official?sourceRows:attributeDynamicV613(sourceRows);
     const hcIndex = hcIndexes(hcFile?.rows || []);
     const map = new Map();
     const misscanByWeek = new Map();
@@ -163,10 +165,10 @@ async function buildReport(request) {
       const week = isoWeek(date);
       const currentStart = weekStartByKey.get(week);
       if (!currentStart || date < currentStart) weekStartByKey.set(week, date);
-      misscanByWeek.set(week, (misscanByWeek.get(week) || 0) + 1);
+      misscanByWeek.set(week, (misscanByWeek.get(week) || 0) + officialWeight(row));
       const operators = validOperators(row?.operator_fail || '');
       if (operators.length !== 1) {
-        unidentified++;
+        unidentified+=officialWeight(row);
         continue;
       }
       const operator = operators[0];
@@ -189,10 +191,10 @@ async function buildReport(request) {
       const item = map.get(key);
       if (!item.weeks[week]) item.weeks[week] = weekMetric();
       const metric = item.weeks[week];
-      metric.missScan++;
+      metric.missScan+=officialWeight(row);
       const area = responsibility(row);
-      if (area === 'ESTEIRA') metric.esteira++;
-      if (area === 'EXPEDIÇÃO') metric.expedicao++;
+      if (area === 'ESTEIRA') metric.esteira+=officialWeight(row);
+      if (area === 'EXPEDIÇÃO') metric.expedicao+=officialWeight(row);
     }
 
     const weekKeys = [...new Set([
