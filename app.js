@@ -2638,6 +2638,21 @@ async function checkSourceRevision(){
   return data.revision;
 }
 
+window.sendT3Now=async()=>{
+  const button=$('sendT3NowBtn');
+  if(button?.disabled)return;
+  if(button)button.disabled=true;
+  try{
+    const result=await sharedTreatmentRequest('/api/seatalk',{action:'daily-dialogues-t3'},{promptPin:true});
+    if(result.sent)alert(`Envio T3 + T5 confirmado para ${result.group}. Pendências: ${result.pending}.`);
+    else{
+      const reasons={'outside-t2-window':'Fora da janela T3: 21h30 a 5h30.','session-closed':'O relatório final já encerrou esta sessão.','presence-unavailable-or-stale':'A presença ABS não está disponível ou está desatualizada.','not-configured':'Integração SeaTalk não configurada.','emergency-paused':'Robô pausado.'};
+      alert(`Nenhuma mensagem enviada. ${reasons[result.reason]||result.reason||'Consulte o resultado da execução.'}`);
+    }
+  }catch(error){alert(`Falha no envio T3: ${error.message}`);}
+  finally{if(button)button.disabled=false;}
+};
+
 async function boot(){
   tabs();loadCalendarPreferences();restorePeriodPreference();
   const initialEvolution=restoreEvolutionSnapshot();
