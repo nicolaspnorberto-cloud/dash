@@ -1,4 +1,4 @@
-import { configureRuntimeEnv, json } from '../lib/blob-store.mjs';
+import { configureRuntimeEnv, json, writeJson } from '../lib/blob-store.mjs';
 import * as dados from '../api/dados.mjs';
 import * as taxas from '../api/taxas.mjs';
 import * as calendarizacao from '../api/calendarizacao.mjs';
@@ -96,10 +96,21 @@ export default {
 
   async scheduled(_event, env, executionCtx) {
     configureRuntimeEnv(env, new Request('https://dash.nicolas-pnorberto.workers.dev/'));
-    executionCtx.waitUntil(
-      sendDailyDialogueReminder({turn:String(_event.cron||'').startsWith('30 ')?'T3':'T2'}).catch(error => {
-        console.error('SEATALK_DAILY_DIALOGUE_REMINDER_ERROR', error);
-      })
-    );
+    const turn=String(_event.cron||'').startsWith('30 ')?'T3':'T2';
+    executionCtx.waitUntil((async()=>{
+      const attemptedAt=new Date().toISOString();
+      let result;
+      try{result=await sendDailyDialogueReminder({turn});}
+      catch(error){
+        console.error('SEATALK_DAILY_DIALOGUE_REMINDER_ERROR',error);
+        result={ok:false,reason:'execution-failed',error:String(error.message||'Falha na execução').slice(0,240)};
+      }
+      await writeJson(`misscan/seatalk-last-attempt-${turn.toLowerCase()}.json`,{
+        attemptedAt,finishedAt:new Date().toISOString(),cron:_event.cron,turn,
+        ok:result.ok===true,sent:result.sent===true,skipped:result.skipped===true,
+        reason:result.reason||'',error:result.error||'',pending:result.pending??null,
+        deferred:result.deferred??null,closingReport:result.closingReport===true
+      });
+    })().catch(error=>console.error('SEATALK_ATTEMPT_RECORD_ERROR',error)));
   }
 };
