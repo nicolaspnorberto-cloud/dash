@@ -2283,7 +2283,7 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
   },2);
   const chunks=dataChunksV68(meta);
   let completed=0;
-  const parts=await mapLimitV68(chunks,3,async chunk=>{
+  const parts=await mapLimitV68(chunks,1,async chunk=>{
     if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
     const key=`${chunk.from}_${chunk.to}`;
     const cached=!fresh?liveBlockCache.get(key):null;
