@@ -1,4 +1,5 @@
 import { configureRuntimeEnv, json, writeJson } from '../lib/blob-store.mjs';
+import * as officialSync from '../api/official-sync.mjs';
 import * as dados from '../api/dados.mjs';
 import * as taxas from '../api/taxas.mjs';
 import * as calendarizacao from '../api/calendarizacao.mjs';
@@ -18,6 +19,7 @@ import * as operations from '../api/operations.mjs';
 import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
 
 const direct = new Map([
+  ['official-sync', officialSync],
   ['dados', dados],
   ['taxas', taxas],
   ['calendarizacao', calendarizacao],
