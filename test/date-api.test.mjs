@@ -29,6 +29,6 @@ test('consulta de período conserva atribuição e não grava cache no banco', a
   assert.equal(result.meta.periodStart, '2026-10-01');
   assert.equal(result.meta.periodEnd, '2026-10-02');
   assert.equal(result.hc.length, 0);
-  assert.equal(reads, 3); // índice e dois dias; nenhum snapshot de relatório.
+  assert.equal(reads, 4); // detecção da fonte oficial, índice e dois dias.
   assert.equal(writes, 0);
 });
