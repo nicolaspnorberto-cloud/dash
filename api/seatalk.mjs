@@ -25,12 +25,14 @@ function assertWritePin(request) {
 }
 
 export async function GET() {
+  const lastT3Attempt=await readJson('misscan/seatalk-last-attempt-t3.json',null);
   const presence = await readJson(PRESENCE_PATH, null);
   const presenceHealth = selectPresentTreatments([], presence);
   // Public status confirms the active reminder destination after each deploy.
   return json({
     ok: true,
     configured: seatalkConfigured(),
+    lastT3Attempt,
     paused: SEATALK_PAUSED,
     route: '/api/seatalk',
     destination: seatalkDestinationName(),
