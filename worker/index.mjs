@@ -100,9 +100,12 @@ export default {
     await (async()=>{
       const attemptedAt=new Date().toISOString();
       const attemptPath=`misscan/seatalk-last-attempt-${turn.toLowerCase()}.json`;
+      const historyPath=`misscan/seatalk-attempts/${turn.toLowerCase()}/${attemptedAt.replace(/[:.]/g,'-')}.json`;
       const recordPhase=async phase=>{
         console.log('SEATALK_SCHEDULE_PHASE',JSON.stringify({turn,cron:_event.cron,attemptedAt,phase}));
-        await writeJson(attemptPath,{attemptedAt,cron:_event.cron,turn,phase,finishedAt:null,sent:false});
+        const checkpoint={attemptedAt,cron:_event.cron,turn,phase,finishedAt:null,sent:false};
+        await writeJson(attemptPath,checkpoint);
+        await writeJson(historyPath,checkpoint);
       };
       let result;
       try{
@@ -113,13 +116,15 @@ export default {
         console.error('SEATALK_DAILY_DIALOGUE_REMINDER_ERROR',error);
         result={ok:false,reason:'execution-failed',error:String(error.message||'Falha na execução').slice(0,240)};
       }
-      await writeJson(attemptPath,{
+      const finalRecord={
         phase:result.sent===true?'sent':result.skipped===true?'skipped':'failed',
         attemptedAt,finishedAt:new Date().toISOString(),cron:_event.cron,turn,
         ok:result.ok===true,sent:result.sent===true,skipped:result.skipped===true,
         reason:result.reason||'',error:result.error||'',pending:result.pending??null,
         deferred:result.deferred??null,closingReport:result.closingReport===true
-      });
+      };
+      await writeJson(attemptPath,finalRecord);
+      await writeJson(historyPath,finalRecord);
     })().catch(error=>{console.error('SEATALK_ATTEMPT_RECORD_ERROR',error);throw error;});
   }
 };
