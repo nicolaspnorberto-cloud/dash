@@ -35,6 +35,7 @@ export async function GET() {
     route: '/api/seatalk',
     destination: seatalkDestinationName(),
     presenceSync: { available: presenceHealth.available, dateKey: presence?.dateKey || '', generatedAt: presence?.generatedAt || '', reason: presenceHealth.reason || '' },
+    t3Reminder:{enabled:true,destination:'📊 T3 | Gestão de Performance & Tratativas',turns:['T3','T5'],start:'21:30',closing:'05:30',frequency:'HOURLY_AT_30',timezone:'America/Sao_Paulo',blockedAfterClosing:true},
     dailyReminder: {
       enabled: !SEATALK_PAUSED,
       start: '13:00',
