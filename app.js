@@ -232,6 +232,7 @@ function enrich(r){
   }
   return {
     ...r,
+    process_fail:r.official_aggregate?(r.official_area==='ESTEIRA'?'Esteira':r.official_area==='EXPEDIÇÃO'?'Expedição':'Padrão/Não identificado'):r.process_fail,
     responsabilidade:responsibility(r),
     identificacao:identified?'IDENTIFICADO':'NÃO IDENTIFICADO',
     operator_count:operators.length,
@@ -521,7 +522,7 @@ function addMetric(set,row){if(row.official_aggregate===true)set.officialTotal=(
 function metricCount(set){return set.size+(set.officialTotal||0);}
 function countBy(field,data=state.filtered){
   const m=new Map();
-  data.forEach(r=>{const k=r[field]||'NA';m.set(k,(m.get(k)||0)+rowWeight(r))});
+  data.forEach(r=>{const value=r[field]||'NA';const k=state.liveMeta?.official&&field==='responsabilidade'&&value==='NA'?'Padrão/Não identificado':value;m.set(k,(m.get(k)||0)+rowWeight(r))});
   return [...m.entries()].sort((a,b)=>b[1]-a[1]);
 }
 
@@ -2611,7 +2612,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
         ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
         : '';
       $('dataNote').textContent=
-        `Histórico LM V6.13. ${fmtInt.format(rowTotal(state.raw))} Miss Scans no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
+        `${state.liveMeta?.official?'Fonte oficial MG4.':'Histórico LM V6.13.'} ${fmtInt.format(rowTotal(state.raw))} Miss Scans no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
     return true;
   }catch(err){

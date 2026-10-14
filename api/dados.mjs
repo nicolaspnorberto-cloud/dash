@@ -1,4 +1,4 @@
-import {OFFICIAL_PATH} from '../lib/official-source.mjs';
+import {OFFICIAL_PATH,officialProcessLabel} from '../lib/official-source.mjs';
 import { withReportCache } from '../lib/report-cache.mjs';
 import { sourceRevision } from '../lib/source-revision.mjs';
 import {
@@ -348,7 +348,7 @@ export async function GET(request){
     if(url.searchParams.get('hc_only')==='1')return json({ok:true,hc:official.hc});
     if(url.searchParams.get('revision')==='1')return json({ok:true,revision:official.meta.updatedAt});
     const period=resolvePeriod(url,official.meta);
-    const selected=url.searchParams.get('meta_only')==='1'?[]:official.rows.filter(r=>r.lmreceived_date>=period.from&&r.lmreceived_date<=period.to);
+    const selected=url.searchParams.get('meta_only')==='1'?[]:official.rows.filter(r=>r.lmreceived_date>=period.from&&r.lmreceived_date<=period.to).map(r=>({...r,process_fail:officialProcessLabel(r.official_area)}));
     return json({ok:true,hc:url.searchParams.get('include_hc')==='0'?[]:official.hc,misscan:selected,meta:{...official.meta,periodStart:period.from,periodEnd:period.to,periodPreset:period.preset,periodLabel:`${formatBr(period.from)} a ${formatBr(period.to)}`,historyLabel:`${formatBr(official.meta.historyStart)} a ${formatBr(official.meta.historyEnd)}`,returnedMisscanRecords:selected.reduce((n,r)=>n+r.official_count,0)}});
   }
   if(new URL(request.url).searchParams.get('hc_only')==='1'){
