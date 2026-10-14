@@ -149,3 +149,11 @@ test('mensagem confirma quando não existem pendências', () => {
   assert.match(messages[0], /Não há diálogos de performance pendentes/);
   assert.match(messages[0], /Referência: \*\*D-1\*\*/);
 });
+
+test('rota T3 reúne T3 e T5 e exclui T2',()=>{
+ const names=['Pessoa T2','Pessoa T3','Pessoa T5'];
+ const options={targetTurn:'T3',misscan:names.map((name,i)=>({operator_fail:`[Ops${123+i}]${name}`,process_fail:'Packed TO'})),hc:names.map((name,i)=>({colaborador:name,turno:['T2','T3','T5'][i],lider_nome:'Lider'}))};
+ const rows=buildDialogueStatusRows(options);
+ assert.equal(rows.length,2);
+ assert.deepEqual(rows.map(x=>x.collaborator).sort(),['Pessoa T3','Pessoa T5']);
+});
