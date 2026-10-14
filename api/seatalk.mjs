@@ -67,6 +67,9 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || 'test').toLowerCase();
     assertWritePin(request);
+    if (action === 'daily-dialogues-t3') {
+      return json(await sendDailyDialogueReminder({ force: true, turn: 'T3' }));
+    }
     if (action === 'status') {
       const group = await resolveSeatalkGroup();
       return json({ ok: true, configured: true, group: group.name });
