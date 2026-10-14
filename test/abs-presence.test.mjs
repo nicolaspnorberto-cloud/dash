@@ -77,7 +77,8 @@ test('endpoint grava somente presença e recusa snapshot antigo sem sobrescrever
   assert.equal(rejected.status,409);
   assert.equal(writes.length,1);
 });
-test('mesmo envio forçado sem ABS válido retorna sem enviar SeaTalk',async()=>{
+test('mesmo envio forçado sem ABS válido retorna sem enviar SeaTalk',async t=>{
+  t.mock.timers.enable({apis:['Date'],now:new Date('2026-10-13T17:00:00Z')});
   configureRuntimeEnv({MISSCAN_DB:{prepare(){return{bind(){return this;},async first(){return null;}}}}});
   const oldFetch=globalThis.fetch;
   globalThis.fetch=async()=>{throw new Error('Não acessar nem enviar rede');};

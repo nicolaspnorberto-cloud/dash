@@ -97,20 +97,29 @@ export default {
   async scheduled(_event, env, executionCtx) {
     configureRuntimeEnv(env, new Request('https://dash.nicolas-pnorberto.workers.dev/'));
     const turn=String(_event.cron||'').startsWith('30 ')?'T3':'T2';
-    executionCtx.waitUntil((async()=>{
+    await (async()=>{
       const attemptedAt=new Date().toISOString();
+      const attemptPath=`misscan/seatalk-last-attempt-${turn.toLowerCase()}.json`;
+      const recordPhase=async phase=>{
+        console.log('SEATALK_SCHEDULE_PHASE',JSON.stringify({turn,cron:_event.cron,attemptedAt,phase}));
+        await writeJson(attemptPath,{attemptedAt,cron:_event.cron,turn,phase,finishedAt:null,sent:false});
+      };
       let result;
-      try{result=await sendDailyDialogueReminder({turn});}
+      try{
+        await recordPhase('started');
+        result=await sendDailyDialogueReminder({turn,onPhase:recordPhase});
+      }
       catch(error){
         console.error('SEATALK_DAILY_DIALOGUE_REMINDER_ERROR',error);
         result={ok:false,reason:'execution-failed',error:String(error.message||'Falha na execução').slice(0,240)};
       }
-      await writeJson(`misscan/seatalk-last-attempt-${turn.toLowerCase()}.json`,{
+      await writeJson(attemptPath,{
+        phase:result.sent===true?'sent':result.skipped===true?'skipped':'failed',
         attemptedAt,finishedAt:new Date().toISOString(),cron:_event.cron,turn,
         ok:result.ok===true,sent:result.sent===true,skipped:result.skipped===true,
         reason:result.reason||'',error:result.error||'',pending:result.pending??null,
         deferred:result.deferred??null,closingReport:result.closingReport===true
       });
-    })().catch(error=>console.error('SEATALK_ATTEMPT_RECORD_ERROR',error)));
+    })().catch(error=>{console.error('SEATALK_ATTEMPT_RECORD_ERROR',error);throw error;});
   }
 };
