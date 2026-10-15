@@ -4,6 +4,8 @@ const state = {
   raw: [],
   dailyRaw: null,
   destinations: null,
+  officialDetails: null,
+  detailRows: [],
   filtered: [],
   hcRecords: [],
   hcMap: new Map(),
@@ -597,7 +599,7 @@ function renderRanking(){
   const all=ranking(),rows=state.liveMeta?.official?all:all.slice(0,80);
   $('rankingBody').innerHTML=rows.map((x,i)=>{
     const area=dominant(x.areas),cls=area==='ESTEIRA'?'tag-esteira':area==='EXPEDIÇÃO'?'tag-expedicao':'tag-na';
-    return `<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td><strong>${fmtInt.format(metricCount(x.br))}</strong></td><td>${state.liveMeta?.official?'—':fmtInt.format(x.to.size)}</td><td>${escapeHtml(dominant(x.turnos))}</td><td>${escapeHtml(dominant(x.setores))}</td><td>${escapeHtml(dominant(x.lideres))}</td><td>${escapeHtml(dominant(x.tipos))}</td><td><span class="tag ${cls}">${escapeHtml(area)}</span></td></tr>`;
+    return `<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td><strong>${fmtInt.format(metricCount(x.br))}</strong></td><td>${state.liveMeta?.official?officialTOCount(x):fmtInt.format(x.to.size)}</td><td>${escapeHtml(dominant(x.turnos))}</td><td>${escapeHtml(dominant(x.setores))}</td><td>${escapeHtml(dominant(x.lideres))}</td><td>${escapeHtml(dominant(x.tipos))}</td><td><span class="tag ${cls}">${escapeHtml(area)}</span></td></tr>`;
   }).join('')||'<tr><td colspan="10" class="empty">Sem ofensores identificados para exibir.</td></tr>';
 }
 
@@ -645,7 +647,8 @@ function renderKPIs(){
   const tos=new Set(scoped.map(r=>r.socpacked_tonumber).filter(Boolean));
   const operators=new Set(scoped.filter(r=>r.identificacao==='IDENTIFICADO').map(r=>r.opsid||normalizeName(r.operator_name)).filter(Boolean));
   const pending=hcPendingRows().length;
-  $('kBR').textContent=fmtInt.format(total);$('kTO').textContent=state.liveMeta?.official?'—':fmtInt.format(tos.size);$('kEsteira').textContent=fmtInt.format(est);$('kExpedicao').textContent=fmtInt.format(exp);$('kUnidentified').textContent=fmtInt.format(unidentified);$('kOperators').textContent=fmtInt.format(operators.size);$('kHCPending').textContent=fmtInt.format(pending);
+  $('kBR').textContent=fmtInt.format(total);$('kTO').textContent=state.liveMeta?.official?(state.officialDetails?.available?fmtInt.format(new Set(filteredOfficialDetails().map(r=>r.socpacked_tonumber).filter(Boolean)).size):'—'):fmtInt.format(tos.size);
+  if($('kTODetail'))$('kTODetail').textContent=state.liveMeta?.official?'TOs identificadas • OUT_12 (mínimo conhecido)':'TO únicas';$('kEsteira').textContent=fmtInt.format(est);$('kExpedicao').textContent=fmtInt.format(exp);$('kUnidentified').textContent=fmtInt.format(unidentified);$('kOperators').textContent=fmtInt.format(operators.size);$('kHCPending').textContent=fmtInt.format(pending);
   $('pEsteira').textContent=total?fmtPct(est/total*100):'—';$('pExpedicao').textContent=total?fmtPct(exp/total*100):'—';$('pUnidentified').textContent=total?fmtPct(unidentified/total*100):'—';
   const dates=scoped.flatMap(r=>r.official_granularity==='week'?[r.official_period_start,r.official_period_end]:[String(r.lmreceived_date||'').slice(0,10)]).filter(Boolean).sort();
   $('kDate').textContent=dates.length?`${dates[0].split('-').reverse().join('/')} ${dates.at(-1)!==dates[0]?'→ '+dates.at(-1).split('-').reverse().join('/'):''}`:'sem data';
@@ -653,7 +656,29 @@ function renderKPIs(){
 
 function officialDataNote(){
   const detail=state.liveMeta?.individualization;
-  return `Fonte oficial MG4: ${fmtInt.format(rowTotal(state.filtered))} Miss Scans no recorte. Turnos, setores e líderes: HC Matinal. ${detail?`${fmtInt.format(detail.recoveredOccurrences)} ocorrências detalhadas por semana; ${fmtInt.format(detail.remainingGrouped)} ainda agrupadas na fonte. O detalhamento semanal exige o período completo e não altera os registros diários. `:''}BR e TO não disponíveis nesta fonte.`;
+  return `Fonte oficial MG4: ${fmtInt.format(rowTotal(state.filtered))} Miss Scans no recorte. Turnos, setores e líderes: HC Matinal. ${detail?`${fmtInt.format(detail.recoveredOccurrences)} ocorrências detalhadas por semana; ${fmtInt.format(detail.remainingGrouped)} ainda agrupadas na fonte. O detalhamento semanal exige o período completo e não altera os registros diários. `:''}TOs identificadas e exemplos de BR: OUT_12, com cobertura própria.`;
+}
+
+function filteredOfficialDetails(){
+  const vals=Object.fromEntries(filterIds.map(id=>[id,$(id).value])),q=$('operatorSearch').value.trim().toLowerCase();
+  return state.detailRows.filter(r=>(!vals.areaFilter||r.responsabilidade===vals.areaFilter)&&(!vals.processFilter||r.process_fail===vals.processFilter)&&(!vals.identFilter||r.identificacao===vals.identFilter)&&(!vals.turnoFilter||r.turno===vals.turnoFilter)&&(!vals.setorFilter||r.setor===vals.setorFilter)&&(!vals.liderFilter||r.lider_nome===vals.liderFilter)&&(!vals.tipoFilter||r.tipo_hc===vals.tipoFilter)&&(!q||`${r.operator_name} ${r.operator_original} ${r.opsid} ${r.lider_nome}`.toLowerCase().includes(q)));
+}
+function officialTOCount(person){
+  if(!state.officialDetails?.available)return '—';
+  const rows=filteredOfficialDetails().filter(r=>(person.opsid&&String(r.opsid).toUpperCase()===String(person.opsid).toUpperCase())||normalizeName(r.operator_name)===normalizeName(person.name));
+  return fmtInt.format(new Set(rows.map(r=>r.socpacked_tonumber).filter(Boolean)).size);
+}
+function renderOfficialDetails(){
+  const panel=$('officialDetailsPanel');if(!panel)return;panel.hidden=!state.liveMeta?.official;if(panel.hidden)return;
+  const rows=filteredOfficialDetails(),meta=state.officialDetails?.meta,coverage=meta?.coverage;
+  const tos=new Set(rows.map(r=>r.socpacked_tonumber).filter(Boolean)),examples=new Set(rows.flatMap(r=>r.br_examples||[]));
+  $('officialDetailsNote').textContent=!state.officialDetails?.available?'Aguardando sincronização OUT_12.':`OUT_12 • ${fmtInt.format(rows.length)} linhas no filtro • ${fmtInt.format(tos.size)} TOs identificadas • ${fmtInt.format(examples.size)} BRs de exemplo distintos. ${coverage?.complete?'Quantidades por dia conferem com a base oficial.':`Cobertura parcial/divergente no período: ${fmtInt.format(coverage?.detailOccurrences||0)} ocorrências na OUT_12 de ${fmtInt.format(coverage?.officialOccurrences||0)} na base oficial.`} TOs e BRs ausentes ou agrupados não são inventados. BRs de exemplo não representam a lista completa.`;
+  $('officialDetailsBody').innerHTML=rows.slice(0,100).map(r=>`<tr><td>${escapeHtml(r.lmreceived_date)}</td><td>${escapeHtml(r.operator_name)}</td><td>${escapeHtml(r.turno)}</td><td>${escapeHtml(r.process_fail)}</td><td>${escapeHtml(r.lt_viagem||'—')}</td><td>${escapeHtml(r.socpacked_tonumber||'Não detalhada')}</td><td>${fmtInt.format(r.official_count)}</td><td>${escapeHtml((r.br_examples||[]).join(', ')||'Sem exemplo')}</td><td>${escapeHtml(r.detail_grouped?'Combinações agrupadas':r.detail_rule||'—')}</td></tr>`).join('')||'<tr><td colspan="9" class="empty">Nenhum detalhe OUT_12 disponível para este recorte.</td></tr>';
+  $('officialDetailsLimit').textContent=rows.length>100?`Mostrando 100 de ${fmtInt.format(rows.length)} linhas. A exportação inclui todas as linhas filtradas.`:'';
+  $('exportOfficialDetailsBtn').disabled=!rows.length;
+}
+function exportOfficialDetails(){
+  exportCSV(filteredOfficialDetails().map(r=>({data:r.lmreceived_date,colaborador:r.operator_name,opsid:r.opsid,turno_hc:r.turno,setor_hc:r.setor,lider_hc:r.lider_nome,operacao:r.process_fail,lt:r.lt_viagem,to:r.socpacked_tonumber,miss_scans:r.official_count,brs_distintos_no_grupo:r.br_distinct_in_group,brs_exemplo:(r.br_examples||[]).join(' | '),combinacoes_agrupadas:r.detail_grouped,regra:r.detail_rule,nivel:r.detail_level,fonte:'OUT_12_COLABORADOR_LT_TO',atualizado_origem:r.source_created_at})),'misscan_out12_tos_brs_filtrados.csv');
 }
 
 function renderDestinations(){
@@ -685,7 +710,7 @@ function renderAll(){
   renderBars('liderBars',countBy('lider_nome',state.filtered.filter(r=>r.identificacao==='IDENTIFICADO')),10);
   renderBars('statusBars',countBy('last_status'),10);
   renderDestinations();
-  renderRanking();renderTreatments();renderProjection();
+  renderOfficialDetails();renderRanking();renderTreatments();renderProjection();
   if(state.liveMeta?.official){$('dataNote').textContent=officialDataNote();return;}
   const duplicateNote=state.sourceRows-state.raw.length;
   $('dataNote').textContent=`${fmtInt.format(state.filtered.length)} de ${fmtInt.format(state.raw.length)} BR únicos exibidos • ${fmtInt.format(state.sourceRows)} linhas de origem${duplicateNote>0?` • ${duplicateNote} duplicidade(s) de BR consolidada(s)`:''}. Regras: Packed TO = Expedição • Extra Parcel = Esteira • Whole TO/NA herda o único operator_fail válido do TO • 2+ operadores no mesmo BR = não identificado.`;
@@ -2315,6 +2340,7 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
   const meta=head.meta||{};
   if(meta.official){
     const {data}=await fetchJsonResilientV68(`/api/dados?${baseQuery}&include_hc=1&individualize=1`,{headers:{Accept:'application/json'},cache:'no-store',signal},2);
+    try{const {data:detail}=await fetchJsonResilientV68(`/api/official-details?from=${data.meta.periodStart}&to=${data.meta.periodEnd}`,{headers:{Accept:'application/json'},cache:'no-store',signal},1);data.officialDetails=detail;}catch(error){if(signal?.aborted)throw error;data.officialDetails={available:false,error:error.message};}
     return data;
   }
   if(!state.raw.length){
@@ -2603,6 +2629,8 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     syncPeriodControlsFromMeta();
 
     buildHCMap(data.hc||[]);
+    state.officialDetails=data.officialDetails||null;
+    state.detailRows=(data.officialDetails?.rows||[]).map(enrich);
     loadMisscanRows(data.individualizedRows||data.misscan||[],data.misscan||[]);
     loadTreatmentRows(liveTreatmentRows());
 
@@ -2690,7 +2718,7 @@ async function boot(){
   const initialEvolution=restoreEvolutionSnapshot();
   if(initialEvolution)renderEvolution();
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
-  $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);
+  $('operatorSearch').addEventListener('input',applyFilters);$('resetBtn').addEventListener('click',()=>resetFilterValues(true));$('exportBtn').addEventListener('click',exportFiltered);$('exportOfficialDetailsBtn')?.addEventListener('click',exportOfficialDetails);
   $('refreshDataBtn').addEventListener('click',()=>forceRefreshSourcesV67({silent:false}));
   $('applyPeriodBtn').addEventListener('click',applyPeriodFromControls);
   $('datePreset').addEventListener('change',()=>{
