@@ -40,7 +40,7 @@ async function buildReport(request) {
       : addDays(from, days - 1);
 
     const rows = (data.forecast || [])
-      .filter(r => r.date >= from && r.date <= to && Number.isFinite(Number(r.total)) && Number(r.total)>=0 && (!r.originType||String(r.originType).trim().toUpperCase().replace(/[ _]+/g,'-')==='INTER-SOC'))
+      .filter(r => r.date >= from && r.date <= to && Number.isFinite(Number(r.total)) && Number(r.total)>0 && (!r.originType||String(r.originType).trim().toUpperCase().replace(/[ _]+/g,'-')==='INTER-SOC'))
       .map(r => ({
         id: `GEROT_${r.date}`,
         source: 'GEROT',
