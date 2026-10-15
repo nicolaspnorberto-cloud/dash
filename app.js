@@ -534,9 +534,9 @@ function countBy(field,data=state.filtered){
   return [...m.entries()].sort((a,b)=>b[1]-a[1]);
 }
 
-function renderBars(id,entries,limit=10){
+function renderBars(id,entries,limit=10,denominator=null){
   const max=Math.max(1,...entries.map(x=>x[1]));
-  const total=entries.reduce((a,b)=>a+b[1],0)||1;
+  const total=(denominator??entries.reduce((a,b)=>a+b[1],0))||1;
   const colors={'ESTEIRA':'#ee4d2d','EXPEDIÇÃO':'#184a86','NA':'#9aa8bb','Extra Parcel - normal flow':'#ee4d2d','Extra Parcel - abnormal flow':'#ff7b5f','Packed TO':'#184a86'};
   $(id).innerHTML=entries.slice(0,limit).map(([label,val],i)=>`<div class="bar-row"><div class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(1,val/max*100)}%;background:${colors[label]||['#184a86','#ee4d2d','#00a66a','#9aa8bb'][i%4]}"></div></div><div class="bar-value">${fmtInt.format(val)} <span style="color:#999;font-weight:650">${(val/total*100).toFixed(1)}%</span></div></div>`).join('')||'<div class="empty">Sem dados para os filtros selecionados.</div>';
 }
@@ -667,9 +667,12 @@ function renderDestinations(){
   const area=$('areaFilter').value,process=$('processFilter').value,destination=$('stationFilter').value;
   const totals=new Map();
   for(const r of data.rows){if(area&&r.area!==area||process&&(r.area==='ESTEIRA'?'Esteira':r.area==='EXPEDIÇÃO'?'Expedição':'Padrão/Não identificado')!==process||destination&&r.destination!==destination)continue;totals.set(r.destination,(totals.get(r.destination)||0)+r.count);}
-  renderBars('stationBars',[...totals].sort((a,b)=>b[1]-a[1]),10);
+  const total=[...totals.values()].reduce((a,b)=>a+b,0);
+  const grouped=[...totals].filter(([name])=>/^(demais|outros) destinos$/i.test(name)).reduce((n,[,q])=>n+q,0);
+  renderBars('stationBars',[...totals].filter(([name])=>!/^(demais|outros) destinos$/i.test(name)).sort((a,b)=>b[1]-a[1]),10,total);
   const periods=data.periods||[],dates=periods.flatMap(p=>[p.start,p.end]).sort();
   if(note)note.textContent+=dates.length?` • ${dates[0]} a ${dates.at(-1)} • ${fmtInt.format([...totals.values()].reduce((a,b)=>a+b,0))} ocorrências na fonte`:'';
+  if(grouped&&note)note.textContent+=` • ${fmtInt.format(grouped)} em demais destinos, fora do ranking nominal`;
   if(data.excludedPeriods?.length){if(note)note.textContent+=' • períodos parciais ou sem cobertura excluídos';if(!periods.length)$('stationBars').innerHTML='<div class="empty">Selecione uma semana completa ou um período maior. Não há dados semanais completos disponíveis neste recorte.</div>';}
 }
 
