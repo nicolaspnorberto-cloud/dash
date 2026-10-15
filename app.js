@@ -599,7 +599,7 @@ function renderRanking(){
   const all=ranking(),rows=state.liveMeta?.official?all:all.slice(0,80);
   $('rankingBody').innerHTML=rows.map((x,i)=>{
     const area=dominant(x.areas),cls=area==='ESTEIRA'?'tag-esteira':area==='EXPEDIÇÃO'?'tag-expedicao':'tag-na';
-    return `<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td><strong>${fmtInt.format(metricCount(x.br))}</strong></td><td>${state.liveMeta?.official?officialTOCount(x):fmtInt.format(x.to.size)}</td><td>${escapeHtml(dominant(x.turnos))}</td><td>${escapeHtml(dominant(x.setores))}</td><td>${escapeHtml(dominant(x.lideres))}</td><td>${escapeHtml(dominant(x.tipos))}</td><td><span class="tag ${cls}">${escapeHtml(area)}</span></td></tr>`;
+    return `<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td><strong>${fmtInt.format(metricCount(x.br))}</strong></td><td><strong>${state.liveMeta?.official?officialTOCount(x):fmtInt.format(x.to.size)}</strong></td><td>${escapeHtml(dominant(x.turnos))}</td><td>${escapeHtml(dominant(x.setores))}</td><td>${escapeHtml(dominant(x.lideres))}</td><td>${escapeHtml(dominant(x.tipos))}</td><td><span class="tag ${cls}">${escapeHtml(area)}</span></td></tr>`;
   }).join('')||'<tr><td colspan="10" class="empty">Sem ofensores identificados para exibir.</td></tr>';
 }
 
@@ -666,7 +666,10 @@ function filteredOfficialDetails(){
 function officialTOCount(person){
   if(!state.officialDetails?.available)return '—';
   const rows=filteredOfficialDetails().filter(r=>(state.rankArea==='all'||r.responsabilidade===state.rankArea)).filter(r=>(person.opsid&&String(r.opsid).toUpperCase()===String(person.opsid).toUpperCase())||normalizeName(r.operator_name)===normalizeName(person.name));
-  return fmtInt.format(new Set(rows.map(r=>r.socpacked_tonumber).filter(Boolean)).size);
+  if(!rows.length)return 'Sem dados';
+  const count=new Set(rows.map(r=>r.socpacked_tonumber).filter(Boolean)).size;
+  if(!count)return 'Não informada';
+  return fmtInt.format(count)+(state.officialDetails.meta?.coverage?.complete?'':'*');
 }
 function renderOfficialDetails(){
   const panel=$('officialDetailsPanel');if(!panel)return;panel.hidden=!state.liveMeta?.official;if(panel.hidden)return;
