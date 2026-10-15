@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {normalizeDetails,detailCoverage} from '../lib/official-details.mjs';
+const row={soc:'MG4',station_id:'13812',data_ref:'12/10/2026',qtd_miss_scan:10,qtd_brs_distintos:8,colaborador:'PESSOA TESTE',is_colaborador_identificado:1,to_voando:'TO2026TEST',br_exemplo_1:'BR2026TEST',br_exemplo_2:'BR2026TEST',regra_atribuicao:'V25_CAuda_TOP3'};
+const body=rows=>({source:{spreadsheetId:'1nubTPlSulT2LY9ZlKkemvjyhlGlYqWIl-eyBlDVRft8',sheet:'OUT_12_COLABORADOR_LT_TO'},rows});
+test('OUT_12 preserva quantidade, TO e BRs somente como exemplos distintos',()=>{const [r]=normalizeDetails(body([row])).rows;assert.equal(r.lmreceived_date,'2026-10-12');assert.equal(r.official_count,10);assert.equal(r.br_examples.length,1);assert.equal(r.detail_grouped,true);assert.equal(r.socpacked_tonumber,'TO2026TEST');});
+test('marcadores não viram TOs ou BRs e fonte/data inválida é rejeitada',()=>{const [r]=normalizeDetails(body([{...row,to_voando:'Not identified',br_exemplo_1:'Demais BRs',br_exemplo_2:''}])).rows;assert.equal(r.socpacked_tonumber,'');assert.deepEqual(r.br_examples,[]);for(const patch of [{soc:'SP2'},{station_id:'1'},{data_ref:'31/02/2026'},{qtd_brs_distintos:11}])assert.throws(()=>normalizeDetails(body([{...row,...patch}])));});
+test('cobertura confere por dia e identifica carga parcial sem substituir total oficial',()=>{const rows=normalizeDetails(body([row])).rows;assert.equal(detailCoverage(rows,[{lmreceived_date:'2026-10-12',official_count:10}]).complete,true);const coverage=detailCoverage(rows,[{lmreceived_date:'2026-10-12',official_count:20}]);assert.equal(coverage.complete,false);assert.equal(coverage.officialOccurrences,20);assert.equal(coverage.detailOccurrences,10);});
