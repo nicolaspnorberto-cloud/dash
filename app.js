@@ -2,6 +2,7 @@
 const state = {
   sourceRows: 0,
   raw: [],
+  dailyRaw: null,
   filtered: [],
   hcRecords: [],
   hcMap: new Map(),
@@ -219,6 +220,9 @@ function parseSingleOperator(raw=''){
 }
 
 function enrich(r){
+  if(r.official_grouped===true || (r.official_aggregate && /^(demais colaboradores|outros colaboradores|outros ofensores|outros)$/i.test(String(r.official_collaborator||r.operator_fail||'').trim()))){
+    return {...r,responsabilidade:responsibility(r),identificacao:'AGRUPADO',operator_name:'Sem detalhamento individual',operator_original:r.official_collaborator||r.operator_fail,opsid:'',turno:'Sem detalhamento individual',setor:'Sem detalhamento individual',lider_nome:'Sem detalhamento individual',lider_email:'',tipo_hc:'Não aplicável',hc_status:'Não aplicável',attribution_source:r.attribution_source||'OFFICIAL_GROUP'};
+  }
   const operators=parseOperators(r.operator_fail);
   const multi=operators.length>1;
   const single=operators.length===1?parseSingleOperator(operators[0]):{opsid:'',name:'',norm:'',invalid:true};
@@ -226,9 +230,9 @@ function enrich(r){
   const hc=identified?(state.hcOpsMap?.get(String(single.opsid).toUpperCase())||state.hcMap.get(single.norm)):null;
   let hcStatus='Não aplicável', turno='Não identificado', setor='Não identificado', liderNome='Não identificado', liderEmail='Não identificado', tipoHC='Não identificado';
   if(identified && hc){
-    hcStatus=hc.ambiguous?'Ambíguo':'OK'; turno=hc.turno; setor=hc.setor; liderNome=hc.lider_nome; liderEmail=hc.lider_email; tipoHC='Fixo';
+    hcStatus=hc.ambiguous?'Ambíguo':hc.turno==='Não cadastrado'?'Turno não cadastrado':'OK'; turno=hc.turno; setor=hc.setor; liderNome=hc.lider_nome; liderEmail=hc.lider_email; tipoHC='Fixo';
   } else if(identified){
-    hcStatus='Não cadastrado'; turno='Não cadastrado'; setor='Não cadastrado'; liderNome='Não cadastrado'; liderEmail='Não cadastrado'; tipoHC='Diarista';
+    hcStatus='Não cadastrado'; turno='Não cadastrado'; setor='Não cadastrado'; liderNome='Não cadastrado'; liderEmail='Não cadastrado'; tipoHC='Não cadastrado';
   }
   return {
     ...r,
@@ -443,12 +447,13 @@ function scopeRowsToLivePeriodV612(rows=[]){
   }
 
   return rows.filter(r=>{
+    if(r.official_granularity==='week')return r.official_period_start>=from&&r.official_period_end<=to;
     const d=String(r?.lmreceived_date||'').slice(0,10);
     return d>=from&&d<=to;
   });
 }
 
-function loadMisscanRows(rows){
+function loadMisscanRows(rows,dailyRows=null){
   state.sourceRows=rows.length;
 
   // V6.13: BR único com operator_fail oficial, sem herança por Whole TO.
@@ -457,6 +462,7 @@ function loadMisscanRows(rows){
   const enriched=scoped.map(enrich);
 
   state.raw=enriched;
+  state.dailyRaw=state.liveMeta?.official?scopeRowsToLivePeriodV612(dailyRows||rows).map(enrich):enriched;
   state.filtered=[...state.raw];
 
   state.v612Integrity={
@@ -586,7 +592,7 @@ function ranking(){
 }
 
 function renderRanking(){
-  const rows=ranking().slice(0,80);
+  const all=ranking(),rows=state.liveMeta?.official?all:all.slice(0,80);
   $('rankingBody').innerHTML=rows.map((x,i)=>{
     const area=dominant(x.areas),cls=area==='ESTEIRA'?'tag-esteira':area==='EXPEDIÇÃO'?'tag-expedicao':'tag-na';
     return `<tr><td>${i+1}</td><td><strong>${escapeHtml(x.name)}</strong></td><td>${escapeHtml(x.opsid||'—')}</td><td><strong>${fmtInt.format(metricCount(x.br))}</strong></td><td>${state.liveMeta?.official?'—':fmtInt.format(x.to.size)}</td><td>${escapeHtml(dominant(x.turnos))}</td><td>${escapeHtml(dominant(x.setores))}</td><td>${escapeHtml(dominant(x.lideres))}</td><td>${escapeHtml(dominant(x.tipos))}</td><td><span class="tag ${cls}">${escapeHtml(area)}</span></td></tr>`;
@@ -639,8 +645,13 @@ function renderKPIs(){
   const pending=hcPendingRows().length;
   $('kBR').textContent=fmtInt.format(total);$('kTO').textContent=state.liveMeta?.official?'—':fmtInt.format(tos.size);$('kEsteira').textContent=fmtInt.format(est);$('kExpedicao').textContent=fmtInt.format(exp);$('kUnidentified').textContent=fmtInt.format(unidentified);$('kOperators').textContent=fmtInt.format(operators.size);$('kHCPending').textContent=fmtInt.format(pending);
   $('pEsteira').textContent=total?fmtPct(est/total*100):'—';$('pExpedicao').textContent=total?fmtPct(exp/total*100):'—';$('pUnidentified').textContent=total?fmtPct(unidentified/total*100):'—';
-  const dates=scoped.map(r=>String(r.lmreceived_date||'').slice(0,10)).filter(Boolean).sort();
+  const dates=scoped.flatMap(r=>r.official_granularity==='week'?[r.official_period_start,r.official_period_end]:[String(r.lmreceived_date||'').slice(0,10)]).filter(Boolean).sort();
   $('kDate').textContent=dates.length?`${dates[0].split('-').reverse().join('/')} ${dates.at(-1)!==dates[0]?'→ '+dates.at(-1).split('-').reverse().join('/'):''}`:'sem data';
+}
+
+function officialDataNote(){
+  const detail=state.liveMeta?.individualization;
+  return `Fonte oficial MG4: ${fmtInt.format(rowTotal(state.filtered))} Miss Scans no recorte. Turnos, setores e líderes: HC Matinal. ${detail?`${fmtInt.format(detail.recoveredOccurrences)} ocorrências detalhadas por semana; ${fmtInt.format(detail.remainingGrouped)} ainda agrupadas na fonte. O detalhamento semanal exige o período completo e não altera os registros diários. `:''}BR e TO não disponíveis nesta fonte.`;
 }
 
 function renderAll(){
@@ -653,7 +664,7 @@ function renderAll(){
   renderBars('statusBars',countBy('last_status'),10);
   renderBars('stationBars',countBy('lmreceived_station'),10);
   renderRanking();renderTreatments();renderProjection();
-  if(state.liveMeta?.official){$('dataNote').textContent=`Fonte oficial MG4: ${fmtInt.format(rowTotal(state.filtered))} Miss Scans no recorte. Turnos, setores e líderes: Base de HC 26 da Matinal. Dados agregados; BR, TO, destino e status não disponíveis nesta fonte.`;return;}
+  if(state.liveMeta?.official){$('dataNote').textContent=officialDataNote();return;}
   const duplicateNote=state.sourceRows-state.raw.length;
   $('dataNote').textContent=`${fmtInt.format(state.filtered.length)} de ${fmtInt.format(state.raw.length)} BR únicos exibidos • ${fmtInt.format(state.sourceRows)} linhas de origem${duplicateNote>0?` • ${duplicateNote} duplicidade(s) de BR consolidada(s)`:''}. Regras: Packed TO = Expedição • Extra Parcel = Esteira • Whole TO/NA herda o único operator_fail válido do TO • 2+ operadores no mesmo BR = não identificado.`;
 }
@@ -666,7 +677,7 @@ function exportCSV(rows,filename){
 }
 
 function exportFiltered(){
-  exportCSV(state.filtered.map(r=>({quantidade:rowWeight(r),fonte:r.official_aggregate?'OUT_05 MG4':'LM',data:r.lmreceived_date,shipment_id:r.shipment_id,socpacked_tonumber:r.socpacked_tonumber,process_fail:r.process_fail,to_mis_status:r.to_mis_status,responsabilidade:r.responsabilidade,operator_fail:r.operator_original,operator_fail_efetivo:r.operator_fail,regra_atribuicao:r.attribution_source,identificacao:r.identificacao,colaborador:r.operator_name,opsid:r.opsid,turno:r.turno,setor:r.setor,lider:r.lider_nome,tipo_hc:r.tipo_hc,hc_status:r.hc_status,destino:r.lmreceived_station,last_status:r.last_status})),'misscan_tratado_filtrado.csv');
+  exportCSV(state.filtered.map(r=>({quantidade:rowWeight(r),fonte:r.attribution_source||(r.official_aggregate?'OUT_05 MG4':'LM'),granularidade:r.official_granularity||'day',periodo_inicio:r.official_period_start||r.lmreceived_date,periodo_fim:r.official_period_end||r.lmreceived_date,data:r.lmreceived_date,shipment_id:r.shipment_id,socpacked_tonumber:r.socpacked_tonumber,process_fail:r.process_fail,to_mis_status:r.to_mis_status,responsabilidade:r.responsabilidade,operator_fail:r.operator_original,operator_fail_efetivo:r.operator_fail,regra_atribuicao:r.attribution_source,identificacao:r.identificacao,colaborador:r.operator_name,opsid:r.opsid,turno:r.turno,setor:r.setor,lider:r.lider_nome,tipo_hc:r.tipo_hc,hc_status:r.hc_status,destino:r.lmreceived_station,last_status:r.last_status})),'misscan_tratado_filtrado.csv');
 }
 
 function exportPending(){
@@ -2165,8 +2176,9 @@ function setLiveStatus(mode,text,detail=''){
 }
 
 function liveTreatmentRows(){
-  const identified=state.raw.filter(r=>r.identificacao==='IDENTIFICADO' && (r.official_aggregate||r.responsabilidade!=='NA'));
-  const total=(state.liveMeta?.official?rowTotal(state.raw):rowTotal(identified))||1;
+  const source=state.dailyRaw||state.raw;
+  const identified=source.filter(r=>r.identificacao==='IDENTIFICADO' && (r.official_aggregate||r.responsabilidade!=='NA'));
+  const total=(state.liveMeta?.official?rowTotal(source):rowTotal(identified))||1;
   const groups=new Map();
 
   identified.forEach(r=>{
@@ -2280,7 +2292,7 @@ async function loadLiveDataV68({fresh=false,signal,baseQuery=periodQuery()}={}){
   if(signal?.aborted)throw new DOMException('Carga cancelada.','AbortError');
   const meta=head.meta||{};
   if(meta.official){
-    const {data}=await fetchJsonResilientV68(`/api/dados?${baseQuery}&include_hc=1`,{headers:{Accept:'application/json'},cache:'no-store',signal},2);
+    const {data}=await fetchJsonResilientV68(`/api/dados?${baseQuery}&include_hc=1&individualize=1`,{headers:{Accept:'application/json'},cache:'no-store',signal},2);
     return data;
   }
   if(!state.raw.length){
@@ -2568,7 +2580,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     syncPeriodControlsFromMeta();
 
     buildHCMap(data.hc||[]);
-    loadMisscanRows(data.misscan||[]);
+    loadMisscanRows(data.individualizedRows||data.misscan||[],data.misscan||[]);
     loadTreatmentRows(liveTreatmentRows());
 
     const syncStamp=
@@ -2612,7 +2624,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
         ? ` • reconstrução do histórico em andamento${Number.isFinite(Number(backfill.progressPct))?` (${Number(backfill.progressPct).toLocaleString('pt-BR')}%)`:''}`
         : '';
       $('dataNote').textContent=
-        `${state.liveMeta?.official?'Fonte oficial MG4.':'Histórico LM V6.13.'} ${fmtInt.format(rowTotal(state.raw))} Miss Scans no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
+        `${state.liveMeta?.official?officialDataNote():'Histórico LM V6.13.'} ${fmtInt.format(rowTotal(state.raw))} Miss Scans no período ${state.liveMeta?.periodLabel||'selecionado'}${active?` • ${fmtInt.format(active)} dias com Misscan no histórico`:''}${calendar?` • ${fmtInt.format(calendar)} dias de intervalo`:''}${months?` • ${fmtInt.format(months)} mês(es) indexado(s)`:''}${backfillText}.`;
     }
     return true;
   }catch(err){
