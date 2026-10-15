@@ -1,4 +1,5 @@
 import {OFFICIAL_PATH,officialWeight} from '../lib/official-source.mjs';
+import {individualizeOfficialPeriod} from '../lib/official-weekly.mjs';
 import { withReportCache } from '../lib/report-cache.mjs';
 import {
   json,
@@ -67,7 +68,7 @@ function hcInfo(index, operator) {
       turno: 'Não cadastrado',
       setor: 'Não cadastrado',
       lider: 'Não cadastrado',
-      tipo: 'Diarista'
+      tipo: 'Não cadastrado'
     };
   }
   return {
@@ -109,6 +110,7 @@ async function buildReport(request) {
 
     const fresh = url.searchParams.get('fresh') === '1';
     const sourceKey = [
+      'official-individual-turns-v1',
       meta?.receivedAt || '',
       meta?.updatedAt || '',
       meta?.historyEnd || '',
@@ -135,7 +137,8 @@ async function buildReport(request) {
     const end = meta.historyEnd;
     const requestedStart = addDays(mondayOf(end), -(requestedWeeks - 1) * 7);
     const start = requestedStart < meta.historyStart ? meta.historyStart : requestedStart;
-    const sourceRows = official?official.rows.filter(r=>r.lmreceived_date>=start&&r.lmreceived_date<=end):await readHistoryRange(start, end, meta);
+    const detailed=official?individualizeOfficialPeriod(official,start,end,official.weeklyDetails):null;
+    const sourceRows = detailed?detailed.rows:await readHistoryRange(start, end, meta);
 
     const volumeByWeek = new Map();
     const volumeDaysByWeek = new Map();
@@ -158,14 +161,16 @@ async function buildReport(request) {
     const misscanByWeek = new Map();
     let manual = 0;
     let unidentified = 0;
+    let groupedOccurrences = 0;
 
     for (const row of attributed) {
-      const date = rowDateKey(row);
+      const date = row.official_granularity==='week'?row.official_period_start:rowDateKey(row);
       if (!date) continue;
       const week = isoWeek(date);
       const currentStart = weekStartByKey.get(week);
       if (!currentStart || date < currentStart) weekStartByKey.set(week, date);
       misscanByWeek.set(week, (misscanByWeek.get(week) || 0) + officialWeight(row));
+      if(row.official_grouped){groupedOccurrences+=officialWeight(row);continue;}
       const operators = validOperators(row?.operator_fail || '');
       if (operators.length !== 1) {
         unidentified+=officialWeight(row);
@@ -246,8 +251,10 @@ async function buildReport(request) {
         returnedRows: rows.length,
         manual,
         unidentified,
+        groupedOccurrences,
+        individualization:detailed?.meta||null,
         volumeSource: 'GEROT db_volume_overall • Inter-SOC • SOC_Packed',
-        numeratorSource: 'Matinal/LM • mesma atribuição do ranking V6.13',
+        numeratorSource: official?'Oficial MG4 • OUT_05 + OUT_04 conciliadas; turno HC Matinal':'Matinal/LM • mesma atribuição do ranking V6.13',
         shareSource: 'BRs do colaborador ÷ total de Miss Scans da semana',
         generatedAt: new Date().toISOString()
       }
