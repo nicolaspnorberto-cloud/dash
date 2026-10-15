@@ -3,6 +3,7 @@ const state = {
   sourceRows: 0,
   raw: [],
   dailyRaw: null,
+  destinations: null,
   filtered: [],
   hcRecords: [],
   hcMap: new Map(),
@@ -494,7 +495,8 @@ function setupFilters(){
   fillSelect('setorFilter',uniq('setor'),'Todos');
   fillSelect('liderFilter',uniq('lider_nome'),'Todos');
   fillSelect('tipoFilter',uniq('tipo_hc'),'Todos');
-  fillSelect('stationFilter',uniq('lmreceived_station'),'Todos');
+  fillSelect('stationFilter',state.liveMeta?.official?[]:uniq('lmreceived_station'),state.liveMeta?.official?'Consultar Top destinos':'Todos');
+  $('stationFilter').disabled=!!state.liveMeta?.official;
 }
 
 const filterIds=['areaFilter','processFilter','identFilter','turnoFilter','setorFilter','liderFilter','tipoFilter','stationFilter'];
@@ -516,7 +518,7 @@ function applyFilters(){
     (!vals.setorFilter||r.setor===vals.setorFilter)&&
     (!vals.liderFilter||r.lider_nome===vals.liderFilter)&&
     (!vals.tipoFilter||r.tipo_hc===vals.tipoFilter)&&
-    (!vals.stationFilter||r.lmreceived_station===vals.stationFilter)&&
+    (state.liveMeta?.official||!vals.stationFilter||r.lmreceived_station===vals.stationFilter)&&
     (!q||`${r.operator_name} ${r.operator_original} ${r.opsid} ${r.lider_nome}`.toLowerCase().includes(q))
   );
   renderAll();
@@ -654,6 +656,23 @@ function officialDataNote(){
   return `Fonte oficial MG4: ${fmtInt.format(rowTotal(state.filtered))} Miss Scans no recorte. Turnos, setores e líderes: HC Matinal. ${detail?`${fmtInt.format(detail.recoveredOccurrences)} ocorrências detalhadas por semana; ${fmtInt.format(detail.remainingGrouped)} ainda agrupadas na fonte. O detalhamento semanal exige o período completo e não altera os registros diários. `:''}BR e TO não disponíveis nesta fonte.`;
 }
 
+function renderDestinations(){
+  const note=$('stationNote');
+  if(!state.liveMeta?.official){if(note)note.textContent='Hubs com maior quantidade de BR';renderBars('stationBars',countBy('lmreceived_station'),10);return;}
+  const data=state.destinations;
+  const unsupported=['identFilter','turnoFilter','setorFilter','liderFilter','tipoFilter'].some(id=>$(id).value)||$('operatorSearch').value.trim();
+  if(note)note.textContent='Destino planejado • MG4 • OUT_08 • totais semanais por operação';
+  if(unsupported){$('stationBars').innerHTML='<div class="empty">A fonte de destinos não permite filtrar por colaborador, identificação, turno, setor, líder ou tipo de HC. Remova esses filtros para consultar.</div>';return;}
+  if(!data?.available){$('stationBars').innerHTML='<div class="empty">Aguardando sincronização da aba OUT_08_DESTINO_ORIGEM.</div>';return;}
+  const area=$('areaFilter').value,process=$('processFilter').value,destination=$('stationFilter').value;
+  const totals=new Map();
+  for(const r of data.rows){if(area&&r.area!==area||process&&(r.area==='ESTEIRA'?'Esteira':r.area==='EXPEDIÇÃO'?'Expedição':'Padrão/Não identificado')!==process||destination&&r.destination!==destination)continue;totals.set(r.destination,(totals.get(r.destination)||0)+r.count);}
+  renderBars('stationBars',[...totals].sort((a,b)=>b[1]-a[1]),10);
+  const periods=data.periods||[],dates=periods.flatMap(p=>[p.start,p.end]).sort();
+  if(note)note.textContent+=dates.length?` • ${dates[0]} a ${dates.at(-1)} • ${fmtInt.format([...totals.values()].reduce((a,b)=>a+b,0))} ocorrências na fonte`:'';
+  if(data.excludedPeriods?.length){if(note)note.textContent+=' • períodos parciais ou sem cobertura excluídos';if(!periods.length)$('stationBars').innerHTML='<div class="empty">Selecione uma semana completa ou um período maior. Não há dados semanais completos disponíveis neste recorte.</div>';}
+}
+
 function renderAll(){
   renderKPIs();
   renderBars('areaBars',countBy('responsabilidade'),8);
@@ -662,7 +681,7 @@ function renderAll(){
   renderBars('setorBars',countBy('setor',state.filtered.filter(r=>r.identificacao==='IDENTIFICADO')),8);
   renderBars('liderBars',countBy('lider_nome',state.filtered.filter(r=>r.identificacao==='IDENTIFICADO')),10);
   renderBars('statusBars',countBy('last_status'),10);
-  renderBars('stationBars',countBy('lmreceived_station'),10);
+  renderDestinations();
   renderRanking();renderTreatments();renderProjection();
   if(state.liveMeta?.official){$('dataNote').textContent=officialDataNote();return;}
   const duplicateNote=state.sourceRows-state.raw.length;
@@ -2577,6 +2596,7 @@ async function refreshLiveData({silent=false,fresh=false}={}){
     if(!load.current())return false;
 
     state.liveMeta=data.meta||{};
+    state.destinations=data.destinations||null;
     syncPeriodControlsFromMeta();
 
     buildHCMap(data.hc||[]);
