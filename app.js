@@ -1710,7 +1710,7 @@ function renderAutoRates(){
   if($('autoRateGeneral')) $('autoRateGeneral').textContent=g&&Number.isFinite(g.rate)?fmtPct(g.rate):'—';
   if($('autoRateGeneralDetail')){
     $('autoRateGeneralDetail').textContent=g
-      ?`${fmtInt.format(g.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(g.volumeReal||0))} Forecast INTER-SOC`
+      ?`${fmtInt.format(g.misscan||0)} Misscan ÷ ${fmtInt.format(Math.round(g.volumeReal||0))} SOC_Packed INTER-SOC`
       :'Aguardando histórico';
   }
 
@@ -1718,7 +1718,7 @@ function renderAutoRates(){
     const m=state.autoRateMeta||{};
     const pending=Number(m.general?.pendingMisscanNoProcessed||0);
     $('autoRateMeta').textContent=m.periodLabel
-      ?`Base ${m.days} dias • ${m.periodLabel} • Matinal/LM ÷ Forecast INTER-SOC Total (F)${pending?` • ${fmtInt.format(pending)} Misscan sem volume do dia`:''}`
+      ?`Base ${m.days} dias • ${m.periodLabel} • Oficial MG4 ÷ SOC_Packed INTER-SOC • ${m.coverage?.matchedDays??0}/${m.days} dias conferidos${pending?` • ${fmtInt.format(pending)} Misscan sem volume do dia`:''}`
       :'Fonte: Matinal/LM + GEROT db_volume_forecast • INTER-SOC • Total (F)';
   }
 
@@ -1742,6 +1742,9 @@ async function loadAutoRates({silent=true,fresh=false}={}){
       periodLabel:data.periodLabel,
       target:Number(data.target??TARGET_MISSCAN),
       source:data.source||'GEROT - MG4',
+      coverage:data.coverage||{},
+      projectionBasis:data.projectionBasis||{},
+      scopeNote:data.scopeNote||'',
       general:data.general||null,
       daily:data.daily||[],
       weekly:data.weekly||[],
@@ -1754,7 +1757,8 @@ async function loadAutoRates({silent=true,fresh=false}={}){
     return true;
   }catch(err){
     console.error('Taxa automática V6.5',err);
-    if(!state.autoRateMeta){
+    {
+      state.autoRateMeta=null;
       state.autoRates=null;
       renderAutoRates();
       renderForecastTable();
@@ -1767,10 +1771,10 @@ ${err.message}`);
 }
 
 function calcForecastDay(x){
-  const baseRate=Number(state.autoRateMeta?.general?.rate);
+  const baseRate=state.autoRateMeta?.general?.rate;
   const volume=Number(x?.volume||x?.total||0);
   const projectedMiss=Number.isFinite(baseRate)?volume*baseRate/100:NaN;
-  const allowedMiss=volume*TARGET_MISSCAN/100;
+  const allowedMiss=Math.floor(volume*TARGET_MISSCAN/100+1e-9);
   const gap=Number.isFinite(projectedMiss)?projectedMiss-allowedMiss:NaN;
   return {...x,volume,baseRate,projectedMiss,allowedMiss,gap};
 }
@@ -1779,37 +1783,39 @@ function renderCalendarHistory(){
   if(!$('calendarHistoryBody'))return;
   const rows=[...(state.autoRateMeta?.daily||[])].reverse();
   $('calendarHistoryBody').innerHTML=rows.map(d=>{
-    const risk=riskForRate(Number(d.rate),TARGET_MISSCAN);
-    const t1=Number(d.blocks?.T1?.volumeReal||0);
-    const t2=Number(d.blocks?.T2?.volumeReal||0);
-    const t3=Number(d.blocks?.T3?.volumeReal||0);
+    const risk=riskForRate(d.rate,TARGET_MISSCAN);
+    const t1=d.blocks?.T1?.volumeReal;
+    const t2=d.blocks?.T2?.volumeReal;
+    const t3=d.blocks?.T3?.volumeReal;
     return `<tr>
       <td><strong>${escapeHtml(String(d.date||'').split('-').reverse().join('/'))}</strong></td>
       <td>${escapeHtml(d.week||'—')}</td>
-      <td>${fmtInt.format(Number(d.misscan||0))}</td>
-      <td>${fmtInt.format(Math.round(Number(d.volumeReal||0)))}</td>
-      <td><strong>${fmtPct(Number(d.rate))}</strong></td>
-      <td>${fmtInt.format(Math.round(t1))}</td>
-      <td>${fmtInt.format(Math.round(t2))}</td>
-      <td>${fmtInt.format(Math.round(t3))}</td>
-      <td><span class="tag ${risk.cls}">${risk.label}</span></td>
+      <td>${Number.isFinite(d.misscan)?fmtInt.format(d.misscan):'—'}</td>
+      <td>${Number.isFinite(d.volumeReal)?fmtInt.format(Math.round(d.volumeReal)):'—'}</td>
+      <td><strong>${fmtPct(d.rate)}</strong></td>
+      <td>${Number.isFinite(t1)?fmtInt.format(Math.round(t1)):'—'}</td>
+      <td>${Number.isFinite(t2)?fmtInt.format(Math.round(t2)):'—'}</td>
+      <td>${Number.isFinite(t3)?fmtInt.format(Math.round(t3)):'—'}</td>
+      <td>${Number.isFinite(d.forecastVolume)?fmtInt.format(d.forecastVolume):'—'}</td>
+      <td>${Number.isFinite(d.forecastGap)?`${d.forecastGap>0?'+':''}${fmtInt.format(d.forecastGap)}`:'—'}</td>
+      <td><span class="tag ${risk.cls}">${d.eligible?risk.label:escapeHtml(d.coverageStatus||'Sem dados compatíveis')}</span></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="9" class="empty">Ainda não há casamento diário entre Matinal e Forecast INTER-SOC.</td></tr>';
+  }).join('')||'<tr><td colspan="11" class="empty">Ainda não há casamento diário entre ocorrências e volume realizado.</td></tr>';
 }
 
 function renderCalendarWeeks(){
   if(!$('calendarWeekBody'))return;
   const rows=[...(state.autoRateMeta?.weekly||[])].reverse();
   $('calendarWeekBody').innerHTML=rows.map(w=>{
-    const risk=riskForRate(Number(w.rate),TARGET_MISSCAN);
+    const risk=riskForRate(w.rate,TARGET_MISSCAN);
     return `<tr>
       <td><strong>${escapeHtml(w.week||'—')}</strong></td>
       <td>${fmtInt.format(Number(w.misscan||0))}</td>
       <td>${fmtInt.format(Math.round(Number(w.volumeReal||0)))}</td>
-      <td><span class="tag ${risk.cls}">${fmtPct(Number(w.rate))}</span></td>
-      <td>${fmtPct(TARGET_MISSCAN)}</td>
+      <td><span class="tag ${risk.cls}">${fmtPct(w.rate)}</span></td>
+      <td>${fmtPct(TARGET_MISSCAN)}</td><td>${w.days||0} conferido(s) • ${w.excludedDays||0} excluído(s)</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="5" class="empty">Sem semanas consolidadas.</td></tr>';
+  }).join('')||'<tr><td colspan="6" class="empty">Sem semanas consolidadas.</td></tr>';
 }
 
 function renderForecastTable(){
@@ -1828,39 +1834,39 @@ function renderForecastTable(){
       <td>${Number.isFinite(x.projectedMiss)?fmtInt.format(Math.round(x.projectedMiss)):'—'}</td>
       <td>${fmtInt.format(Math.round(x.allowedMiss||0))}</td>
       <td><strong class="${Number.isFinite(x.gap)?(x.gap>0?'gap-positive':'gap-negative'):''}">${gapText}</strong></td>
-      <td><span class="tag ${risk.cls}">${risk.label}</span></td>
+      <td><span class="tag ${risk.cls}">${Number.isFinite(x.baseRate)?`Cenário: ${risk.label.toLowerCase()}`:'Sem base histórica'}</span></td>
     </tr>`;
   }).join('')||'<tr><td colspan="8" class="empty">Nenhum Forecast futuro disponível na GEROT.</td></tr>';
 }
 
 function renderProjection(){
   const rows=(state.forecastAuto||[]).map(calcForecastDay);
-  const historicalRate=Number(state.autoRateMeta?.general?.rate);
+  const historicalRate=state.autoRateMeta?.general?.rate;
   const futureVolume=rows.reduce((sum,x)=>sum+Number(x.volume||0),0);
   const projected=rows.reduce((sum,x)=>sum+(Number.isFinite(x.projectedMiss)?x.projectedMiss:0),0);
   const allowed=rows.reduce((sum,x)=>sum+Number(x.allowedMiss||0),0);
-  const gap=Number.isFinite(historicalRate)?projected-allowed:NaN;
+  const gap=rows.length&&Number.isFinite(historicalRate)?projected-allowed:NaN;
   const riskDays=Number.isFinite(historicalRate)?(historicalRate>TARGET_MISSCAN?rows.length:0):null;
 
   if($('calTarget'))$('calTarget').textContent=fmtPct(TARGET_MISSCAN);
   if($('calHistoricalRate'))$('calHistoricalRate').textContent=fmtPct(historicalRate);
   if($('calFutureVolume'))$('calFutureVolume').textContent=fmtInt.format(Math.round(futureVolume));
-  if($('calProjectedMiss'))$('calProjectedMiss').textContent=Number.isFinite(historicalRate)?fmtInt.format(Math.round(projected)):'—';
-  if($('calAllowedMiss'))$('calAllowedMiss').textContent=fmtInt.format(Math.round(allowed));
+  if($('calProjectedMiss'))$('calProjectedMiss').textContent=rows.length&&Number.isFinite(historicalRate)?fmtInt.format(Math.round(projected)):'—';
+  if($('calAllowedMiss'))$('calAllowedMiss').textContent=rows.length?fmtInt.format(Math.round(allowed)):'—';
   if($('calGap')){
     $('calGap').textContent=Number.isFinite(gap)?`${gap>=0?'+':''}${fmtInt.format(Math.round(gap))}`:'—';
     $('calGap').classList.toggle('gap-positive',Number.isFinite(gap)&&gap>0);
     $('calGap').classList.toggle('gap-negative',Number.isFinite(gap)&&gap<=0);
   }
   if($('calGapDetail'))$('calGapDetail').textContent=Number.isFinite(gap)?(gap>0?'Misscans acima do limite':'folga vs limite'):'aguardando histórico';
-  if($('calRiskDays'))$('calRiskDays').textContent=riskDays===null?'—':fmtInt.format(riskDays);
+  if($('calRiskDays'))$('calRiskDays').textContent=riskDays===null||!rows.length?'—':`${fmtInt.format(riskDays)} / ${rows.length}`;
 
   if($('calendarSummaryText')){
     const hist=state.autoRateMeta?.periodLabel||'histórico ainda indisponível';
     const future=state.calendarMeta?.periodStart&&state.calendarMeta?.periodEnd
       ?`${state.calendarMeta.periodStart.split('-').reverse().join('/')} a ${state.calendarMeta.periodEnd.split('-').reverse().join('/')}`
       :'forecast futuro';
-    $('calendarSummaryText').textContent=`Histórico ${hist} • Forecast ${future} • Meta fixa ${fmtPct(TARGET_MISSCAN)}`;
+    $('calendarSummaryText').textContent=`Histórico ${hist} • ${state.autoRateMeta?.coverage?.matchedDays??0}/${state.autoRateMeta?.days??0} dias conferidos • Forecast ${future} • Cenário por referência histórica, não previsão estatística • Meta ${fmtPct(TARGET_MISSCAN)}`;
   }
 }
 

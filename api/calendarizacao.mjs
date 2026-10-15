@@ -29,7 +29,8 @@ async function buildReport(request) {
     }
 
     const url = new URL(request.url);
-    const days = Math.max(1, Math.min(60, Number(url.searchParams.get('days') || 21)));
+    const requestedDays=Number(url.searchParams.get('days')||21);
+    const days=Number.isFinite(requestedDays)?Math.max(1,Math.min(60,Math.floor(requestedDays))):21;
     const today = saoPauloDateKey();
     const from = /^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('from') || ''))
       ? String(url.searchParams.get('from'))
@@ -39,7 +40,7 @@ async function buildReport(request) {
       : addDays(from, days - 1);
 
     const rows = (data.forecast || [])
-      .filter(r => r.date >= from && r.date <= to && Number(r.total || 0) > 0)
+      .filter(r => r.date >= from && r.date <= to && Number.isFinite(Number(r.total)) && Number(r.total)>=0 && (!r.originType||String(r.originType).trim().toUpperCase().replace(/[ _]+/g,'-')==='INTER-SOC'))
       .map(r => ({
         id: `GEROT_${r.date}`,
         source: 'GEROT',
@@ -55,7 +56,8 @@ async function buildReport(request) {
 
     return json({
       ok: true,
-      version: '6.6',
+      version: '7.1-calendar-real',
+      projectionKind:'historical-reference-scenario',
       targetMisscan: TARGET,
       rows,
       meta: {
