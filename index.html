@@ -118,8 +118,8 @@
       </div>
 
       <div class="kpi-grid kpi-grid-7">
-        <article class="kpi"><span>BR Misscan</span><strong id="kBR">—</strong><small id="kDate">—</small></article>
-        <article class="kpi"><span>TO envolvidas</span><strong id="kTO">—</strong><small>TO únicas</small></article>
+        <article class="kpi"><span>Miss Scans</span><strong id="kBR">—</strong><small id="kDate">—</small></article>
+        <article class="kpi"><span>TO envolvidas</span><strong id="kTO">—</strong><small id="kTODetail">TO únicas</small></article>
         <article class="kpi kpi-yellow"><span>Esteira</span><strong id="kEsteira">—</strong><small id="pEsteira">—</small></article>
         <article class="kpi kpi-purple"><span>Expedição</span><strong id="kExpedicao">—</strong><small id="pExpedicao">—</small></article>
         <article class="kpi kpi-gray"><span>Operador não identificado</span><strong id="kUnidentified">—</strong><small id="pUnidentified">—</small></article>
@@ -163,6 +163,12 @@
           <div id="stationBars" class="bar-list compact"></div>
         </article>
       </div>
+
+      <article id="officialDetailsPanel" class="panel table-panel" hidden>
+        <div class="panel-head table-head"><div><h2>TOs e BRs — detalhamento oficial</h2><p id="officialDetailsNote">Fonte OUT_12</p></div><button id="exportOfficialDetailsBtn" class="action-btn" disabled>Exportar TOs / BRs</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Colaborador</th><th>Turno HC</th><th>Operação</th><th>LT / viagem</th><th>TO identificada</th><th>Miss Scans</th><th>BRs de exemplo</th><th>Atribuição</th></tr></thead><tbody id="officialDetailsBody"></tbody></table></div>
+        <p id="officialDetailsLimit" class="data-note"></p>
+      </article>
 
       <article class="panel table-panel">
         <div class="panel-head table-head">
@@ -666,7 +672,7 @@
   <footer>Mis-Scan Control Center • V6.15 • LM + GEROT + Evolução semanal + Tratativas</footer>
   <script src="refresh-policy.js?v=7.0.22"></script>
   <script src="date-loader.js?v=7.0.22"></script>
-  <script src="app.js?v=7.0.27"></script>
+  <script src="app.js?v=7.0.28"></script>
   <script src="training.js?v=7.2.0"></script>
 </body>
 </html>
