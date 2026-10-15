@@ -665,7 +665,7 @@ function filteredOfficialDetails(){
 }
 function officialTOCount(person){
   if(!state.officialDetails?.available)return '—';
-  const rows=filteredOfficialDetails().filter(r=>(person.opsid&&String(r.opsid).toUpperCase()===String(person.opsid).toUpperCase())||normalizeName(r.operator_name)===normalizeName(person.name));
+  const rows=filteredOfficialDetails().filter(r=>(state.rankArea==='all'||r.responsabilidade===state.rankArea)).filter(r=>(person.opsid&&String(r.opsid).toUpperCase()===String(person.opsid).toUpperCase())||normalizeName(r.operator_name)===normalizeName(person.name));
   return fmtInt.format(new Set(rows.map(r=>r.socpacked_tonumber).filter(Boolean)).size);
 }
 function renderOfficialDetails(){
