@@ -1,3 +1,4 @@
+import {selectDestinations} from '../lib/official-destinations.mjs';
 import {OFFICIAL_PATH,officialProcessLabel} from '../lib/official-source.mjs';
 import {individualizeOfficialPeriod,prepareOfficialDisplayRow} from '../lib/official-weekly.mjs';
 import { withReportCache } from '../lib/report-cache.mjs';
@@ -352,7 +353,7 @@ export async function GET(request){
     const metaOnly=url.searchParams.get('meta_only')==='1';
     const selected=metaOnly?[]:official.rows.filter(r=>r.lmreceived_date>=period.from&&r.lmreceived_date<=period.to).map(r=>prepareOfficialDisplayRow({...r,process_fail:officialProcessLabel(r.official_area)},official.hc));
     const detailed=!metaOnly&&url.searchParams.get('individualize')==='1'?individualizeOfficialPeriod(official,period.from,period.to,official.weeklyDetails):null;
-    return json({ok:true,hc:url.searchParams.get('include_hc')==='0'?[]:official.hc,misscan:selected,...(detailed?{individualizedRows:detailed.rows}:{}),meta:{...official.meta,individualization:detailed?.meta||null,periodStart:period.from,periodEnd:period.to,periodPreset:period.preset,periodLabel:`${formatBr(period.from)} a ${formatBr(period.to)}`,historyLabel:`${formatBr(official.meta.historyStart)} a ${formatBr(official.meta.historyEnd)}`,returnedMisscanRecords:selected.reduce((n,r)=>n+r.official_count,0)}});
+    return json({ok:true,destinations:metaOnly?null:selectDestinations(official,period.from,period.to),hc:url.searchParams.get('include_hc')==='0'?[]:official.hc,misscan:selected,...(detailed?{individualizedRows:detailed.rows}:{}),meta:{...official.meta,individualization:detailed?.meta||null,periodStart:period.from,periodEnd:period.to,periodPreset:period.preset,periodLabel:`${formatBr(period.from)} a ${formatBr(period.to)}`,historyLabel:`${formatBr(official.meta.historyStart)} a ${formatBr(official.meta.historyEnd)}`,returnedMisscanRecords:selected.reduce((n,r)=>n+r.official_count,0)}});
   }
   if(new URL(request.url).searchParams.get('hc_only')==='1'){
     try{const file=await readJson(HC_PATH,{rows:[]});return json({ok:true,hc:file?.rows||[]});}
