@@ -164,15 +164,16 @@
         </article>
       </div>
 
-      <article id="officialDetailsPanel" class="panel table-panel" hidden>
+      <details id="officialDetailsPanel" class="panel table-panel" hidden>
+        <summary style="padding:18px;cursor:pointer;font-weight:750">Consultar códigos de TO, LT e exemplos de BR</summary>
         <div class="panel-head table-head"><div><h2>TOs e BRs — detalhamento oficial</h2><p id="officialDetailsNote">Fonte OUT_12</p></div><button id="exportOfficialDetailsBtn" class="action-btn" disabled>Exportar TOs / BRs</button></div>
         <div class="table-wrap"><table><thead><tr><th>Data</th><th>Colaborador</th><th>Turno HC</th><th>Operação</th><th>LT / viagem</th><th>TO identificada</th><th>Miss Scans</th><th>BRs de exemplo</th><th>Atribuição</th></tr></thead><tbody id="officialDetailsBody"></tbody></table></div>
         <p id="officialDetailsLimit" class="data-note"></p>
-      </article>
+      </details>
 
       <article class="panel table-panel">
         <div class="panel-head table-head">
-          <div><h2>Ranking de ofensores</h2><p>Somente erros com um colaborador identificado</p></div>
+          <div><h2>Ranking de ofensores</h2><p>Quantidade de BRs e TOs por colaborador. * TOs identificadas na OUT_12, com cobertura parcial. “Sem dados” indica ausência de detalhamento no período.</p></div>
           <div class="pill-group">
             <button class="rank-pill active" data-rank="all">Todos</button>
             <button class="rank-pill" data-rank="ESTEIRA">Esteira</button>
@@ -181,7 +182,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>Colaborador</th><th>OPSID</th><th>BR</th><th>TO</th><th>Turno</th><th>Setor</th><th>Líder</th><th>Tipo</th><th>Responsabilidade</th></tr></thead>
+            <thead><tr><th>#</th><th>Colaborador</th><th>OPSID</th><th>Qtd. BRs</th><th>Qtd. TOs</th><th>Turno</th><th>Setor</th><th>Líder</th><th>Tipo</th><th>Responsabilidade</th></tr></thead>
             <tbody id="rankingBody"></tbody>
           </table>
         </div>
@@ -672,7 +673,7 @@
   <footer>Mis-Scan Control Center • V6.15 • LM + GEROT + Evolução semanal + Tratativas</footer>
   <script src="refresh-policy.js?v=7.0.22"></script>
   <script src="date-loader.js?v=7.0.22"></script>
-  <script src="app.js?v=7.0.28"></script>
+  <script src="app.js?v=7.0.29"></script>
   <script src="training.js?v=7.2.0"></script>
 </body>
 </html>
