@@ -8,6 +8,7 @@ import * as evolucao from '../api/evolucao.mjs';
 import * as reciclagens from '../api/reciclagens.mjs';
 import * as trainingSync from '../api/training-sync.mjs';
 import * as presenceSync from '../api/presence-sync.mjs';
+import * as treatmentPresence from '../api/treatment-presence.mjs';
 import * as trainingFiles from '../api/training-files.mjs';
 import * as refreshSource from '../api/refresh-source.mjs';
 import * as notificar from '../api/notificar.mjs';
@@ -29,6 +30,7 @@ const direct = new Map([
   ['reciclagens', reciclagens],
   ['training-sync', trainingSync],
   ['presence-sync', presenceSync],
+  ['treatment-presence', treatmentPresence],
   ['training-files', trainingFiles],
   ['refresh-source', refreshSource],
   ['notificar', notificar],

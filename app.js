@@ -24,6 +24,11 @@ const state = {
   treatmentMode: null,
   treatmentCycle: 1,
   treatmentFiltered: [],
+  treatmentPresence: {},
+  treatmentPresenceLoaded: false,
+  treatmentPresenceLoading: false,
+  treatmentPresenceError: '',
+  treatmentPresenceFetchedAt: 0,
   treatmentArchive: {},
   treatmentHistoryFilter: '',
   treatmentLoaded: false,
@@ -1010,6 +1015,7 @@ function enrichTreatmentRow(r){
   const miss=Number(r.miss_scan??r['Miss Scan']??r.ocorrencias??r.Ocorrencias??r.ocorr??0)||0;
   return {
     id:norm,
+    opsid:MisscanPresenceUI.opsid(r.opsid)||(!hc?.ambiguous?MisscanPresenceUI.opsid(hc?.opsid):''),
     colaborador:name||'Não identificado',
     indicador:indicator,
     miss_scan:miss,
@@ -1034,6 +1040,46 @@ function loadTreatmentRows(rows){
   setupTreatmentFilters();
   renderTreatments();
   renderGlobalTreatmentHistory();
+  if($('tratativas')?.classList.contains('active'))refreshTreatmentPresence();
+}
+
+function treatmentPresenceInfo(row){
+  if(!/^T[1-5]$/.test(row.turno))return {status:'UNKNOWN',label:'Não confirmada',detail:'Turno não confirmado na HC',className:'unknown'};
+  return MisscanPresenceUI.info(row,state.treatmentPresence);
+}
+
+async function refreshTreatmentPresence({pin=treatmentPin(false),force=false}={}){
+  if(!pin||state.treatmentPresenceLoading||(!force&&Date.now()-state.treatmentPresenceFetchedAt<30000))return;
+  state.treatmentPresenceLoading=true;
+  state.treatmentPresenceError='';
+  const button=$('treatPresenceRefresh');
+  button.disabled=true;
+  button.textContent='Consultando ABS…';
+  try{
+    const entries=[...new Map(state.treatmentSource.filter(row=>MisscanPresenceUI.opsid(row.opsid)&&/^T[1-5]$/.test(row.turno)).map(row=>[MisscanPresenceUI.key(row),{opsid:row.opsid,turno:row.turno}])).values()];
+    const response=await fetch('/api/treatment-presence',{method:'POST',cache:'no-store',headers:{'content-type':'application/json','x-treatment-pin':pin},body:JSON.stringify({entries})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.ok){
+      if(response.status===401)sessionStorage.removeItem(TREATMENT_PIN_SESSION);
+      throw new Error(data.error||'Não foi possível consultar a presença ABS.');
+    }
+    state.treatmentPresence=Object.fromEntries((data.rows||[]).map(row=>[MisscanPresenceUI.key(row),row]));
+    state.treatmentPresenceLoaded=true;
+    state.treatmentPresenceFetchedAt=Date.now();
+    sessionStorage.setItem(TREATMENT_PIN_SESSION,pin);
+    $('treatPresenceAccess').hidden=true;
+    $('treatPresencePin').value='';
+    $('treatPresenceFilter').disabled=false;
+  }catch(error){
+    state.treatmentPresence={};
+    state.treatmentPresenceLoaded=false;
+    state.treatmentPresenceError=error.message;
+  }finally{
+    state.treatmentPresenceLoading=false;
+    button.disabled=false;
+    button.textContent=state.treatmentPresenceLoaded?'Atualizar presença':'Consultar presença';
+    renderTreatments();
+  }
 }
 
 function setupTreatmentFilters(){
@@ -1062,10 +1108,11 @@ function filteredTreatments(){
   const turno=$('treatTurnoFilter').value;
   const setor=$('treatSetorFilter').value;
   const status=$('treatStatusFilter').value;
+  const presenceFilter=$('treatPresenceFilter')?.value||'';
   const q=$('treatSearch').value.trim().toLowerCase();
   return state.treatmentSource.filter(x=>{
     const st=treatmentStatus(x);
-    return x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && (!q||`${x.colaborador} ${x.turno} ${x.setor} ${x.lider}`.toLowerCase().includes(q));
+    return x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && MisscanPresenceUI.matches(presenceFilter,treatmentPresenceInfo(x),st.group==='PENDENTE') && (!q||`${x.colaborador} ${x.turno} ${x.setor} ${x.lider}`.toLowerCase().includes(q));
   }).sort((a,b)=>b.indicador-a.indicador||b.miss_scan-a.miss_scan);
 }
 
@@ -1101,8 +1148,13 @@ function renderTreatments(){
   $('treatTotal').textContent=fmtInt.format(rows.length);$('treatPending').textContent=fmtInt.format(pending);$('treatMonitoring').textContent=fmtInt.format(monitoring);$('treatRepeat').textContent=fmtInt.format(repeats);$('treatAbove1').textContent=fmtInt.format(above1);
   $('treatCountLabel').textContent=`${rows.length} colaborador(es) acima de ${fmtPct(state.treatmentThreshold)} nos filtros atuais`;
   $('treatFooterCount').textContent=`${rows.length} colaboradores`;$('treatUpdatedAt').textContent=`Atualizado ${new Date().toLocaleString('pt-BR')}`;
+  const presentPending=rows.filter(x=>treatmentStatus(x).group==='PENDENTE'&&treatmentPresenceInfo(x).status==='PRESENT').length;
+  const stamps=[...new Set(Object.values(state.treatmentPresence).map(r=>r.generatedAt).filter(Boolean))].sort();
+  const stamp=stamps[0];
+  const fresh=Object.values(state.treatmentPresence).some(r=>Date.parse(r.validUntil)>Date.now());
+  $('treatPresenceNote').textContent=state.treatmentPresenceError?`Consulta indisponível: ${state.treatmentPresenceError} Nenhuma presença foi presumida.`:state.treatmentPresenceLoaded?`${presentPending} pendente(s) presente(s) nos filtros atuais. ${fresh?'':'Presença indisponível ou desatualizada; nenhuma presença presumida. '}ABS sincronizada ${stamp?new Date(stamp).toLocaleString('pt-BR'):'sem data confirmada'}. Presença atual, independente do período de MIS SCAN; T3/T5 de madrugada usa a data de início do turno.`:'Consulte a ABS para localizar os pendentes presentes. A presença atual independe do período de MIS SCAN selecionado.';
   $('treatmentBody').innerHTML=rows.map((x,i)=>{
-    const p=progressFor(x.id),st=treatmentStatus(x),rateCls=x.indicador>1?'':'near';
+    const p=progressFor(x.id),st=treatmentStatus(x),rateCls=x.indicador>1?'':'near',presence=treatmentPresenceInfo(x);
     return `<tr>
       <td>${i+1}</td>
       <td><strong>${escapeHtml(x.colaborador)}</strong><div class="cell-sub">${escapeHtml(x.operacao)} • ${escapeHtml(x.tipo_hc)}</div></td>
@@ -1111,13 +1163,14 @@ function renderTreatments(){
       <td><span class="tag tag-good">${escapeHtml(x.turno)}</span></td>
       <td>${escapeHtml(x.setor)}</td>
       <td><strong>${escapeHtml(x.lider||'Não cadastrado')}</strong></td>
+      <td><span class="presence-badge ${presence.className}">${escapeHtml(presence.label)}</span><div class="cell-sub">${escapeHtml(presence.detail)}</div></td>
       <td>${dialogueButton(x,1)}</td><td>${recycleButton(x,1)}</td>
       <td>${dialogueButton(x,2)}</td><td>${recycleButton(x,2)}</td>
       <td>${dialogueButton(x,3)}</td><td>${recycleButton(x,3)}</td>
       <td><span class="${st.className}">${escapeHtml(st.text)}</span></td>
       <td><div class="row-action-stack"><button class="mini-action" onclick="openOffenderHistory('${x.id}')">Histórico</button>${recurrenceSummaryHtml(x.id)}${historyTreatmentActionsHtml(x.id)}<button class="mini-action" onclick="registerRecurrence('${x.id}')">+ Reincidência</button><span class="cell-sub">Dias reincidente: ${recurrenceDays(x.id)===null?'—':recurrenceDays(x.id)+' dia(s)'}</span></div></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="15" class="empty">Nenhum colaborador acima da meta nos filtros atuais.</td></tr>';
+  }).join('')||'<tr><td colspan="16" class="empty">Nenhum colaborador atende aos filtros. Confirme a consulta ABS se estiver filtrando presença.</td></tr>';
   if($('globalHistoryModal')?.classList.contains('open'))renderGlobalTreatmentHistory();
   renderEvolution();
 }
@@ -2141,7 +2194,7 @@ function tabs(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
     if(b.dataset.tab==='calendarizacao'){refreshCalendarizationV65({silent:true})}
-    if(b.dataset.tab==='tratativas')renderTreatments();
+    if(b.dataset.tab==='tratativas'){renderTreatments();refreshTreatmentPresence();}
     if(b.dataset.tab==='evolucao'){
       if(state.evolution.length)renderEvolution();
       else refreshEvolution({silent:true});
@@ -2744,9 +2797,16 @@ async function boot(){
 
 
   // Tratativas V4
-  ['treatmentThreshold','treatTurnoFilter','treatSetorFilter','treatStatusFilter'].forEach(id=>$(id).addEventListener('change',renderTreatments));
+  ['treatmentThreshold','treatTurnoFilter','treatSetorFilter','treatStatusFilter','treatPresenceFilter'].forEach(id=>$(id).addEventListener('change',renderTreatments));
   $('treatSearch').addEventListener('input',renderTreatments);
-  $('treatResetBtn').addEventListener('click',()=>{$('treatmentThreshold').value='0.88';$('treatTurnoFilter').value='';$('treatSetorFilter').value='';$('treatStatusFilter').value='';$('treatSearch').value='';renderTreatments()});
+  $('treatResetBtn').addEventListener('click',()=>{$('treatmentThreshold').value='0.88';$('treatTurnoFilter').value='';$('treatSetorFilter').value='';$('treatStatusFilter').value='';$('treatPresenceFilter').value='';$('treatSearch').value='';renderTreatments()});
+  $('treatPresenceRefresh').addEventListener('click',()=>{
+    const pin=treatmentPin(false);
+    if(pin)refreshTreatmentPresence({pin,force:true});
+    else{$('treatPresenceAccess').hidden=false;$('treatPresencePin').focus();}
+  });
+  $('treatPresenceAccess').addEventListener('submit',event=>{event.preventDefault();refreshTreatmentPresence({pin:$('treatPresencePin').value.trim(),force:true});});
+  setInterval(()=>{if(!document.hidden&&$('tratativas')?.classList.contains('active')){renderTreatments();refreshTreatmentPresence();}},60000);
 
   // Matriz de evolução V6.15
   ['evolutionScope','evolutionOperation','evolutionTurno','evolutionStatus','evolutionTrend','evolutionTreatment'].forEach(id=>$(id)?.addEventListener('change',renderEvolution));
