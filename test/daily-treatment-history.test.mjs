@@ -96,7 +96,9 @@ test('API autenticada carrega fonte oficial e presença sem alterar registros or
   sqlite.prepare('INSERT INTO misscan_store VALUES(?,?,?)').run('misscan/dialogues-realized.json',registry,'2026-10-19');
   const response=await POST(new Request('https://test/api/daily-treatments',{method:'POST',headers:{'x-treatment-pin':'test-only'},body:JSON.stringify({action:'refresh'})}));
   assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/private.*no-store/);
-  const data=await response.json();assert.equal(data.rows.length,2);assert.ok(data.rows.every(r=>r.state==='REVIEW'&&r.ageDays===null));
+  assert.equal((await response.json()).importComplete,true);
+  const listed=await POST(new Request('https://test/api/daily-treatments',{method:'POST',headers:{'x-treatment-pin':'test-only'},body:JSON.stringify({action:'list'})}));
+  const data=await listed.json();assert.equal(data.rows.length,2);assert.ok(data.rows.every(r=>r.state==='REVIEW'&&r.ageDays===null));
   assert.equal(data.evidence[0].opsid,'OPS1');assert.equal(sqlite.prepare("SELECT value FROM misscan_store WHERE key='misscan/dialogues-realized.json'").get().value,registry);
 });
 test('reciclagem em grupo mantém evidência individual por OPSID e não usa curso sem relação com MIS SCAN',async()=>{
@@ -104,4 +106,25 @@ test('reciclagem em grupo mantém evidência individual por OPSID e não usa cur
   const participants=[{opsid:'OPS1'},{opsid:'OPS2'}];
   for(const topic of ['MIS SCAN','Segurança'])sqlite.prepare('INSERT INTO misscan_training_events VALUES(?)').run(JSON.stringify({id:topic,type:'Reciclagem',topic,reason:'',date:'2026-10-18',participants}));
   const result=await dailyEvidence(db,source(),[]);assert.equal(result.length,2);assert.notEqual(result[0].key,result[1].key);assert.ok(result.every(e=>e.title==='MIS SCAN'));
+});
+
+test('carga grande usa lotes JSON e permanece abaixo de 50 consultas D1',async()=>{
+  const {db,sqlite}=database();let calls=0;
+  const prepare=db.prepare.bind(db);db.prepare=sql=>{calls++;if(calls>49)throw new Error('D1 query budget exceeded');return prepare(sql);};
+  const data=source(['2026-10-18']);data.hc=Array.from({length:1000},(_,i)=>({...hc[0],colaborador:'PESSOA '+i,opsid:'OPS'+(i+1)}));
+  // Um dia por pessoa mantém o share acima do corte, totalizando 1.000 ocorrências.
+  data.rows=data.hc.map((p,i)=>({official_aggregate:true,official_count:1,lmreceived_date:new Date(Date.UTC(2023,0,1+i)).toISOString().slice(0,10),operator_fail:p.colaborador}));
+  data.meta.historyStart='2023-01-01';data.meta.historyEnd='2025-09-26';
+  await syncDailyHistory(data,{activate:true});assert.ok(calls<30);assert.equal(sqlite.prepare('SELECT count(*) n FROM misscan_daily_treatments').get().n,1000);
+  calls=0;const corrected={...data,rows:[]};await syncDailyHistory(corrected);assert.ok(calls<30);
+  assert.equal(sqlite.prepare('SELECT count(*) n FROM misscan_daily_treatments WHERE in_source=0').get().n,1000);
+});
+test('importação semanal continua sem revisar registros de outras semanas',async()=>{
+  const {db,sqlite}=database();const dates=Array.from({length:15},(_,i)=>new Date(Date.UTC(2026,8,1+i)).toISOString().slice(0,10)),data=source(dates);
+  sqlite.prepare('INSERT INTO misscan_store VALUES(?,?,?)').run('misscan/official-mg4.json',JSON.stringify(data),'2026-10-19');
+  async function refresh(cursor){const response=await POST(new Request('https://test/api/daily-treatments',{method:'POST',headers:{'x-treatment-pin':'test-only'},body:JSON.stringify({action:'refresh',cursor})}));assert.equal(response.status,200);return response.json();}
+  const first=await refresh();assert.equal(first.continuation,dates[7]);assert.equal((await dailyRows(db)).length,7);
+  const second=await refresh(first.continuation);assert.equal(second.continuation,dates[14]);assert.equal((await dailyRows(db)).length,14);
+  const last=await refresh(second.continuation);assert.equal(last.importComplete,true);assert.equal((await dailyRows(db)).filter(r=>r.inSource).length,15);
+  await refresh();assert.equal((await dailyRows(db)).filter(r=>r.inSource).length,15);
 });
