@@ -40,14 +40,23 @@
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),60000);
     try{
       const response=await fetch('/api/daily-treatments',{method:'POST',cache:'no-store',signal:controller.signal,headers:{'content-type':'application/json','x-treatment-pin':pin},body:JSON.stringify({action,...extra})});
-      const data=await response.json().catch(()=>({}));if(!response.ok||!data.ok){if(response.status===401)sessionStorage.removeItem(pinKey);throw new Error(data.error||'Falha ao consultar histórico.');}
+      const data=await response.json().catch(()=>null);if(!response.ok||!data?.ok){if(response.status===401)sessionStorage.removeItem(pinKey);throw new Error(data?.error||`Falha no servidor ao consultar histórico (HTTP ${response.status}). Atualize a página e tente novamente. Se persistir, informe este código.`);}
       sessionStorage.setItem(pinKey,pin);$('dhPin').value='';return data;
     }finally{clearTimeout(timer);}
   }
   async function load(action='refresh',extra={}){
     if(model.loading)return;model.loading=true;$('dhLoad').disabled=true;$('dhMessage').textContent='Consultando histórico, tratativas registradas e presença ABS…';
     try{
-      const data=await request(action,extra);model.rows=data.rows||[];model.evidence=data.evidence||[];model.config=data.config;model.checkedAt=data.checkedAt;
+      let data=await request(action,extra);
+      const cursors=new Set();
+      while(action==='refresh'&&data.continuation){
+        if(cursors.has(data.continuation)||cursors.size>=200)throw new Error('A importação não avançou. Atualize a página para retomar com segurança.');
+        cursors.add(data.continuation);
+        $('dhMessage').textContent=`Importando histórico por etapas… Conferido até ${date(data.through)}.`;
+        data=await request('refresh',{...extra,cursor:data.continuation});
+      }
+      if(action==='refresh'&&data.importComplete)data=await request('list');
+      model.rows=data.rows||[];model.evidence=data.evidence||[];model.config=data.config;model.checkedAt=data.checkedAt;
       options('dhTurn',model.rows.map(r=>r.turno));options('dhLeader',model.rows.map(r=>r.leader));
       $('dhMessage').textContent=data.config?`Acompanhamento iniciado em ${date(data.config.trackingStart)}. Fonte oficial atualizada ${new Date(data.sourceUpdatedAt).toLocaleString('pt-BR')}. Consulta ${new Date(data.checkedAt).toLocaleString('pt-BR')}. Presença é atual, não a do dia da ocorrência.`:'Histórico ainda não ativado. Clique em Carregar / atualizar histórico para importar e iniciar o acompanhamento.';
       $('dhDetail').hidden=true;model.selected=null;render();
