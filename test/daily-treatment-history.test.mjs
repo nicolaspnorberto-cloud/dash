@@ -4,6 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {configureRuntimeEnv} from '../lib/blob-store.mjs';
 import {dailyCandidates,nextDailyAction,syncDailyHistory,dailyRows,changeDailyRecord,dailyEvidence,DAILY_CONFIG} from '../lib/daily-treatment-history.mjs';
 import {POST} from '../api/daily-treatments.mjs';
+import {importDailyDialogues,readDailyDialogueRegistry,DAILY_DIALOGUES_PATH,DAILY_DIALOGUES_SOURCE} from '../lib/daily-dialogue-history.mjs';
 
 const hc=[{colaborador:'PESSOA TESTE',opsid:'OPS1',turno:'T2',lider_nome:'LÍDER TESTE',setor:'Outbound'}];
 const source=(dates=['2026-10-17','2026-10-18'])=>({hc,rows:dates.flatMap(date=>[
@@ -127,4 +128,18 @@ test('importação semanal continua sem revisar registros de outras semanas',asy
   const second=await refresh(first.continuation);assert.equal(second.continuation,dates[14]);assert.equal((await dailyRows(db)).length,14);
   const last=await refresh(second.continuation);assert.equal(last.importComplete,true);assert.equal((await dailyRows(db)).filter(r=>r.inSource).length,15);
   await refresh();assert.equal((await dailyRows(db)).filter(r=>r.inSource).length,15);
+});
+
+test('leitura histórica completa é privada, qualifica MIS SCAN e não altera a fonte do bot',async()=>{
+  const {sqlite}=database();const live={byDate:{'2026-10-19':[{id:'HOJE',opsid:'OPS2'}]}};
+  sqlite.prepare('INSERT INTO misscan_store VALUES(?,?,?)').run('misscan/dialogues-realized.json',JSON.stringify(live),'2026-10-19');
+  const good={idNC:'DP1',date:'18/10/2026',operation:'SOC-MG4',collaboratorId:'OPS1',dialogueType:'Desenvolvimento',reason:'Miss Scan'};
+  const snapshot={source:DAILY_DIALOGUES_SOURCE,complete:true,from:'2026-10-17',to:'2026-10-18',checkedAt:'2026-10-19T20:00:00Z',records:[good,{...good,idNC:'SEG',reason:'Segurança'}]};
+  await importDailyDialogues(snapshot,new Date('2026-10-19T21:00:00Z'));
+  const catalog=await readDailyDialogueRegistry();assert.equal(catalog.byDate['2026-10-18'].length,1);assert.equal(catalog.byDate['2026-10-17'].length,0);assert.equal(catalog.byDate['2026-10-19'][0].id,'HOJE');
+  assert.equal(sqlite.prepare("SELECT value FROM misscan_store WHERE key='misscan/dialogues-realized.json'").get().value,JSON.stringify(live));
+  assert.ok(sqlite.prepare('SELECT value FROM misscan_store WHERE key=?').get(DAILY_DIALOGUES_PATH));
+  await assert.rejects(importDailyDialogues({...snapshot,source:{spreadsheetId:'outra'}},new Date('2026-10-19T21:00:00Z')),/planilha/);
+  await assert.rejects(importDailyDialogues({...snapshot,complete:false},new Date('2026-10-19T21:00:00Z')),/completa/);
+  const response=await POST(new Request('https://test/api/daily-treatments',{method:'POST',body:JSON.stringify({action:'import-dialogues',snapshot})}));assert.equal(response.status,401);
 });
