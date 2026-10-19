@@ -12,5 +12,6 @@
 
 !date-loader.js
 !presence-ui.js
+!daily-history.js
 !training.js
 !training.css

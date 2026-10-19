@@ -1206,3 +1206,27 @@ thead,
 .presence-badge.present{background:#e1f7ed;color:#096443;border-color:#a9dec5}
 .presence-badge.absent{background:#fff1e7;color:#974515;border-color:#f1cfb3}
 .presence-badge.unknown{background:#f1f4f8;color:#5d6d83}
+
+.daily-history-tabs{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.daily-history-tabs button[aria-pressed="false"]{background:white;color:var(--navy);border:1px solid #ced9e6}
+#currentTreatmentView[hidden],#dailyTreatmentView[hidden],.daily-history-detail[hidden]{display:none}
+.daily-history-intro,.daily-history-access,.daily-history-detail,.daily-history-filters{padding:16px;margin-bottom:14px}
+.daily-history-intro p,.daily-history-detail p{font-size:12px;color:#60738d;line-height:1.6}
+.daily-history-access{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.daily-history-access label,.daily-history-filters label,.daily-review-form label{display:flex;flex-direction:column;gap:6px;color:#48627f;font-size:11px;font-weight:800}
+.daily-history-access input,.daily-history-filters input,.daily-history-filters select,.daily-review-form input,.daily-review-form select,.daily-review-form textarea{border:1px solid #cfdbea;border-radius:8px;padding:9px;background:white;color:var(--ink);font:inherit}
+.daily-history-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
+.daily-history-message{font-size:12px;color:#48627f;line-height:1.6}
+.daily-history-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:16px}
+.daily-history-summary>div{background:white;border:1px solid #d9e3ef;border-radius:12px;padding:14px}
+.daily-history-summary span{display:block;font-size:11px;color:#60738d}.daily-history-summary strong{font-size:27px;color:var(--navy)}
+.daily-history-table{min-width:1550px;width:100%;border-collapse:collapse;font-size:12px}
+.daily-history-table th,.daily-history-table td{padding:12px;border-bottom:1px solid #e4ebf2;text-align:left;vertical-align:top}
+.daily-history-table thead{background:var(--navy);color:white}.daily-date-group th{background:#eaf0f8;color:var(--navy);font-weight:900}
+.daily-state{display:inline-block;border-radius:8px;padding:6px;background:#f1f4f8;color:#586a80;font-size:11px;font-weight:800}
+.daily-state.pending{background:#fff1dd;color:#946000}.daily-state.closed{background:#e1f7ed;color:#096443}
+.daily-detail-head{display:flex;justify-content:space-between;gap:12px;align-items:start}.daily-detail-head h2{font-size:18px;margin:0}
+.daily-history-detail ul{font-size:11px;color:#60738d;line-height:1.7}
+.daily-review-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid #e4ebf2;padding-top:16px}
+.daily-wide{grid-column:1/-1}.daily-review-form .daily-confirm{flex-direction:row;align-items:start}.daily-confirm input{flex:none}
+@media(max-width:600px){.daily-review-form{grid-template-columns:1fr}.daily-detail-head{flex-direction:column}.daily-history-access button{width:100%}}
