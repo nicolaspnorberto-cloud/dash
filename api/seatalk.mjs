@@ -1,4 +1,4 @@
-import { envValue, json, readJson } from '../lib/blob-store.mjs';
+import { envValue, json, readJson, runtimeBinding } from '../lib/blob-store.mjs';
 import { PRESENCE_PATH, selectPresentTreatments } from '../lib/abs-presence.mjs';
 import {
   SEATALK_PAUSED,
@@ -24,7 +24,20 @@ function assertWritePin(request) {
   }
 }
 
+async function recentAttempts(){
+  const db=runtimeBinding('MISSCAN_DB');
+  if(!db)return [];
+  try{
+    const result=await db.prepare("SELECT value FROM misscan_store WHERE key LIKE 'misscan/seatalk-attempts/%' ORDER BY updated_at DESC LIMIT 36").all();
+    return (result.results||[]).map(row=>{
+      const r=JSON.parse(row.value);
+      return {turn:r.turn,attemptedAt:r.attemptedAt,finishedAt:r.finishedAt,phase:r.phase,sent:r.sent===true,skipped:r.skipped===true,reason:r.reason||'',pending:r.pending??null,deferred:r.deferred??null,closingReport:r.closingReport===true};
+    });
+  }catch{return [];}
+}
 export async function GET() {
+  const lastT2Attempt=await readJson('misscan/seatalk-last-attempt-t2.json',null);
+  const attempts=await recentAttempts();
   const lastT3Attempt=await readJson('misscan/seatalk-last-attempt-t3.json',null);
   const presence = await readJson(PRESENCE_PATH, null);
   const presenceHealth = selectPresentTreatments([], presence);
@@ -33,6 +46,8 @@ export async function GET() {
     ok: true,
     configured: seatalkConfigured(),
     lastT3Attempt,
+    lastT2Attempt,
+    recentAttempts:attempts,
     paused: SEATALK_PAUSED,
     route: '/api/seatalk',
     destination: seatalkDestinationName(),
