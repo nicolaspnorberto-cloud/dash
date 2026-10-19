@@ -240,6 +240,17 @@
         <article class="treatment-kpi"><div class="treatment-kpi-icon red">!</div><div><span>Acima de 1,00%</span><strong id="treatAbove1">0</strong></div></article>
       </div>
 
+      <div class="treatment-presence-panel panel">
+        <div><strong>Presença na operação</strong><p id="treatPresenceNote" role="status">Consulte a ABS para localizar os pendentes presentes. A presença atual independe do período de MIS SCAN selecionado.</p></div>
+        <div class="treatment-presence-controls">
+          <label>Presença ABS<select id="treatPresenceFilter" disabled><option value="">Todos</option><option value="PENDING_PRESENT">Pendentes presentes</option><option value="PRESENT">Presentes</option><option value="ABSENT">Ausentes</option><option value="UNKNOWN">Não confirmada</option></select></label>
+          <button id="treatPresenceRefresh" class="action-btn blue" type="button">Consultar presença</button>
+        </div>
+        <form id="treatPresenceAccess" class="treatment-presence-access" hidden>
+          <label>PIN das tratativas<input id="treatPresencePin" type="password" autocomplete="off" required /></label><button type="submit" class="action-btn blue">Consultar ABS</button>
+        </form>
+      </div>
+
       <div class="treatment-toolbar">
         <div>
           <h2>Acompanhamento de ofensores</h2>
@@ -265,6 +276,7 @@
                 <th>Turno</th>
                 <th>Setor</th>
                 <th>Líder</th>
+                <th>Presença ABS</th>
                 <th>1º Diálogo</th>
                 <th>1ª Reciclagem</th>
                 <th>2º Diálogo</th>
@@ -673,7 +685,8 @@
   <footer>Mis-Scan Control Center • V6.15 • LM + GEROT + Evolução semanal + Tratativas</footer>
   <script src="refresh-policy.js?v=7.0.22"></script>
   <script src="date-loader.js?v=7.0.22"></script>
-  <script src="app.js?v=7.1.0-calendar"></script>
+  <script src="presence-ui.js?v=7.3.0"></script>
+  <script src="app.js?v=7.3.0-presence"></script>
   <script src="training.js?v=7.2.0"></script>
 </body>
 </html>

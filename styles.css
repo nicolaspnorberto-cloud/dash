@@ -1192,3 +1192,17 @@ thead,
 #calendarizacao .target-badge span{color:#91604f}
 #calendarizacao .target-badge strong{color:var(--orange)}
 #calendarizacao .target-badge small{color:#a65542}
+
+/* Presença ABS na fila de tratativas */
+.treatment-presence-panel{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;padding:16px;margin-bottom:16px;border-left:4px solid var(--blue)}
+.treatment-presence-panel>div:first-child{flex:1 1 340px}
+.treatment-presence-panel p{font-size:12px;line-height:1.5;color:#60738d;margin:6px 0 0}
+.treatment-presence-controls,.treatment-presence-access{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.treatment-presence-panel label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:800;color:#48627f}
+.treatment-presence-panel select,.treatment-presence-panel input{height:38px;padding:0 10px;border:1px solid #cfdbea;border-radius:8px;background:white;color:var(--ink)}
+.treatment-presence-access{flex-basis:100%;border-top:1px solid #e2eaf3;padding-top:12px}
+.treatment-presence-access[hidden]{display:none}
+.presence-badge{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:6px 10px;border-radius:20px;font-size:11px;font-weight:850;border:1px solid #d8e2ee}
+.presence-badge.present{background:#e1f7ed;color:#096443;border-color:#a9dec5}
+.presence-badge.absent{background:#fff1e7;color:#974515;border-color:#f1cfb3}
+.presence-badge.unknown{background:#f1f4f8;color:#5d6d83}
