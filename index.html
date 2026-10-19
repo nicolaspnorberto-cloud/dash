@@ -190,6 +190,8 @@
     </section>
 
     <section id="tratativas" class="view">
+      <div class="daily-history-tabs"><button id="dailyCurrentTab" class="action-btn blue" type="button" aria-pressed="true">Acompanhamento atual</button><button id="dailyHistoryTab" class="action-btn orange" type="button" aria-pressed="false">Histórico diário de pendências</button></div>
+      <div id="currentTreatmentView">
       <div class="treatment-hero">
         <div>
           <span class="eyebrow">TRATATIVAS V6.5</span>
@@ -292,6 +294,8 @@
         </div>
         <div class="treatment-table-footer"><span id="treatFooterCount">0 colaboradores</span><span id="treatUpdatedAt">—</span></div>
       </article>
+      </div>
+      <div id="dailyTreatmentView" hidden></div>
     </section>
 
     <section id="evolucao" class="view">
@@ -688,5 +692,6 @@
   <script src="presence-ui.js?v=7.3.0"></script>
   <script src="app.js?v=7.3.0-presence"></script>
   <script src="training.js?v=7.2.0"></script>
+  <script src="daily-history.js?v=7.4.0"></script>
 </body>
 </html>
