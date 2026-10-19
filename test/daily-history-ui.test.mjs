@@ -18,7 +18,7 @@ function setup(responder){
 }
 test('visão diária tem filtros próprios e não mistura histórico não confirmado com pendências',async()=>{
   const ui=setup();await ui.load();
-  assert.match(ui.el('dhBody').innerHTML,/PESSOA A/);assert.match(ui.el('dhBody').innerHTML,/Histórico não confirmado/);
+  assert.match(ui.el('dhBody').innerHTML,/PESSOA A/);assert.match(ui.el('dhBody').innerHTML,/Fonte ou vínculo a conferir/);
   ui.el('dhStatus').value='PENDING';ui.el('dhStatus').change();
   assert.match(ui.el('dhBody').innerHTML,/PESSOA A/);assert.doesNotMatch(ui.el('dhBody').innerHTML,/PESSOA B|PESSOA C/);
   ui.el('dhExport').onclick();assert.equal(ui.exported.length,1);assert.equal(ui.exported[0].opsid,'OPS1');
@@ -43,4 +43,14 @@ test('interface continua as semanas e só exibe registros após a leitura final'
 test('falha HTML do servidor informa HTTP e libera nova tentativa sem revelar resposta bruta',async()=>{
   const ui=setup(()=>({ok:false,status:500,json:async()=>{throw new Error('HTML de erro interno');}}));
   await ui.load();assert.match(ui.el('dhMessage').textContent,/HTTP 500/);assert.doesNotMatch(ui.el('dhMessage').textContent,/HTML/);assert.equal(ui.el('dhLoad').disabled,false);
+});
+
+test('cruzamento mostra datas de diálogos/reciclagens e filtra sem exigir vínculo manual',async()=>{
+  const ui=setup((body,{rows,today})=>{
+    rows[1].reconciliation={status:'FOUND',dialogues:[{date:today}],recycles:[{date:today}],reason:'Registro localizado por OPSID'};
+    return {ok:true,json:async()=>({ok:true,rows,evidence:[],config:{trackingStart:today},dialogueSource:{coveredDays:30,updatedAt:new Date().toISOString()},checkedAt:new Date().toISOString()})};
+  });await ui.load();ui.el('dhReconciliation').value='FOUND';ui.el('dhReconciliation').change();
+  assert.match(ui.el('dhBody').innerHTML,/PESSOA B/);assert.doesNotMatch(ui.el('dhBody').innerHTML,/PESSOA A|PESSOA C/);
+  assert.match(ui.el('dhBody').innerHTML,/Tratativa localizada/);assert.match(ui.el('dhBody').innerHTML,/<strong>Diálogo:<\/strong>/);
+  assert.match(ui.el('dhBody').innerHTML,/<strong>Reciclagem:<\/strong>/);assert.match(ui.el('dhSourceStatus').textContent,/30 dia/);
 });

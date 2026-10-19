@@ -1230,3 +1230,11 @@ thead,
 .daily-review-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid #e4ebf2;padding-top:16px}
 .daily-wide{grid-column:1/-1}.daily-review-form .daily-confirm{flex-direction:row;align-items:start}.daily-confirm input{flex:none}
 @media(max-width:600px){.daily-review-form{grid-template-columns:1fr}.daily-detail-head{flex-direction:column}.daily-history-access button{width:100%}}
+
+.daily-history-import{margin:12px 0;padding:16px}
+.daily-history-import summary{cursor:pointer;color:#163e69;font-weight:700}
+.daily-history-import p{color:#586a81;line-height:1.5}
+.daily-history-import input{margin:10px 16px 10px 0;max-width:100%}
+.daily-state.found,.daily-state.linked{background:#e5f5ed;color:#176246}
+.daily-state.not_found,.daily-state.pending{background:#fff0dc;color:#925009}
+.daily-state.unknown,.daily-state.blocked{background:#edf0f5;color:#53647b}

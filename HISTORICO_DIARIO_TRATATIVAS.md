@@ -36,3 +36,13 @@ Consultas e gravações exigem o PIN existente. As respostas são privadas e sem
 A atualização manual percorre até sete dias da fonte por requisição, com continuação automática e progresso na tela. A listagem só é feita após concluir a importação. É seguro repetir a atualização: os vínculos, estados validados e auditorias são preservados. A revisão da fonte só alcança as datas da etapa processada.
 
 As gravações usam lotes JSON de até 100 registros por consulta D1, inclusive revisões, para evitar uma consulta por ocorrência. A HC e os históricos são indexados uma vez por processamento. Falhas sem JSON exibem o código HTTP, sem expor o conteúdo bruto da resposta do servidor.
+
+## Cruzamento automático de registros
+
+A consulta cruza cada ocorrência com os registros pelo OPSID e compara as datas. Mostra datas dos diálogos e reciclagens posteriores ou do mesmo dia, além dos registros anteriores na conferência. Registro anterior não quita reincidência. Um registro localizado não é um vínculo confirmado, não conclui várias ocorrências e não inicia outro ciclo.
+
+Resultados: tratativa localizada (conferir vínculo), sem diálogo localizado, pendência confirmada, vínculo confirmado, fonte/vínculo a conferir e validação operacional. “Sem diálogo localizado” exige cobertura de todos os dias entre a ocorrência e a consulta; significa ausência de registro na fonte, não prova de que a conversa não aconteceu. Sem cobertura suficiente, continua exigindo conferência.
+
+O histórico da planilha de diálogos pode ser importado, com o PIN existente, a partir de uma leitura completa identificada pelo ID/aba da fonte, período até ontem, instante da leitura e registros. São aceitos até 119 dias e uma leitura de até 24 horas. A qualificação é SOC-MG4, Desenvolvimento e motivo Miss Scan. Assinaturas, descrições livres e dados de outros motivos não são armazenados. O snapshot fica em armazenamento privado separado; não muda a fonte do bot, horários ou envios. O dia atual e os novos dias continuam vindo da sincronização existente. Correções retroativas na planilha exigem nova leitura histórica; o painel mostra o instante de conferência da leitura.
+
+Reciclagens são as registradas nesta dashboard; ausência de registro nela não garante ausência em fontes externas. A idade exibida é o número de dias desde a ocorrência, sem atribuir automaticamente tempo de pendência a registros ainda não validados.
