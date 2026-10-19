@@ -11,45 +11,92 @@ function instalarSincronizacaoABSReciclagens() {
 }
 
 function sincronizarABSReciclagens() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) throw new Error('Outra sincronização em andamento. Tente novamente.');
-  try {
-    var props = PropertiesService.getScriptProperties();
-    var token = String(props.getProperty('WEBHOOK_TOKEN') || '').trim();
-    if (!token) throw new Error('WEBHOOK_TOKEN não configurado no projeto existente.');
-    var source = {spreadsheetId:'1ltU2eLkym-ERSNyzvFsK0EyvKZT5kKUiHcY6PNiOxR8',sheetId:942845654,sheet:'COPPIT - ABS'};
-    var ss = SpreadsheetApp.openById(source.spreadsheetId);
-    var sheet = ss.getSheetByName(source.sheet);
-    if (!sheet || sheet.getSheetId() !== source.sheetId) throw new Error('Aba COPPIT - ABS não encontrada.');
-    var header = sheet.getRange(4,1,1,15).getDisplayValues()[0];
-    [[2,'Colaborador'],[6,'Turno'],[10,'Setor'],[13,'lider'],[14,'Ops ID']].forEach(function(h){
-      if(String(header[h[0]]).trim().toLowerCase() !== h[1].toLowerCase()) throw new Error('Colunas do ABS alteradas. Revise o cabeçalho antes de sincronizar.');
-    });
-    var count = Math.min(sheet.getLastRow(),5000)-4;
-    if(count<1)throw new Error('Lista ABS vazia. A lista anterior será preservada.');
-    var columns = [3,7,11,14,15].map(function(col){return sheet.getRange(5,col,count,1).getDisplayValues();});
-    var seen = {}, rows=[];
-    for(var i=0;i<count;i++){
-      var name=String(columns[0][i][0]||'').trim();if(!name)continue;
-      var opsid=String(columns[4][i][0]||'').trim().toUpperCase();
-      if(!/^OPS\d+$/.test(opsid))throw new Error('OPSID inválido na linha '+(i+5)+'. Lista anterior preservada.');
-      if(seen[opsid])throw new Error('OPSID duplicado na linha '+(i+5)+'. Lista anterior preservada.');
-      seen[opsid]=true;
-      rows.push({name:name,opsid:opsid,shift:String(columns[1][i][0]||'').trim(),sector:String(columns[2][i][0]||'').trim(),leader:String(columns[3][i][0]||'').trim()});
+  return executarCicloABS_(false);
+}
+
+/** Acionador temporário: repete somente a sincronização, nunca envia SeaTalk. */
+function repetirSincronizacaoABSReciclagens() {
+  return executarCicloABS_(true);
+}
+
+function cancelarRetentativasABS_() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'repetirSincronizacaoABSReciclagens') {
+      ScriptApp.deleteTrigger(trigger);
     }
-    if(!rows.length)throw new Error('Nenhum colaborador válido. Lista anterior preservada.');
-    var response = UrlFetchApp.fetch('https://dash.nicolas-pnorberto.workers.dev/api/training-sync',{
-      method:'post',contentType:'application/json',headers:{'X-Sync-Token':token},
-      payload:JSON.stringify({rows:rows,source:source,generatedAt:new Date().toISOString()}),muteHttpExceptions:true
-    });
-    var result;try{result=JSON.parse(response.getContentText());}catch(e){throw new Error('Resposta inválida do dashboard. HTTP '+response.getResponseCode());}
-    if(response.getResponseCode()>=300||!result.ok)throw new Error(result.error||'Falha ao sincronizar ABS.');
-    var presenceResult = sincronizarPresencaFiscalABS_(ss, token);
-    props.setProperty('ABS_RECICLAGENS_LAST_SYNC',result.updatedAt);
-    props.setProperty('ABS_RECICLAGENS_RECORDS',String(result.records));
-    Logger.log('ABS sincronizado: '+result.records+' colaboradores; '+result.updatedAt);
-    return {roster:result,presence:presenceResult};
+  });
+}
+
+function executarCicloABS_(retry) {
+  // Os acionadores deste usuário usam UserLock; as outras cargas usam ScriptLock.
+  // Mantém a exclusão entre execuções ABS sem disputar o bloqueio da carga oficial.
+  var lock = LockService.getUserLock();
+  if (!lock.tryLock(1000)) {
+    Logger.log('ABS já em execução para este usuário; a execução ativa controla as retentativas.');
+    return {ok:false,skipped:true,reason:'abs-already-running'};
+  }
+  var state = PropertiesService.getUserProperties();
+  try {
+    cancelarRetentativasABS_();
+    if (!retry) state.deleteProperty('ABS_SYNC_RETRY_COUNT');
+    try {
+      var result = executarSincronizacaoABS_();
+      state.deleteProperty('ABS_SYNC_RETRY_COUNT');
+      Logger.log('ABS: ciclo concluído; presença atualizada; retentativas encerradas.');
+      return result;
+    } catch (error) {
+      var attempts = Number(state.getProperty('ABS_SYNC_RETRY_COUNT') || 0);
+      if (attempts < 3) {
+        var delayMinutes = 2 * Math.pow(2, attempts);
+        ScriptApp.newTrigger('repetirSincronizacaoABSReciclagens')
+          .timeBased().after(delayMinutes * 60 * 1000).create();
+        state.setProperty('ABS_SYNC_RETRY_COUNT', String(attempts + 1));
+        Logger.log('ABS: nova tentativa '+(attempts+1)+'/3 agendada para após '+delayMinutes+' minutos.');
+      } else {
+        Logger.log('ABS: três retentativas esgotadas; próximo ciclo regular tentará novamente.');
+      }
+      throw error;
+    }
   } finally {lock.releaseLock();}
+}
+
+function executarSincronizacaoABS_() {
+  var props = PropertiesService.getScriptProperties();
+  var token = String(props.getProperty('WEBHOOK_TOKEN') || '').trim();
+  if (!token) throw new Error('WEBHOOK_TOKEN não configurado no projeto existente.');
+  var source = {spreadsheetId:'1ltU2eLkym-ERSNyzvFsK0EyvKZT5kKUiHcY6PNiOxR8',sheetId:942845654,sheet:'COPPIT - ABS'};
+  var ss = SpreadsheetApp.openById(source.spreadsheetId);
+  // A presença do fiscal não depende da validação/publicação do cadastro de reciclagens.
+  var presenceResult = sincronizarPresencaFiscalABS_(ss, token);
+  var sheet = ss.getSheetByName(source.sheet);
+  if (!sheet || sheet.getSheetId() !== source.sheetId) throw new Error('Aba COPPIT - ABS não encontrada.');
+  var header = sheet.getRange(4,1,1,15).getDisplayValues()[0];
+  [[2,'Colaborador'],[6,'Turno'],[10,'Setor'],[13,'lider'],[14,'Ops ID']].forEach(function(h){
+    if(String(header[h[0]]).trim().toLowerCase() !== h[1].toLowerCase()) throw new Error('Colunas do ABS alteradas. Revise o cabeçalho antes de sincronizar.');
+  });
+  var count = Math.min(sheet.getLastRow(),5000)-4;
+  if(count<1)throw new Error('Lista ABS vazia. A lista anterior será preservada.');
+  var columns = [3,7,11,14,15].map(function(col){return sheet.getRange(5,col,count,1).getDisplayValues();});
+  var seen = {}, rows=[];
+  for(var i=0;i<count;i++){
+    var name=String(columns[0][i][0]||'').trim();if(!name)continue;
+    var opsid=String(columns[4][i][0]||'').trim().toUpperCase();
+    if(!/^OPS\d+$/.test(opsid))throw new Error('OPSID inválido na linha '+(i+5)+'. Lista anterior preservada.');
+    if(seen[opsid])throw new Error('OPSID duplicado na linha '+(i+5)+'. Lista anterior preservada.');
+    seen[opsid]=true;
+    rows.push({name:name,opsid:opsid,shift:String(columns[1][i][0]||'').trim(),sector:String(columns[2][i][0]||'').trim(),leader:String(columns[3][i][0]||'').trim()});
+  }
+  if(!rows.length)throw new Error('Nenhum colaborador válido. Lista anterior preservada.');
+  var response = UrlFetchApp.fetch('https://dash.nicolas-pnorberto.workers.dev/api/training-sync',{
+    method:'post',contentType:'application/json',headers:{'X-Sync-Token':token},
+    payload:JSON.stringify({rows:rows,source:source,generatedAt:new Date().toISOString()}),muteHttpExceptions:true
+  });
+  var result;try{result=JSON.parse(response.getContentText());}catch(e){throw new Error('Resposta inválida do dashboard. HTTP '+response.getResponseCode());}
+  if(response.getResponseCode()>=300||!result.ok)throw new Error(result.error||'Falha ao sincronizar ABS.');
+  props.setProperty('ABS_RECICLAGENS_LAST_SYNC',result.updatedAt);
+  props.setProperty('ABS_RECICLAGENS_RECORDS',String(result.records));
+  Logger.log('ABS sincronizado: '+result.records+' colaboradores; '+result.updatedAt);
+  return {roster:result,presence:presenceResult};
 }
 
 /** Usa a data efetiva do cabeçalho, nunca a posição fixa do dia do mês. */
