@@ -9,6 +9,13 @@ import '../presence-ui.js';
 import '../date-loader.js';
 
 const now=new Date('2026-10-19T19:40:00Z');
+test('arquivos JavaScript da página estão incluídos na publicação do Cloudflare',()=>{
+  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const assets=readFileSync(new URL('../.assetsignore',import.meta.url),'utf8').split(/\r?\n/);
+  for(const match of html.matchAll(/<script\s+src="([^"?]+)(?:\?[^"]*)?"/g)){
+    assert.ok(assets.includes('!'+match[1]),'Arquivo não publicado: '+match[1]);
+  }
+});
 const snapshot=(overrides={})=>({source:PRESENCE_SOURCE,dateKey:'2026-10-19',generatedAt:'2026-10-19T19:29:43Z',rows:[
   {opsid:'OPS1',status:'P',disabled:false},{opsid:'OPS2',status:'DSR',disabled:false},
   {opsid:'OPS3',status:'P',disabled:true},{opsid:'OPS4',status:'',disabled:false},
