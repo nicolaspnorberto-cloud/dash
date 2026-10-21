@@ -5,27 +5,27 @@ import {configureRuntimeEnv} from '../lib/blob-store.mjs';
 import {OFFICIAL_PATH} from '../lib/official-source.mjs';
 import {dailyCandidates,dailyShareTotals} from '../lib/daily-treatment-history.mjs';
 const {calculate,weeklyRow}=globalThis.MisscanOfficialShare;
-test('share reproduz prioridades do canonicalTotal oficial: pessoa, turno, operação e SOC',()=>{
+test('turno preserva share global e o conjunto acima do corte',()=>{
   const base={numerator:10,total:1000,turnTotal:200,operationTotal:100,personTotal:10};
   assert.equal(calculate(base).value,1);
   assert.equal(calculate({...base,operation:'ESTEIRA'}).value,10);
-  assert.equal(calculate({...base,turn:'T2'}).value,5);
-  assert.equal(calculate({...base,turn:'T2',operation:'ESTEIRA'}).value,5);
+  assert.equal(calculate({...base,turn:'T2'}).value,1);
+  assert.equal(calculate({...base,turn:'T2',operation:'ESTEIRA'}).value,10);
   assert.equal(calculate({...base,person:'PESSOA',turn:'T2',operation:'ESTEIRA'}).value,100);
 });
 test('denominador ausente/zero não vira percentual inventado e corte usa precisão original',()=>{
   assert.equal(calculate({numerator:5,total:0}).value,null);
-  assert.equal(calculate({numerator:5,total:100,turn:'T2'}).value,null);
+  assert.equal(calculate({numerator:5,total:100,turn:'T2'}).value,5);
   assert.equal(calculate({numerator:88,total:10000}).value>0.88,false);
   assert.equal(calculate({numerator:89,total:10000}).value>0.88,true);
 });
-test('matriz usa quantidade da operação e total completo do turno, sem alterar o snapshot',()=>{
+test('matriz usa quantidade da operação e total da operação em MG4, sem alterar o snapshot',()=>{
   const row={weeks:{W40:{missScan:20,esteira:5,expedicao:15}}};
   const weeks=[{week:'W40',missScan:1000,shareTotals:{esteira:200,expedicao:800,turns:{T2:{total:100}}}}];
   assert.equal(weeklyRow(row,weeks).weeks.W40.share,2);
   assert.equal(weeklyRow(row,weeks,{operation:'ESTEIRA'}).weeks.W40.share,2.5);
   const metric=weeklyRow(row,weeks,{turn:'T2',operation:'ESTEIRA'}).weeks.W40;
-  assert.equal(metric.missScan,5);assert.equal(metric.share,5);assert.equal(metric.shareDenominator,100);
+  assert.equal(metric.missScan,5);assert.equal(metric.share,2.5);assert.equal(metric.shareDenominator,200);
   assert.equal(row.weeks.W40.missScan,20);assert.equal(row.weeks.W40.share,undefined);
 });
 const hc=[{colaborador:'PESSOA A',opsid:'OPS1',turno:'T4'},{colaborador:'PESSOA B',opsid:'OPS2',turno:'T2'},{colaborador:'PESSOA C',opsid:'OPS3',turno:'T1'}];
