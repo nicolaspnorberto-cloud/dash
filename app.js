@@ -987,7 +987,7 @@ function mergeTreatmentArchive(rows=[]){
   saveTreatmentArchive();
 }
 function archiveRowFor(id){
-  return state.treatmentArchive?.[id]||state.treatmentSource.find(x=>x.id===id)||null;
+  return state.treatmentFiltered?.find(x=>x.id===id)||state.treatmentArchive?.[id]||state.treatmentSource.find(x=>x.id===id)||null;
 }
 
 function baseProgress(){
@@ -1110,7 +1110,13 @@ function filteredTreatments(){
   const status=$('treatStatusFilter').value;
   const presenceFilter=$('treatPresenceFilter')?.value||'';
   const q=$('treatSearch').value.trim().toLowerCase();
-  return state.treatmentSource.filter(x=>{
+  const totalRows=state.dailyRaw||state.raw||[];
+  const total=rowTotal(totalRows),turnTotal=turno?rowTotal(totalRows.filter(r=>r.turno===turno)):null;
+  if($('treatShareNote'))$('treatShareNote').textContent=`Share oficial: Miss Scans da pessoa ÷ ${turno?'total de Miss Scans do '+turno+' (HC Matinal)':'total de Miss Scans do MG4'} no período selecionado. Liderança, setor, busca e status apenas organizam a lista. Corte: acima de ${fmtPct(threshold)}.`;
+  return state.treatmentSource.map(x=>{
+    const share=MisscanOfficialShare.calculate({numerator:x.miss_scan,total,turnTotal,turn:turno});
+    return {...x,indicador:share.value,share_denominator:share.denominator,share_scope:share.scope};
+  }).filter(x=>{
     const st=treatmentStatus(x);
     return x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && MisscanPresenceUI.matches(presenceFilter,treatmentPresenceInfo(x),st.group==='PENDENTE') && (!q||`${x.colaborador} ${x.turno} ${x.setor} ${x.lider}`.toLowerCase().includes(q));
   }).sort((a,b)=>b.indicador-a.indicador||b.miss_scan-a.miss_scan);
@@ -2072,14 +2078,13 @@ function filteredEvolution(){
   const treatment=$('evolutionTreatment')?.value||'';
   const search=String($('evolutionSearch')?.value||'').trim().toLowerCase();
   const latest=state.evolutionWeeks.at(-1)?.week;
-  return state.evolution.filter(row=>{
+  return state.evolution.map(row=>MisscanOfficialShare.weeklyRow(row,state.evolutionWeeks,{turn:turno,operation})).filter(row=>{
     const metrics=evolutionMetrics(row);
     const current=evolutionIsAboveTarget(row.weeks?.[latest]);
     const scopeOk=(scope==='ALL'&&evolutionHasHistoricalOffense(row))||(scope==='CURRENT'&&current)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
-    const op=evolutionOperation(row);
     const currentTreatment=evolutionTreatment(row);
     return scopeOk
-      &&(!operation||op===operation)
+      &&(!operation||Object.values(row.weeks||{}).some(metric=>metric.missScan>0))
       &&(!turno||normalizeTurno(row.turno)===turno)
       &&(!status||metrics.status===status)
       &&(!trend||metrics.trend===trend)
@@ -2094,6 +2099,7 @@ function renderEvolution(){
   const weeks=state.evolutionWeeks;
   const latest=weeks.at(-1)?.week;
   const rows=filteredEvolution();
+  if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Share oficial por semana: BRs da pessoa ${$('evolutionOperation').value?'na operação selecionada ':''}÷ ${$('evolutionTurno').value?'total do turno '+$('evolutionTurno').value+' pela HC Matinal (todas as operações)':$('evolutionOperation').value?'total da operação selecionada':'total do MG4'}. Corte acima de ${fmtPct(state.evolutionTarget)}. Liderança e busca não alteram a referência.`;
   const metrics=rows.map(row=>evolutionMetrics(row));
   const current=rows.filter(row=>evolutionIsAboveTarget(row.weeks?.[latest])).length;
   const chronic=metrics.filter(item=>item.status==='Crônico').length;
@@ -2117,10 +2123,10 @@ function renderEvolution(){
       const metric=row.weeks?.[week.week];
       return `<td class="evolution-week">${metric?`<strong>${fmtInt.format(metric.missScan)}</strong><span>${Number.isFinite(metric.share)?fmtPct(metric.share):'sem volume'}</span>`:'—'}</td>`;
     }).join('');
-    const action=evolutionTreatment(row);
+    const action=evolutionTreatment(row),displayOperation=$('evolutionOperation').value||evolutionOperation(row);
     return `<tr>
       <td><div class="evolution-name">${escapeHtml(row.colaborador)}</div><div class="evolution-sub">${escapeHtml(row.opsid||'Sem OpsID')} • ${escapeHtml(row.turno)} • ${escapeHtml(row.lider)}</div></td>
-      <td><span class="evolution-pill ${evolutionOperation(row)==='EXPEDIÇÃO'?'evolution-neutral':'evolution-warning'}">${escapeHtml(evolutionOperation(row))}</span></td>
+      <td><span class="evolution-pill ${displayOperation==='EXPEDIÇÃO'?'evolution-neutral':'evolution-warning'}">${escapeHtml(displayOperation)}</span></td>
       ${weekCells}
       <td><strong>${item.presence}</strong></td>
       <td><span class="evolution-pill ${evolutionTone(item.trend)}">${escapeHtml(item.trend)}</span></td>
@@ -2176,10 +2182,12 @@ function exportEvolution(){
   const weeks=state.evolutionWeeks.map(item=>item.week);
   const rows=filteredEvolution().map(row=>{
     const metrics=evolutionMetrics(row);
-    const out={colaborador:row.colaborador,opsid:row.opsid,turno:row.turno,setor:row.setor,lider:row.lider,operacao:evolutionOperation(row)};
+    const out={colaborador:row.colaborador,opsid:row.opsid,turno:row.turno,setor:row.setor,lider:row.lider,operacao:$('evolutionOperation').value||evolutionOperation(row)};
     weeks.forEach(week=>{
       out[`${week}_miss_scan`]=row.weeks?.[week]?.missScan??'';
       out[`${week}_percentual`]=row.weeks?.[week]?.share??'';
+      out[`${week}_base_share`]=row.weeks?.[week]?.shareDenominator??'';
+      out[`${week}_referencia_share`]=row.weeks?.[week]?.shareScope??'';
       out[`${week}_volume_expedido`]=row.weeks?.[week]?.volume??'';
     });
     return {...out,aparicoes:metrics.presence,total:metrics.total,pico:metrics.peak,tendencia:metrics.trend,status:metrics.status,tratativa_atual:evolutionTreatment(row)};

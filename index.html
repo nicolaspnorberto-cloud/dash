@@ -229,8 +229,8 @@
           </label>
           <button id="treatResetBtn" class="reset-btn">Limpar</button>
         </div>
-        <div class="treatment-source-note">
-          <strong>Fonte automática:</strong> o ranking é recalculado conforme o período selecionado, usando o histórico sincronizado da Matinal e o enriquecimento da Base HC. O indicador atual é o <strong>Share dos Misscan identificados</strong>; ele não substitui a taxa individual por volume até que o denominador oficial seja integrado.
+        <div class="treatment-source-note" id="treatShareNote">
+          <strong>Share oficial:</strong> Miss Scans da pessoa ÷ total do recorte. Com turno selecionado, a referência é o total desse turno pela HC Matinal. Setor, liderança, busca e situação da tratativa apenas organizam a lista.
         </div>
       </div>
 
@@ -689,9 +689,10 @@
   <footer>Mis-Scan Control Center • V6.15 • LM + GEROT + Evolução semanal + Tratativas</footer>
   <script src="refresh-policy.js?v=7.0.22"></script>
   <script src="date-loader.js?v=7.0.22"></script>
+  <script src="official-share.js?v=7.6.0"></script>
   <script src="presence-ui.js?v=7.3.0"></script>
-  <script src="app.js?v=7.3.0-presence"></script>
+  <script src="app.js?v=7.6.0-official-share"></script>
   <script src="training.js?v=7.2.0"></script>
-  <script src="daily-history.js?v=7.5.0"></script>
+  <script src="daily-history.js?v=7.6.0"></script>
 </body>
 </html>

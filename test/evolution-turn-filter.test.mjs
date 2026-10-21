@@ -1,3 +1,4 @@
+import '../official-share.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -10,13 +11,13 @@ function setup() {
     if (!elements.has(id)) elements.set(id, { value: '', innerHTML: '', textContent: '' });
     return elements.get(id);
   };
-  const context = vm.createContext({ window: {}, MisscanDateLoader: globalThis.MisscanDateLoader,
+  const context = vm.createContext({ window: {}, MisscanOfficialShare:globalThis.MisscanOfficialShare,MisscanDateLoader: globalThis.MisscanDateLoader,
     document: { getElementById: get }, localStorage: { getItem() { return null; }, setItem() {} },
     Intl, Map, Set, Date, Number, String, Math, AbortController, DOMException, setTimeout, clearTimeout, console });
   const run = code => vm.runInContext(code, context);
   run(readFileSync(new URL('../app.js', import.meta.url), 'utf8').replace(/boot\(\);\s*$/, ''));
   get('evolutionScope').value = 'ALL';
-  run(`state.evolutionWeeks=[{week:'W40'},{week:'W41'}];
+  run(`state.evolutionWeeks=[{week:'W40',missScan:1000,shareTotals:{turns:{T2:{total:1000}}}},{week:'W41',missScan:1000,shareTotals:{expedicao:60,esteira:10,turns:{T1:{total:10},T2:{total:30},T3:{total:10},'Não cadastrado':{total:10},'T1 / T2':{total:10}}}}];
     state.evolution=[
       {colaborador:'Teste A',turno:'T1',weeks:{W41:{share:1,missScan:10,expedicao:10}}},
       {colaborador:'Teste B',turno:'T2',weeks:{W40:{share:1,missScan:10,expedicao:10},W41:{share:2,missScan:20,expedicao:20}}},
