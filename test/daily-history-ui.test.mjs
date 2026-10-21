@@ -55,9 +55,9 @@ test('cruzamento mostra datas de diálogos/reciclagens e filtra sem exigir vínc
   assert.match(ui.el('dhBody').innerHTML,/Tratativa localizada/);assert.match(ui.el('dhBody').innerHTML,/<strong>Diálogo:<\/strong>/);
   assert.match(ui.el('dhBody').innerHTML,/<strong>Reciclagem:<\/strong>/);assert.match(ui.el('dhSourceStatus').textContent,/30 dia/);
 });
-test('share diário muda com turno, preserva base global e não muda com líder ou busca',async()=>{
+test('share diário permanece global ao filtrar turno e líder',async()=>{
   const ui=setup();await ui.load();ui.el('dhExport').onclick();assert.equal(ui.exported[0].share_diario_pct,2);
-  ui.el('dhTurn').value='T2';ui.el('dhTurn').change();ui.el('dhExport').onclick();assert.equal(ui.exported[0].share_diario_pct,10);
-  ui.el('dhLeader').value='LÍDER TESTE';ui.el('dhLeader').change();ui.el('dhExport').onclick();assert.equal(ui.exported[0].share_diario_pct,10);
+  ui.el('dhTurn').value='T2';ui.el('dhTurn').change();ui.el('dhExport').onclick();assert.equal(ui.exported[0].share_diario_pct,2);
+  ui.el('dhLeader').value='LÍDER TESTE';ui.el('dhLeader').change();ui.el('dhExport').onclick();assert.equal(ui.exported[0].share_diario_pct,2);
   ui.el('dhTurn').value='';ui.el('dhTurn').change();ui.el('dhExport').onclick();assert.equal(ui.exported[0].share_diario_pct,2);
 });
