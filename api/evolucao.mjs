@@ -118,7 +118,8 @@ async function buildReport(request) {
       gerot?.receivedAt || '',
       gerot?.updatedAt || '',
       gerot?.processed?.length || 0,
-      requestedWeeks
+      requestedWeeks,
+      'official-share-scope-v1'
     ].join('|');
 
     if (!fresh) {
@@ -159,6 +160,7 @@ async function buildReport(request) {
     const hcIndex = hcIndexes(hcFile?.rows || []);
     const map = new Map();
     const misscanByWeek = new Map();
+    const shareTotalsByWeek = new Map();
     let manual = 0;
     let unidentified = 0;
     let groupedOccurrences = 0;
@@ -169,7 +171,12 @@ async function buildReport(request) {
       const week = isoWeek(date);
       const currentStart = weekStartByKey.get(week);
       if (!currentStart || date < currentStart) weekStartByKey.set(week, date);
-      misscanByWeek.set(week, (misscanByWeek.get(week) || 0) + officialWeight(row));
+      const weight=officialWeight(row),area=responsibility(row);
+      misscanByWeek.set(week, (misscanByWeek.get(week) || 0) + weight);
+      if(!shareTotalsByWeek.has(week))shareTotalsByWeek.set(week,{total:0,esteira:0,expedicao:0,turns:{}});
+      const scopeTotals=shareTotalsByWeek.get(week);scopeTotals.total+=weight;
+      if(area==='ESTEIRA')scopeTotals.esteira+=weight;
+      if(area==='EXPEDIÇÃO')scopeTotals.expedicao+=weight;
       if(row.official_grouped){groupedOccurrences+=officialWeight(row);continue;}
       const operators = validOperators(row?.operator_fail || '');
       if (operators.length !== 1) {
@@ -182,13 +189,18 @@ async function buildReport(request) {
         continue;
       }
 
+      const info=hcInfo(hcIndex,operator);
+      if(info.turno){
+        if(!scopeTotals.turns[info.turno])scopeTotals.turns[info.turno]={total:0};
+        scopeTotals.turns[info.turno].total+=weight;
+      }
       const key = String(operator.opsid || normalizeName(operator.name)).toUpperCase();
       if (!map.has(key)) {
         map.set(key, {
           key,
           opsid: operator.opsid || '',
           colaborador: operator.name,
-          ...hcInfo(hcIndex, operator),
+          ...info,
           weeks: {}
         });
       }
@@ -197,7 +209,6 @@ async function buildReport(request) {
       if (!item.weeks[week]) item.weeks[week] = weekMetric();
       const metric = item.weeks[week];
       metric.missScan+=officialWeight(row);
-      const area = responsibility(row);
       if (area === 'ESTEIRA') metric.esteira+=officialWeight(row);
       if (area === 'EXPEDIÇÃO') metric.expedicao+=officialWeight(row);
     }
@@ -235,6 +246,7 @@ async function buildReport(request) {
       weeks: weekKeys.map(week => ({
         week,
         missScan: Number(misscanByWeek.get(week) || 0),
+        shareTotals:shareTotalsByWeek.get(week)||{total:0,esteira:0,expedicao:0,turns:{}},
         volume: Number(volumeByWeek.get(week) || 0),
         rate: Number(volumeByWeek.get(week) || 0) > 0
           ? Number(misscanByWeek.get(week) || 0) / Number(volumeByWeek.get(week)) * 100
@@ -255,7 +267,7 @@ async function buildReport(request) {
         individualization:detailed?.meta||null,
         volumeSource: 'GEROT db_volume_overall • Inter-SOC • SOC_Packed',
         numeratorSource: official?'Oficial MG4 • OUT_05 + OUT_04 conciliadas; turno HC Matinal':'Matinal/LM • mesma atribuição do ranking V6.13',
-        shareSource: 'BRs do colaborador ÷ total de Miss Scans da semana',
+        shareSource: 'Regra oficial: BRs da pessoa ÷ total do recorte semanal; turno tem prioridade sobre operação; turno HC Matinal',
         generatedAt: new Date().toISOString()
       }
     };

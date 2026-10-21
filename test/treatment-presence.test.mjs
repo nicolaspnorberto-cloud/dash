@@ -1,3 +1,4 @@
+import '../official-share.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -82,11 +83,11 @@ test('badge expira sem continuar mostrando presença antiga e filtro respeita pe
 test('tratativas preservam OPSID e combinam filtro de presença com turno e status',()=>{
   const elements=new Map();
   const get=id=>{if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',textContent:''});return elements.get(id);};
-  const context=vm.createContext({window:{},MisscanDateLoader:globalThis.MisscanDateLoader,MisscanPresenceUI:globalThis.MisscanPresenceUI,document:{getElementById:get},Intl,Map,Set,Date,Number,String,Math,AbortController,DOMException,setTimeout,clearTimeout,console});
+  const context=vm.createContext({window:{},MisscanOfficialShare:globalThis.MisscanOfficialShare,MisscanDateLoader:globalThis.MisscanDateLoader,MisscanPresenceUI:globalThis.MisscanPresenceUI,document:{getElementById:get},Intl,Map,Set,Date,Number,String,Math,AbortController,DOMException,setTimeout,clearTimeout,console});
   const run=code=>vm.runInContext(code,context);
   run(readFileSync(new URL('../app.js',import.meta.url),'utf8').replace(/boot\(\);\s*$/,''));
   assert.equal(run("enrichTreatmentRow({colaborador:'Teste',opsid:'OPS1',turno:'T2'}).opsid"),'OPS1');
-  run(`state.treatmentSource=[{id:'A',colaborador:'A',opsid:'OPS1',turno:'T2',indicador:2,miss_scan:10},{id:'B',colaborador:'B',opsid:'OPS2',turno:'T2',indicador:1,miss_scan:5}];
+  run(`state.dailyRaw=[{official_aggregate:true,official_count:1000,turno:'T2'}];state.treatmentSource=[{id:'A',colaborador:'A',opsid:'OPS1',turno:'T2',indicador:2,miss_scan:10},{id:'B',colaborador:'B',opsid:'OPS2',turno:'T2',indicador:1,miss_scan:5}];
     state.treatmentPresence={'OPS1|T2':{status:'PRESENT',dateKey:'2026-10-19',validUntil:'2099-01-01T00:00:00Z'},'OPS2|T2':{status:'ABSENT',dateKey:'2026-10-19',validUntil:'2099-01-01T00:00:00Z'}};`);
   get('treatPresenceFilter').value='PENDING_PRESENT';
   assert.equal(run('filteredTreatments().length'),1);

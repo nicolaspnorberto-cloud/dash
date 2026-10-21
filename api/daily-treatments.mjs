@@ -4,7 +4,7 @@ import {envValue,json,readJson} from '../lib/blob-store.mjs';
 import {OFFICIAL_PATH} from '../lib/official-source.mjs';
 import {PRESENCE_PATH,saoPauloPresenceDate} from '../lib/abs-presence.mjs';
 import {presenceForTreatments} from './treatment-presence.mjs';
-import {DAILY_CONFIG,dailySchema,dailyRows,dailyContext,syncDailyHistory,changeDailyRecord} from '../lib/daily-treatment-history.mjs';
+import {DAILY_CONFIG,dailyShareTotals,dailySchema,dailyRows,dailyContext,syncDailyHistory,changeDailyRecord} from '../lib/daily-treatment-history.mjs';
 
 function privateJson(data,status=200){const response=json(data,status);response.headers.set('cache-control','private, no-store, max-age=0');response.headers.set('Vary','x-treatment-pin');return response;}
 
@@ -33,12 +33,12 @@ export async function POST(request){
     let rows=await dailyRows(db);
     const context=await dailyContext(db);
     if(['link','confirm-pending'].includes(body.action)){await changeDailyRecord(db,body,rows,context.evidence);rows=await dailyRows(db);}
-    const today=saoPauloPresenceDate();
+    const today=saoPauloPresenceDate(),shareTotals=dailyShareTotals(context.official);
     const entries=[...new Map(rows.filter(r=>r.opsid&&/^T[1-3]$/.test(r.turno)).map(r=>[r.opsid+'|'+r.turno,{opsid:r.opsid,turno:r.turno}])).values()];
     const evidenceKeys=new Set(context.evidence.map(e=>e.key));
     const presence=presenceForTreatments(entries,await readJson(PRESENCE_PATH,null));
     const byKey=new Map(presence.map(p=>[p.opsid+'|'+p.turno,p]));
-    rows=rows.map(row=>({...row,presence:byKey.get(row.opsid+'|'+row.turno)||null,
+    rows=rows.map(row=>({...row,totalDay:shareTotals[row.date]?.total??row.totalDay??null,turnTotal:shareTotals[row.date]?.turns?.[row.turno]??row.turnTotal??null,presence:byKey.get(row.opsid+'|'+row.turno)||null,
       occurrenceAgeDays:Math.max(0,Math.round((Date.parse(today)-Date.parse(row.date))/86400000)),
       ageDays:row.state==='PENDING'?Math.max(0,Math.round((Date.parse(today)-Date.parse(row.date))/86400000)):null,
       evidenceCurrent:row.evidence?evidenceKeys.has(row.evidence.key):null}));
