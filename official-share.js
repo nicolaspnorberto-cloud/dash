@@ -1,8 +1,7 @@
 (function(root){
-  // Regra do Index oficial: colaborador > turno (ignora operação no
-  // denominador) > operação > total do SOC no período já selecionado.
+  // Turno apenas filtra pessoas. O denominador permanece o mesmo do recorte MG4.
   function calculate({numerator,total,turnTotal,operationTotal,personTotal,turn='',operation='',person=''}={}){
-    const scope=person?'person':turn?'turn':operation?'operation':'soc';
+    const scope=person?'person':operation?'operation':'soc';
     const raw=scope==='person'?personTotal:scope==='turn'?turnTotal:scope==='operation'?operationTotal:total;
     const denominator=raw==null?null:Number(raw);
     return {scope,denominator:Number.isFinite(denominator)?denominator:null,

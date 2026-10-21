@@ -1112,7 +1112,7 @@ function filteredTreatments(){
   const q=$('treatSearch').value.trim().toLowerCase();
   const totalRows=state.dailyRaw||state.raw||[];
   const total=rowTotal(totalRows),turnTotal=turno?rowTotal(totalRows.filter(r=>r.turno===turno)):null;
-  if($('treatShareNote'))$('treatShareNote').textContent=`Share oficial: Miss Scans da pessoa ÷ ${turno?'total de Miss Scans do '+turno+' (HC Matinal)':'total de Miss Scans do MG4'} no período selecionado. Liderança, setor, busca e status apenas organizam a lista. Corte: acima de ${fmtPct(threshold)}.`;
+  if($('treatShareNote'))$('treatShareNote').textContent=`Share oficial: Miss Scans da pessoa ÷ total de Miss Scans do MG4 no período selecionado. Turno, liderança, setor, busca e status apenas organizam a lista. Corte: acima de ${fmtPct(threshold)}.`;
   return state.treatmentSource.map(x=>{
     const share=MisscanOfficialShare.calculate({numerator:x.miss_scan,total,turnTotal,turn:turno});
     return {...x,indicador:share.value,share_denominator:share.denominator,share_scope:share.scope};
@@ -2099,7 +2099,7 @@ function renderEvolution(){
   const weeks=state.evolutionWeeks;
   const latest=weeks.at(-1)?.week;
   const rows=filteredEvolution();
-  if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Share oficial por semana: BRs da pessoa ${$('evolutionOperation').value?'na operação selecionada ':''}÷ ${$('evolutionTurno').value?'total do turno '+$('evolutionTurno').value+' pela HC Matinal (todas as operações)':$('evolutionOperation').value?'total da operação selecionada':'total do MG4'}. Corte acima de ${fmtPct(state.evolutionTarget)}. Liderança e busca não alteram a referência.`;
+  if($('evolutionSourceNote'))$('evolutionSourceNote').textContent=`Share oficial por semana: BRs da pessoa ${$('evolutionOperation').value?'na operação selecionada ':''}÷ ${$('evolutionOperation').value?'total da operação selecionada no MG4':'total do MG4'}. Corte acima de ${fmtPct(state.evolutionTarget)}. Turno, liderança e busca não alteram a referência.`;
   const metrics=rows.map(row=>evolutionMetrics(row));
   const current=rows.filter(row=>evolutionIsAboveTarget(row.weeks?.[latest])).length;
   const chronic=metrics.filter(item=>item.status==='Crônico').length;

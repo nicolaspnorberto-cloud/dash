@@ -1,3 +1,5 @@
+Filtro de turno: desde esta revisão, apenas seleciona colaboradores; não altera denominadores nem o corte. Operação continua definindo seu recorte MG4. Esta regra substitui a prioridade de turno descrita abaixo.
+
 # Share por pessoa — regra oficial
 
 Referência: `canonicalTotal`, `qtdTipo` e `renderDetailTable` do Index oficial fornecido pelo responsável do painel (V33). Share = quantidade da pessoa no recorte ÷ total de Miss Scans do recorte × 100. Não usa volume processado individual.
