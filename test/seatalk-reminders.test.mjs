@@ -157,3 +157,18 @@ test('rota T3 reúne T3 e T5 e exclui T2',()=>{
  assert.equal(rows.length,2);
  assert.deepEqual(rows.map(x=>x.collaborator).sort(),['Pessoa T3','Pessoa T5']);
 });
+
+
+test('T2 dispensa ABS somente às 13h e 14h; T3 e demais horários exigem presença', async()=>{
+  const {reminderPresenceSelection}=await import('../lib/seatalk-reminders.mjs');
+  const rows=[{opsid:'OPS1',done:false},{opsid:'OPS2',done:true}];
+  for(const hour of [13,14]) {
+    const result=reminderPresenceSelection(rows,null,{turn:'T2',hour,dateKey:'2026-10-22'});
+    assert.equal(result.available,true);assert.equal(result.required,false);
+    assert.deepEqual(result.eligible,rows);assert.deepEqual(result.deferred,[]);
+  }
+  for(const [turn,hour] of [['T2',12],['T2',15],['T2',22],['T3',13],['T3',14],['T3',21]]) {
+    const result=reminderPresenceSelection(rows,null,{turn,hour,dateKey:'2026-10-22'});
+    assert.equal(result.available,false);assert.equal(result.required,true);
+  }
+});

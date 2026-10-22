@@ -65,7 +65,7 @@ export async function GET() {
       target: 0.88,
       preset: 'YESTERDAY',
       recurrence: 'NEXT_DAILY_OCCURRENCE',
-      presence: { required: true, source: 'ABS', identity: 'OPSID', date: 'TODAY_SAO_PAULO', maxAgeMinutes: 60, unconfirmed: 'SKIP_CHARGE' },
+      presence: { required: true, requiredFrom: '15:00', exemptHours: ['13:00','14:00'], source: 'ABS', identity: 'OPSID', date: 'TODAY_SAO_PAULO', maxAgeMinutes: 60, unconfirmed: 'SKIP_CHARGE' },
       treatmentFlow: [
         '1º diálogo',
         '1ª reciclagem',
