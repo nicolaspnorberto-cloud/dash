@@ -172,3 +172,18 @@ test('T2 dispensa ABS somente às 13h e 14h; T3 e demais horários exigem presen
     assert.equal(result.available,false);assert.equal(result.required,true);
   }
 });
+
+
+test('T3 dispensa ABS nas duas primeiras horas; às 23h30 e no fechamento exige ABS',async()=>{
+  const {reminderPresenceSelection}=await import('../lib/seatalk-reminders.mjs');
+  const rows=[{opsid:'OPS1',done:false},{opsid:'OPS2',done:true}];
+  for(const [hour,minute] of [[21,30],[22,30],[23,29]]) {
+    const result=reminderPresenceSelection(rows,null,{turn:'T3',hour,minute,dateKey:'2026-10-23'});
+    assert.equal(result.available,true);assert.equal(result.required,false);
+    assert.deepEqual(result.eligible,rows);assert.deepEqual(result.deferred,[]);
+  }
+  for(const [hour,minute] of [[21,29],[23,30],[0,30],[5,30]]) {
+    const result=reminderPresenceSelection(rows,null,{turn:'T3',hour,minute,dateKey:'2026-10-23'});
+    assert.equal(result.available,false);assert.equal(result.required,true);
+  }
+});
