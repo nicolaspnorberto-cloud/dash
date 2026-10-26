@@ -95,6 +95,29 @@
 @media(max-width:1150px){#reciclagens .training-workspace{grid-template-columns:minmax(0,1fr) 290px;gap:16px}#reciclagens .training-box{padding:20px}#reciclagens .training-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#reciclagens .training-filters,#reciclagens .training-history-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:850px){#reciclagens .training-workspace{grid-template-columns:1fr}#reciclagens .training-review{position:static}#reciclagens .training-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#reciclagens .training-count{margin-left:0}}
 @media(max-width:550px){#reciclagens h1{font-size:25px}#reciclagens .training-grid,#reciclagens .training-roster,#reciclagens .training-history-people{grid-template-columns:1fr}#reciclagens .training-wide{grid-column:auto}#reciclagens .training-box{padding:16px}#reciclagens .training-kpis>div{padding:14px}#reciclagens .training-kpis strong{font-size:24px}#reciclagens .training-event summary{align-items:flex-start;flex-direction:column;gap:10px}#reciclagens .training-pagination{flex-wrap:wrap}#reciclagens .training-upload{padding:18px 12px}#reciclagens .training-navigation button{font-size:12px;padding:12px}#reciclagens input:not([type=checkbox]),#reciclagens select,#reciclagens textarea{font-size:16px}#reciclagens button{min-height:44px}}
-@media print{body:has(#trainingPrintArea)>:not(#trainingPrintArea){display:none!important}#trainingPrintArea{display:block!important;font:11px Arial,sans-serif;color:#142c46}#trainingPrintArea header{border-bottom:3px solid #ee4d2d;padding-bottom:10px}#trainingPrintArea header>strong{font-size:10px;letter-spacing:1px}#trainingPrintArea h1{font-size:20px;margin:8px 0 0}#trainingPrintArea h2{font-size:14px;margin-top:18px}#trainingPrintArea table{width:100%;border-collapse:collapse;margin:18px 0}#trainingPrintArea th,#trainingPrintArea td{border:1px solid #aab7c6;padding:9px 7px;text-align:left}#trainingPrintArea th{background:#edf2f7}#trainingPrintArea tr{break-inside:avoid}#trainingPrintArea .training-print-signature{width:30%}#trainingPrintArea thead{display:table-header-group}}
+@media print{
+ @page{size:A4 portrait;margin:18mm 7mm 10mm}
+ body:has(#trainingPrintArea){margin:0!important;padding:0!important;background:#fff!important}
+ body:has(#trainingPrintArea)>:not(#trainingPrintArea){display:none!important}
+ #trainingPrintArea{display:block!important;color:#000;font:9px Arial,sans-serif}
+ #trainingPrintArea *{box-sizing:border-box;color:#000;letter-spacing:normal}
+ #trainingPrintArea .attendance-page{position:relative;break-after:page;padding:0 0 8mm;min-height:265mm}
+ #trainingPrintArea .attendance-page:last-child{break-after:auto}
+ #trainingPrintArea table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0}
+ #trainingPrintArea th,#trainingPrintArea td{border:1px solid #000;padding:1mm;text-align:left;overflow-wrap:anywhere;vertical-align:middle}
+ #trainingPrintArea .attendance-heading{border:1.5px solid #000;margin-bottom:1mm}
+ #trainingPrintArea .attendance-heading th,#trainingPrintArea .attendance-heading td{text-align:center;height:5mm;font-size:7px}
+ #trainingPrintArea .attendance-heading .attendance-title{font-size:11px;font-weight:700}
+ #trainingPrintArea .attendance-details td{height:8.4mm;font-weight:700}
+ #trainingPrintArea .attendance-subjects{border:1.5px solid #000;min-height:12mm;margin:1mm 0;padding:2mm 1mm;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:700}
+ #trainingPrintArea .attendance-band td{height:4mm;padding:0;background:#bfbfbf!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+ #trainingPrintArea .attendance-participants th{height:8mm;text-align:center;font-size:11px}
+ #trainingPrintArea .attendance-participants tbody td{height:8.5mm;font-size:9px}
+ #trainingPrintArea .attendance-participants tbody td:first-child{text-align:center}
+ #trainingPrintArea .attendance-participants tbody tr:nth-child(odd) td:nth-child(2){background:#f7f7f7!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+ #trainingPrintArea tr{break-inside:avoid}
+ #trainingPrintArea .attendance-footer{position:absolute;bottom:0;right:1mm;font-size:11px}
+}
+
 
 body:has(#reciclagens.active) .period-bar{display:none}
