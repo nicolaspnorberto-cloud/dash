@@ -97,7 +97,7 @@
 @media(max-width:550px){#reciclagens h1{font-size:25px}#reciclagens .training-grid,#reciclagens .training-roster,#reciclagens .training-history-people{grid-template-columns:1fr}#reciclagens .training-wide{grid-column:auto}#reciclagens .training-box{padding:16px}#reciclagens .training-kpis>div{padding:14px}#reciclagens .training-kpis strong{font-size:24px}#reciclagens .training-event summary{align-items:flex-start;flex-direction:column;gap:10px}#reciclagens .training-pagination{flex-wrap:wrap}#reciclagens .training-upload{padding:18px 12px}#reciclagens .training-navigation button{font-size:12px;padding:12px}#reciclagens input:not([type=checkbox]),#reciclagens select,#reciclagens textarea{font-size:16px}#reciclagens button{min-height:44px}}
 @media print{
  @page{size:A4 portrait;margin:18mm 7mm 10mm}
- body:has(#trainingPrintArea){margin:0!important;padding:0!important;background:#fff!important}
+ body:has(#trainingPrintArea){margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important}
  body:has(#trainingPrintArea)>:not(#trainingPrintArea){display:none!important}
  #trainingPrintArea{display:block!important;color:#000;font:9px Arial,sans-serif}
  #trainingPrintArea *{box-sizing:border-box;color:#000;letter-spacing:normal}
