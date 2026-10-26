@@ -636,12 +636,18 @@
               <label>Instrutor / responsável<input id="recycleResponsible" type="text" placeholder="Responsável pela reciclagem" /></label>
               <label class="span-2">E-mail do instrutor<input id="recycleInstructorEmail" type="email" placeholder="nome@shopee.com" /></label>
               <label class="span-2">Tema abordado<input id="recycleTopic" type="text" placeholder="Ex.: Misscan / procedimento operacional" /></label>
+              <label>Horário início<input id="recycleStartTime" type="time" /></label>
+              <label>Local<input id="recycleVenue" type="text" maxlength="120" placeholder="Ex.: SOC MG4" /></label>
+              <label>Carga horária (minutos)<input id="recycleDuration" type="number" min="1" max="1440" /></label>
+              <label>Avaliação?<select id="recycleAssessment"><option value="">Não informado</option><option value="yes">Sim</option><option value="no">Não</option></select></label>
+              <label class="span-2">Função do colaborador (opcional)<input id="recycleAttendanceRole" type="text" maxlength="120" placeholder="Preencher somente se confirmada" /></label>
               <label class="span-2">Causa identificada<textarea id="recycleCause" rows="3" placeholder="Causa ou desvio identificado..."></textarea></label>
               <label class="span-2">Orientação aplicada<textarea id="recycleOrientation" rows="3" placeholder="Orientação, conteúdo e reforço aplicado..."></textarea></label>
               <label class="span-2">Observações<textarea id="recycleNotes" rows="3" placeholder="Informações complementares..."></textarea></label>
             </div>
             <div class="email-notice">O e-mail será enviado quando a reciclagem for concluída, após evidência e assinaturas.</div>
             <div class="modal-actions">
+              <button type="button" onclick="printRecycleAttendance()" class="action-btn blue">Imprimir lista oficial</button>
               <button id="saveRecycleInfoBtn" class="primary-btn">Salvar informações</button>
               <button id="completeRecycleBtn" class="completion-btn">Concluir reciclagem</button>
             </div>
@@ -652,7 +658,7 @@
             <div class="evidence-upload-zone">
               <div>
                 <strong>Anexar lista de reciclagem / evidência</strong>
-                <p>PDF, imagem ou documento. Na V4 os arquivos ficam armazenados neste navegador.</p>
+                <p>Imprima a lista oficial, colha a assinatura e anexe o arquivo. Confira a indicação de compartilhamento após salvar.</p>
               </div>
               <label class="treat-upload-btn" for="evidenceFile">Adicionar arquivo</label>
               <input id="evidenceFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" hidden />
@@ -691,9 +697,9 @@
   <script src="date-loader.js?v=7.0.22"></script>
   <script src="official-share.js?v=7.6.1"></script>
   <script src="presence-ui.js?v=7.3.0"></script>
-  <script src="app.js?v=7.6.1-official-share"></script>
-  <script src="attendance-template.js?v=7.7.0"></script>
-  <script src="training.js?v=7.7.0"></script>
+  <script src="app.js?v=7.7.1-attendance"></script>
+  <script src="attendance-template.js?v=7.7.1"></script>
+  <script src="training.js?v=7.7.1"></script>
   <script src="daily-history.js?v=7.6.1"></script>
 </body>
 </html>

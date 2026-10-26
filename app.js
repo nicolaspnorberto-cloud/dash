@@ -1226,6 +1226,7 @@ window.openRecycle=async(id,cycle)=>{
   $('recycleCause').value=r.cause||'';
   $('recycleOrientation').value=r.orientation||'';
   $('recycleNotes').value=r.notes||'';
+  for(const [id,key] of [['recycleStartTime','startTime'],['recycleVenue','venue'],['recycleDuration','duration'],['recycleAssessment','assessment'],['recycleAttendanceRole','attendanceRole']])$(id).value=r[key]||'';
   // Abre a reciclagem imediatamente. A consulta de evidências pode depender
   // do IndexedDB e da API compartilhada; ela nunca deve impedir o clique de
   // abrir o modal nos computadores dos líderes.
@@ -1390,6 +1391,17 @@ async function saveDialogue(){
   renderTreatments();
 }
 
+window.printRecycleAttendance=()=>{
+  const row=modalRow();if(!row||state.treatmentMode!=='recycle')return;
+  MisscanAttendance.print({
+    topic:$('recycleTopic').value.trim(),date:$('recycleDate').value,
+    instructor:$('recycleResponsible').value.trim(),notes:$('recycleOrientation').value.trim(),
+    startTime:$('recycleStartTime').value,venue:$('recycleVenue').value.trim(),
+    duration:$('recycleDuration').value,assessment:$('recycleAssessment').value,
+    attendanceRole:$('recycleAttendanceRole').value.trim(),participants:[{name:row.colaborador}]
+  });
+};
+
 async function saveRecycleInfo(){
   const row=modalRow();if(!row)return;
   const p=progressFor(row.id),c=state.treatmentCycle,r=p[`recycle${c}`];
@@ -1400,7 +1412,12 @@ async function saveRecycleInfo(){
     topic:$('recycleTopic').value.trim(),
     cause:$('recycleCause').value.trim(),
     orientation:$('recycleOrientation').value.trim(),
-    notes:$('recycleNotes').value.trim()
+    notes:$('recycleNotes').value.trim(),
+    startTime:$('recycleStartTime').value,
+    venue:$('recycleVenue').value.trim(),
+    duration:$('recycleDuration').value,
+    assessment:$('recycleAssessment').value,
+    attendanceRole:$('recycleAttendanceRole').value.trim()
   });
   if(!r.date||!r.responsible||!r.instructorEmail||!r.topic||!r.orientation)
     return alert('Preencha data, instrutor/responsável, e-mail do instrutor, tema e orientação aplicada.');

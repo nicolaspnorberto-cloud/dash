@@ -18,5 +18,12 @@
       return `<section class="attendance-page"><table class="attendance-heading"><colgroup><col style="width:67%"><col style="width:11%"><col style="width:7%"><col style="width:15%"></colgroup><tbody><tr><th rowspan="2" class="attendance-title">LISTA DE PRESENÇA</th><th>Data Revisão</th><th>Revisão</th><th>Página</th></tr><tr><td>06/01/2026</td><td>02</td><td>${page+1}</td></tr></tbody></table><table class="attendance-details"><colgroup><col style="width:46%"><col style="width:21.5%"><col style="width:32.5%"></colgroup><tbody><tr><td colspan="3">Título do Treinamento: ${escape(event.topic)}</td></tr><tr><td>Data: ${escape(date(event.date))}</td><td>Horário início: ${escape(event.startTime)}</td><td>Carga Horária: ${event.duration?escape(event.duration)+' min':''}</td></tr><tr><td>Instrutor: ${escape(event.instructor)}</td><td>Local: ${escape(event.venue)}</td><td>Avaliação? ${assessment}</td></tr></tbody></table><div class="attendance-subjects">Assuntos Abordados: ${escape(notes)}</div><table class="attendance-participants"><colgroup><col style="width:4.2%"><col style="width:41.5%"><col style="width:21.5%"><col style="width:32.8%"></colgroup><thead><tr class="attendance-band"><td colspan="4"></td></tr><tr><th></th><th>Nome</th><th>Função</th><th>Assinatura</th></tr></thead><tbody>${cells}</tbody></table><div class="attendance-footer">${page+1}</div></section>`;
     }).join('');
   }
-  root.MisscanAttendance={render};
+  function print(event){
+    let area=document.getElementById('trainingPrintArea');
+    if(!area){area=document.createElement('div');area.id='trainingPrintArea';document.body.appendChild(area);}
+    area.innerHTML=render(event);
+    window.addEventListener('afterprint',()=>area.remove(),{once:true});
+    window.print();
+  }
+  root.MisscanAttendance={render,print};
 })(globalThis);
