@@ -1,3 +1,4 @@
+import { OFFICIAL_PATH } from '../lib/official-source.mjs';
 import { linkTrainingTreatments } from '../lib/training-treatment-links.mjs';
 import { envValue, json, runtimeBinding, readJson } from '../lib/blob-store.mjs';
 
@@ -81,10 +82,13 @@ async function readAll() {
   }
   const exists = await db().prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='misscan_training_events'").first();
   if (!exists) return { progress, archive, updatedAt, trainingLinks: [] };
-  const [classes, hcData] = await Promise.all([
+  const [classes, official] = await Promise.all([
     db().prepare('SELECT payload FROM misscan_training_events ORDER BY created_at').all(),
-    readJson('misscan/hc.json', null)
+    readJson(OFFICIAL_PATH, null)
   ]);
+  // Same HC Matinal snapshot as /api/dados. The legacy HC is only for sites
+  // that have not migrated to the official source; never mix the two snapshots.
+  const hcData = official ? { rows: official.hc || [] } : await readJson('misscan/hc.json', null);
   const hc = Array.isArray(hcData) ? hcData : hcData?.rows || hcData?.hc || [];
   const events = (classes.results || []).flatMap(row => { try { return [JSON.parse(row.payload)]; } catch { return []; } });
   const linked = linkTrainingTreatments({ progress, hc, events });
