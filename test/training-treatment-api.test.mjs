@@ -6,12 +6,13 @@ import {GET} from '../api/tratativas.mjs';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 
-test('API compartilhada e consumidores recebem conclusão da turma sem alterar registros originais',async()=>{
+test('API usa HC Matinal oficial para vincular turma, mesmo quando o cadastro legado diverge',async()=>{
  const sqlite=new DatabaseSync(':memory:');
  const db={prepare(sql){const s=sqlite.prepare(sql);let values=[];return{bind(...v){values=v;return this;},async run(){return s.run(...values);},async first(){return s.get(...values)||null;},async all(){return{results:s.all(...values)};}};}};
  configureRuntimeEnv({MISSCAN_DB:db});
  sqlite.exec('CREATE TABLE misscan_store(key TEXT PRIMARY KEY,value TEXT,updated_at TEXT); CREATE TABLE misscan_training_events(id TEXT PRIMARY KEY,payload TEXT,created_at TEXT)');
- sqlite.prepare('INSERT INTO misscan_store VALUES(?,?,?)').run('misscan/hc.json',JSON.stringify({rows:[{colaborador:'Pessoa Teste',opsid:'OPS123'}]}),'2026-10-27');
+ sqlite.prepare('INSERT INTO misscan_store VALUES(?,?,?)').run('misscan/hc.json',JSON.stringify({rows:[{colaborador:'Pessoa Teste',opsid:'OPS999'}]}),'2026-10-27');
+ sqlite.prepare('INSERT INTO misscan_store VALUES(?,?,?)').run('misscan/official-mg4.json',JSON.stringify({hc:[{colaborador:'Pessoa Teste',opsid:'OPS123'}]}),'2026-10-27');
  await GET();
  const original=JSON.stringify({requiredCycle:1,dialogue1:{done:true,date:'2026-10-20'},recycle1:{}});
  sqlite.prepare('INSERT INTO misscan_treatment_state VALUES(?,?,?,?,?)').run('progress','PESSOA TESTE',original,'2026-10-20','2026-10-20');
@@ -19,6 +20,14 @@ test('API compartilhada e consumidores recebem conclusão da turma sem alterar r
  sqlite.prepare('INSERT INTO misscan_training_events VALUES(?,?,?)').run(event.id,JSON.stringify(event),event.createdAt);
  const response=await GET();assert.equal(response.status,200);const data=await response.json();assert.equal(data.progress['PESSOA TESTE'].recycle1.done,true);assert.equal(data.trainingLinks.length,1);
  assert.equal(sqlite.prepare("SELECT payload FROM misscan_treatment_state WHERE scope='progress'").get().payload,original);
+ // An official snapshot with no matching HC must not silently use legacy data.
+ sqlite.prepare('UPDATE misscan_store SET value=? WHERE key=?').run(JSON.stringify({hc:[]}),'misscan/official-mg4.json');
+ const noIdentity=await (await GET()).json();assert.equal(noIdentity.trainingLinks.length,0);assert.equal(noIdentity.progress['PESSOA TESTE'].recycle1.done,undefined);
+ // Legacy installations remain supported when there is no official snapshot.
+ sqlite.prepare('DELETE FROM misscan_store WHERE key=?').run('misscan/official-mg4.json');
+ const legacyEvent={...event,id:'legacy-class',participants:[{opsid:'OPS999'}]};
+ sqlite.prepare('UPDATE misscan_training_events SET payload=?').run(JSON.stringify(legacyEvent));
+ const fallback=await (await GET()).json();assert.equal(fallback.progress['PESSOA TESTE'].recycle1.trainingOpsid,'OPS999');
  sqlite.close();
 });
 
