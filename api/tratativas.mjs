@@ -1,4 +1,5 @@
-import { envValue, json, runtimeBinding } from '../lib/blob-store.mjs';
+import { linkTrainingTreatments } from '../lib/training-treatment-links.mjs';
+import { envValue, json, runtimeBinding, readJson } from '../lib/blob-store.mjs';
 
 let schemaReady = null;
 
@@ -78,7 +79,16 @@ async function readAll() {
       if (String(row.server_updated_at || '') > updatedAt) updatedAt = row.server_updated_at;
     } catch {}
   }
-  return { progress, archive, updatedAt };
+  const exists = await db().prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='misscan_training_events'").first();
+  if (!exists) return { progress, archive, updatedAt, trainingLinks: [] };
+  const [classes, hcData] = await Promise.all([
+    db().prepare('SELECT payload FROM misscan_training_events ORDER BY created_at').all(),
+    readJson('misscan/hc.json', null)
+  ]);
+  const hc = Array.isArray(hcData) ? hcData : hcData?.rows || hcData?.hc || [];
+  const events = (classes.results || []).flatMap(row => { try { return [JSON.parse(row.payload)]; } catch { return []; } });
+  const linked = linkTrainingTreatments({ progress, hc, events });
+  return { progress: linked.progress, archive, updatedAt, trainingLinks: linked.links };
 }
 
 async function upsertScope(scope, records) {
