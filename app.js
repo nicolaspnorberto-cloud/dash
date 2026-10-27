@@ -853,7 +853,8 @@ function mergeProgressRecord(local={},remote={}){
     const ld=local[`dialogue${c}`]||{},rd=remote[`dialogue${c}`]||{};
     const lr=local[`recycle${c}`]||{},rr=remote[`recycle${c}`]||{};
     merged[`dialogue${c}`]=String(ld.updatedAt||'')>=String(rd.updatedAt||'')?{...rd,...ld}:{...ld,...rd};
-    const recycle=String(lr.completedAt||lr.updatedAt||'')>=String(rr.completedAt||rr.updatedAt||'')?{...rr,...lr}:{...lr,...rr};
+    const linkedRemote=rr.source==='TRAINING_ATTENDANCE'&&rr.done&&!lr.done;
+    const recycle=linkedRemote?{...lr,...rr}:String(lr.completedAt||lr.updatedAt||'')>=String(rr.completedAt||rr.updatedAt||'')?{...rr,...lr}:{...lr,...rr};
     recycle.signatures={...(lr.signatures||{}),...(rr.signatures||{})};
     merged[`recycle${c}`]=recycle;
   });
@@ -880,6 +881,8 @@ function ensureTreatmentLocalLoaded(){
   loadTreatmentArchive();
   state.treatmentLoaded=true;
 }
+
+document.addEventListener?.('misscan-training-saved',()=>{hydrateSharedTreatments();});
 
 async function hydrateSharedTreatments(){
   ensureTreatmentLocalLoaded();
@@ -1128,7 +1131,7 @@ function dialogueButton(row,c){
   return `<button class="step-btn ${d.done?'done':'pending'}" onclick="openDialogue('${row.id}',${c})">${d.done?'Realizado':'Não realizado'}</button>`;
 }
 function recycleLabel(r){
-  if(r.done)return ['Concluída','done'];
+  if(r.done)return [r.trainingEventId?'Concluída · turma':'Concluída','done'];
   if(r.infoSaved||r.evidenceCount||r.signatures?.colaborador||r.signatures?.responsavel)return ['Em andamento','recycle-ready'];
   return ['Não realizada','pending'];
 }
@@ -2219,7 +2222,7 @@ function tabs(){
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
     if(b.dataset.tab==='calendarizacao'){refreshCalendarizationV65({silent:true})}
-    if(b.dataset.tab==='tratativas'){renderTreatments();refreshTreatmentPresence();}
+    if(b.dataset.tab==='tratativas'){renderTreatments();hydrateSharedTreatments();refreshTreatmentPresence();}
     if(b.dataset.tab==='evolucao'){
       if(state.evolution.length)renderEvolution();
       else refreshEvolution({silent:true});
@@ -2831,7 +2834,7 @@ async function boot(){
     else{$('treatPresenceAccess').hidden=false;$('treatPresencePin').focus();}
   });
   $('treatPresenceAccess').addEventListener('submit',event=>{event.preventDefault();refreshTreatmentPresence({pin:$('treatPresencePin').value.trim(),force:true});});
-  setInterval(()=>{if(!document.hidden&&$('tratativas')?.classList.contains('active')){renderTreatments();refreshTreatmentPresence();}},60000);
+  setInterval(()=>{if(!document.hidden&&$('tratativas')?.classList.contains('active')){hydrateSharedTreatments();refreshTreatmentPresence();}},60000);
 
   // Matriz de evolução V6.15
   ['evolutionScope','evolutionOperation','evolutionTurno','evolutionStatus','evolutionTrend','evolutionTreatment'].forEach(id=>$(id)?.addEventListener('change',renderEvolution));
