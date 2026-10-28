@@ -7,7 +7,7 @@ const now=new Date('2026-10-28T18:00:00Z');
 const raw={id:'00000000-0000-4000-8000-000000000001',observedAt:'2026-10-28T12:00:00-03:00',area:'Esteiras',process:'Lateral',activity:'Saca sem atrelamento',description:'Fato de teste, sem dados operacionais reais.',reporter:'Instrutor de teste',shift:'T4',priority:'HIGH',dueDate:'2026-10-29'};
 function database(){const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');const db={prepare(sql){const s=sqlite.prepare(sql);let args=[];return{bind(...v){args=v;return this;},async run(){return s.run(...args.map(v=>v instanceof ArrayBuffer?new Uint8Array(v):v));},async first(){return s.get(...args)||null;},async all(){return{results:s.all(...args)};}};},async batch(statements){sqlite.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());sqlite.exec('COMMIT');return r;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};configureRuntimeEnv({MISSCAN_DB:db,TREATMENT_WRITE_PIN:'test-only'});return {sqlite,db};}
 const request=body=>new Request('https://test/api/anomalias',{method:'POST',headers:{'x-treatment-pin':'test-only','content-type':'application/json'},body:JSON.stringify(body)});
-const get=query=>api.GET(new Request('https://test/api/anomalias'+(query?'?'+query:'')));
+const get=query=>api.GET(new Request('https://test/api/anomalias'+(query?'?'+query:''),{headers:{'x-treatment-pin':'test-only'}}));
 
 test('registro valida campos e datas, mantém desconhecidos e consolida T4/T5 sem inventar líder',()=>{
  const row=validateAnomaly(raw,now);assert.equal(row.shift,'T2');assert.equal(row.leader,'');assert.equal(row.status,'OPEN');assert.equal(row.observedAt,'2026-10-28T15:00:00.000Z');assert.equal(validateAnomaly({...raw,shift:'T5'},now).shift,'T3');
@@ -45,4 +45,8 @@ test('foto/PDF é salvo atomicamente e download exige PIN, preservando os bytes'
 });
 test('anexo inválido não deixa ocorrência parcial na base',async()=>{
  const {sqlite}=database(),form=new FormData();form.append('record',JSON.stringify({action:'create',record:{...raw,observedAt:'2026-10-01T12:00:00-03:00'}}));form.append('files',new File(['html inválido'],'foto.jpg',{type:'image/jpeg'}));assert.equal((await api.POST(new Request('https://test/api/anomalias',{method:'POST',headers:{'x-treatment-pin':'test-only'},body:form}))).status,400);assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM misscan_anomalies').get().n,0);
+});
+
+test('consulta sem PIN ou com PIN inválido não lê o banco nem expõe indicadores',async()=>{
+ configureRuntimeEnv({TREATMENT_WRITE_PIN:'test-only',MISSCAN_DB:{prepare(){throw new Error('Não acessar o banco');}}});for(const headers of [{},{'x-treatment-pin':'errado'}]){const r=await api.GET(new Request('https://test/api/anomalias',{headers}));assert.equal(r.status,401);const d=await r.json();assert.equal(d.rows,undefined);assert.equal(d.summary,undefined);}
 });

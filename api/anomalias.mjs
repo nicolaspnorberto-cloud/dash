@@ -13,6 +13,7 @@ export async function anomalyDatabase(){
  })().catch(e=>{schemas.delete(db);throw e;});schemas.set(db,task);}await schemas.get(db);return db;
 }
 export async function GET(request){try{
+ assertTrainingPin(request);
  const url=new URL(request.url),from=url.searchParams.get('from')||'',to=url.searchParams.get('to')||'';validateAnomalyPeriod(from,to);const db=await anomalyDatabase();
  const args=[],where=[];if(from){where.push('observed_date>=?');args.push(from);}if(to){where.push('observed_date<=?');args.push(to);}
  const result=await db.prepare('SELECT payload FROM misscan_anomalies'+(where.length?' WHERE '+where.join(' AND '):'')+' ORDER BY observed_date DESC,id LIMIT 10001').bind(...args).all();

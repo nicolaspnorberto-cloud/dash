@@ -6,8 +6,10 @@ altera os dados ou regras de MIS SCAN.
 
 ## Uso
 
-Consulta pública no mesmo dashboard da liderança. Registrar anomalia e atualizar
-tratativa exigem a tela de PIN da Instrutoria. O PIN também protege o download de
+A abertura da aba e a consulta da API exigem o PIN da Instrutoria. A tela de
+bloqueio é exibida antes de carregar qualquer registro ou indicador. Ao sair da
+aba, o PIN em memória e os dados exibidos são limpos. Registrar anomalia e
+atualizar tratativa também exigem a tela de PIN da Instrutoria. O PIN também protege o download de
 fotos/PDFs. A validação de escrita ocorre no servidor.
 
 Registro: data/hora da ocorrência em São Paulo, turno informado, área, processo,
