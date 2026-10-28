@@ -44,3 +44,27 @@ body.anomalies-active .period-bar{display:none}
 .an-signature-section{border:1px solid #d5dee8;border-radius:16px;background:#f8fafc;padding:20px;margin:20px 0}.an-signature-section h3{margin-top:0;color:#0b1f35}.an-signature-toggle{display:flex!important;align-items:center;gap:10px}.an-signature-toggle input{width:auto!important;min-height:auto!important}.an-signature-section canvas{display:block;width:100%;height:180px;touch-action:none;background:#fff;border:1px solid #b7c5d5;border-radius:10px;margin:12px 0}.an-signature-previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.an-signature-preview{margin:0;border:1px solid #d5dee8;border-radius:10px;background:#fff;padding:12px;overflow:hidden}.an-signature-preview figcaption{display:grid;gap:4px;overflow-wrap:anywhere}.an-signature-preview svg{display:block;width:100%;max-width:420px;background:white}.an-signed-record{margin:12px 0}.an-signed-record .an-signature-previews{margin-top:10px}
 
 #anProcessChoice{width:100%;min-width:0;max-width:100%}.an-process-choice-text{white-space:normal;overflow-wrap:anywhere}.an-form-grid>label{min-width:0}
+
+/* Gemba: one-handed entry, readable inputs and a persistent save area. */
+.an-signature-section select{box-sizing:border-box;width:100%;min-width:0;min-height:48px;padding:11px;border:1px solid #d5deea;border-radius:8px;background:#fff;color:#102d4a;font:inherit;font-size:16px}
+.an-signature-toggle{min-height:44px;line-height:1.5}.an-signature-toggle input{min-width:24px;min-height:24px!important;flex-shrink:0}
+.an-signature-section canvas{box-sizing:border-box}.an-signature-previews{grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
+@media(max-width:600px){
+ .an-backdrop{padding:0;overflow:hidden;overscroll-behavior:contain}
+ .an-editor{width:100%;height:100dvh;max-height:100dvh;border-radius:0;padding:0;display:flex;flex-direction:column;overflow:hidden;border-top-width:3px}
+ .an-editor>.an-heading{flex-shrink:0;margin:0;padding:12px 16px;border-bottom:1px solid #e2e8f0;flex-wrap:nowrap}
+ .an-editor>.an-heading h2{font-size:20px}.an-editor #anEditorClose{min-width:44px;min-height:44px;font-size:20px}
+ #anForm{display:flex;flex-direction:column;flex:1;min-height:0;margin:0}
+ #anFormFields{padding:18px 16px;overflow-y:auto;overflow-x:hidden;min-height:0;flex:1;overscroll-behavior:contain;scroll-padding-block:18px}
+ .an-form-grid{grid-template-columns:minmax(0,1fr);gap:18px}
+ .an-form-grid label{font-size:14px;gap:8px}.an-form-grid input,.an-form-grid select,.an-form-grid textarea{font-size:16px;min-height:48px;max-width:100%}
+ .an-form-grid textarea{min-height:110px;resize:vertical}.an-form-grid small{font-size:12px}.an-form-grid input[type=file]{font-size:14px}
+ .an-form-footer{flex-shrink:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #d5deea;box-shadow:0 -5px 16px #102d4a08}
+ #anomalias .an-form-footer button{min-height:48px;font-size:15px;padding:12px 16px}
+ #anSaveStatus{flex-shrink:0;margin:0;padding:10px 16px;background:#fff4ef;max-height:90px;overflow:auto}#anSaveStatus:empty{display:none}
+ .an-signature-section{padding:14px;margin:20px 0 0}.an-signature-section h3{font-size:18px}.an-signature-section canvas{height:180px}
+ #anomalias .an-signature-section button{min-height:44px;font-size:14px;flex:1}.an-signature-section .an-actions{display:flex;gap:10px}
+ .an-signature-section label{font-size:14px}.an-signature-section p{font-size:13px;line-height:1.5}
+ #anomalias .an-sidebar #anNew{min-height:48px;background:#ee4d2d;color:#fff;border-color:#ee4d2d}
+ .an-sidebar{gap:10px}.an-sidebar button{min-height:44px}
+}
