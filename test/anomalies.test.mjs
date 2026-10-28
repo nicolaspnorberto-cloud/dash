@@ -78,3 +78,14 @@ test('assinatura ausente não grava orientação parcial e registro sem orienta�
  assert.equal((await api.POST(request({action:'create',record}))).status,400);assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM misscan_anomalies').get().n,0);
  const unsigned=await (await api.POST(request({action:'create',record:{...raw,observedAt:record.observedAt}}))).json();assert.equal(unsigned.record.orientationPerformed,false);assert.equal(unsigned.record.signatures,null);
 });
+
+test('processos predefinidos preservam os textos e Outros exige motivo sem truncar',async()=>{
+ const catalog=globalThis.MisscanAnomalyProcesses.options;assert.equal(catalog.length,29);assert.deepEqual(catalog.map(o=>o.number),[...Array.from({length:22},(_,i)=>i+1),24,25,26,27,28,29,30]);
+ for(const option of catalog)assert.equal(validateAnomaly({...raw,process:option.text},now).process,option.text);
+ for(const processOther of ['', '   ', 'a'.repeat(233)])assert.throws(()=>validateAnomaly({...raw,process:'Outros',processOther},now));
+ database();const record={...raw,observedAt:'2026-10-01T12:00:00-03:00',process:'Outros',processOther:'  Motivo específico confirmado  '};assert.equal((await api.POST(request({action:'create',record}))).status,200);assert.equal((await api.POST(request({action:'create',record}))).status,200);const data=await (await get()).json();assert.equal(data.rows[0].process,'Outros: Motivo específico confirmado');assert.ok(data.options.process.includes('Outros: Motivo específico confirmado'));
+});
+test('motivo de Outros só é exigido e enviado enquanto a opção está selecionada',()=>{
+ const select={value:'',addEventListener(_event,handler){this.change=handler;}},input={value:'',disabled:false,required:false},wrapper={hidden:false},preview={textContent:''};const control=globalThis.MisscanAnomalyProcesses.attach(select,input,wrapper,preview);assert.equal(wrapper.hidden,true);assert.equal(input.disabled,true);
+ select.value='Outros';select.change();assert.equal(wrapper.hidden,false);assert.equal(input.required,true);assert.throws(()=>control.validate(),/digite o motivo/);input.value='Motivo informado';assert.equal(control.validate(),'Outros: Motivo informado');select.value=globalThis.MisscanAnomalyProcesses.options[0].text;select.change();assert.equal(wrapper.hidden,true);assert.equal(input.disabled,true);assert.equal(input.required,false);assert.equal(control.validate(),select.value);assert.equal(preview.textContent,select.value);
+});

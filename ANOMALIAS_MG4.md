@@ -73,3 +73,6 @@ responsabilidade causal. Campos ausentes continuam explícitos.
 Na ficha de nova anomalia, marque “Orientação realizada — registrar assinaturas”. Preencha o instrutor e um nome completo por linha em orientados. Selecione cada signatário, assine com dedo/caneta/mouse e clique em “Salvar assinatura na ficha”. São exigidas a assinatura do instrutor e a de cada orientado. Alterar nomes invalida as respectivas assinaturas.
 
 Os traçados e os nomes são validados no servidor e persistidos no payload D1 da ocorrência com horário de registro do servidor. A consulta protegida exibe as assinaturas no detalhe do registro. As atualizações de situação preservam as assinaturas originais. Não há armazenamento local ou envio ao SeaTalk. Registros sem orientação realizada e registros antigos continuam permitidos e são apresentados sem assinaturas, sem presunção de orientação.
+
+## Seleção de processo
+Novas anomalias oferecem as 29 opções de processo informadas pelo COP (numeração original 1–22 e 24–30), mais “Outros”. A opção Outros exibe um motivo obrigatório de até 232 caracteres, validado também na API; o processo é salvo como “Outros: [motivo]” para manter a descrição nos filtros, detalhes e exportação. Os processos de registros anteriores são preservados.
