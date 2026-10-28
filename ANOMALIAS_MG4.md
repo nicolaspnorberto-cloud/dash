@@ -76,3 +76,6 @@ Os traçados e os nomes são validados no servidor e persistidos no payload D1 d
 
 ## Seleção de processo
 Novas anomalias oferecem as 29 opções de processo informadas pelo COP (numeração original 1–22 e 24–30), mais “Outros”. A opção Outros exibe um motivo obrigatório de até 232 caracteres, validado também na API; o processo é salvo como “Outros: [motivo]” para manter a descrição nos filtros, detalhes e exportação. Os processos de registros anteriores são preservados.
+
+## Abertura da ficha de registro
+Depois de desbloquear a aba Anomalias, “Registrar anomalia” abre a ficha sem pedir o PIN novamente. O salvamento continua autenticado com o PIN validado da aba, mantido apenas em memória. Ao sair/bloquear a aba, a ficha e a autorização são limpas. A confirmação adicional das atualizações e dos anexos permanece.
