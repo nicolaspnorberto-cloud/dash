@@ -79,3 +79,6 @@ Novas anomalias oferecem as 29 opções de processo informadas pelo COP (numera�
 
 ## Abertura da ficha de registro
 Depois de desbloquear a aba Anomalias, “Registrar anomalia” abre a ficha sem pedir o PIN novamente. O salvamento continua autenticado com o PIN validado da aba, mantido apenas em memória. Ao sair/bloquear a aba, a ficha e a autorização são limpas. A confirmação adicional das atualizações e dos anexos permanece.
+
+## Uso no celular / Gemba
+A ficha não solicita Sinergia nem Prazo nos novos registros. Os valores históricos são preservados. No celular (até 600 px), a ficha ocupa a tela, com campos em uma coluna e rolagem própria; cabeçalho e ações de cancelar/salvar permanecem visíveis. Campos com fonte de 16 px, botões de pelo menos 44–48 px e espaço seguro inferior favorecem uso por toque. A assinatura permite desenho no campo sem rolar a página.
