@@ -20,7 +20,7 @@ export async function GET(request){try{
  if(result.results.length>10000)return json({ok:false,error:'Mais de 10 mil registros no período. Reduza o intervalo para analisar a base completa.'},422);
  const periodRows=result.results.map(r=>JSON.parse(r.payload));
  const text=s=>String(s||'').toLocaleLowerCase('pt-BR');const q=text(url.searchParams.get('q'));
- const rows=periodRows.filter(r=>['shift','area','process','activity','status','leader'].every(k=>!url.searchParams.get(k)||(k==='shift'&&url.searchParams.get(k)==='unknown'?!r.shift:r[k]===url.searchParams.get(k)))&&(!q||text([r.activity,r.description,r.theme,r.leader,r.reporter].join(' ')).includes(q)));
+ const rows=periodRows.filter(r=>['shift','area','process','activity','status','leader','reporter','theme','synergy'].every(k=>!url.searchParams.get(k)||(k==='shift'&&url.searchParams.get(k)==='unknown'?!r.shift:k==='status'&&url.searchParams.get(k)==='PENDING'?r.status!=='CLOSED':r[k]===url.searchParams.get(k)))&&(!q||text([r.activity,r.description,r.theme,r.leader,r.reporter].join(' ')).includes(q)));
  // Earlier closures remain relevant when the selected interval starts later.
  const closed=await db.prepare('SELECT payload FROM misscan_anomalies WHERE observed_date<=? LIMIT 10001').bind(to||'9999-12-31').all();
  if(closed.results.length>10000)return json({ok:false,error:'Histórico de recorrências excedeu 10 mil registros; revisão da consulta necessária.'},422);
@@ -28,7 +28,7 @@ export async function GET(request){try{
  const source=await db.prepare('SELECT COUNT(*) AS total,MAX(updated_at) AS updatedAt FROM misscan_anomalies').first();
  const attachments=(await db.prepare('SELECT id,anomaly_id,name,mime_type,size FROM misscan_anomaly_files').all()).results||[];
  report.rows=report.rows.map(r=>({...r,attachments:attachments.filter(f=>f.anomaly_id===r.id).map(f=>({id:f.id,name:f.name,type:f.mime_type,size:f.size}))}));
- const options=Object.fromEntries(['area','process','activity','leader'].map(k=>[k,[...new Set(periodRows.map(r=>r[k]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'))]));
+ const options=Object.fromEntries(['area','process','activity','leader','reporter','theme','synergy'].map(k=>[k,[...new Set(periodRows.map(r=>r[k]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'))]));
  return json({ok:true,...report,options,source:{kind:'BASE_PROPRIA_MG4',total:source.total,updatedAt:source.updatedAt},period:{from,to}});
 }catch(e){return json({ok:false,error:e.message},e.status||400);}}
 export async function POST(request){try{
@@ -39,7 +39,7 @@ export async function POST(request){try{
  if(body.action==='create'){
   const row=validateAnomaly(body.record||{}),prepared=await prepareAnomalyFiles(row.id,files);
   const old=await db.prepare('SELECT payload FROM misscan_anomalies WHERE id=?').bind(row.id).first();
-  if(old){const saved=JSON.parse(old.payload);const fields=['id','area','process','activity','theme','description','reporter','leader','shift','priority','dueDate','observedAt'];if(fields.some(k=>saved[k]!==row[k]))return json({ok:false,error:'Identificador já utilizado por outra ocorrência.'},409);return json({ok:true,record:saved,duplicate:true});}
+  if(old){const saved=JSON.parse(old.payload);const fields=['id','area','process','activity','theme','synergy','oriented','description','reporter','leader','shift','priority','dueDate','observedAt'];if(fields.some(k=>JSON.stringify(saved[k]??(k==='oriented'?null:''))!==JSON.stringify(row[k]??(k==='oriented'?null:''))))return json({ok:false,error:'Identificador já utilizado por outra ocorrência.'},409);return json({ok:true,record:saved,duplicate:true});}
   await db.batch([db.prepare('INSERT INTO misscan_anomalies(id,payload,observed_date,version,updated_at) VALUES(?,?,?,?,?)').bind(row.id,JSON.stringify(row),row.observedDate,row.version,row.updatedAt),...anomalyFileStatements(db,prepared)]);
   return json({ok:true,record:row});
  }

@@ -50,3 +50,11 @@ test('anexo inválido não deixa ocorrência parcial na base',async()=>{
 test('consulta sem PIN ou com PIN inválido não lê o banco nem expõe indicadores',async()=>{
  configureRuntimeEnv({TREATMENT_WRITE_PIN:'test-only',MISSCAN_DB:{prepare(){throw new Error('Não acessar o banco');}}});for(const headers of [{},{'x-treatment-pin':'errado'}]){const r=await api.GET(new Request('https://test/api/anomalias',{headers}));assert.equal(r.status,401);const d=await r.json();assert.equal(d.rows,undefined);assert.equal(d.summary,undefined);}
 });
+
+test('tema, instrutor e sinergia filtram a base; pendentes inclui todos os não concluídos',async()=>{
+ database();for(const [i,theme,reporter,synergy] of [[1,'Padronização','Instrutor A','Inbound'],[2,'Segurança','Instrutor B','SHE']])assert.equal((await api.POST(request({action:'create',record:{...raw,id:raw.id.slice(0,-1)+i,theme,reporter,synergy,observedAt:'2026-10-01T12:00:00-03:00'}}))).status,200);
+ for(const q of ['theme=Seguran%C3%A7a','reporter=Instrutor%20A','synergy=SHE'])assert.equal((await (await get(q)).json()).summary.total,1);assert.equal((await (await get('status=PENDING')).json()).summary.total,2);const data=await (await get()).json();assert.deepEqual(data.options.synergy,['Inbound','SHE']);
+});
+test('orientados e sinergia são opcionais e não presumem participantes ausentes',()=>{
+ const r=validateAnomaly(raw,now);assert.equal(r.oriented,null);assert.equal(r.synergy,'');const provided=validateAnomaly({...raw,oriented:'Pessoa A\nPessoa B\nPessoa A',synergy:'COP e Outbound'},now);assert.deepEqual(provided.oriented,['Pessoa A','Pessoa B']);assert.equal(provided.synergy,'COP e Outbound');
+});
