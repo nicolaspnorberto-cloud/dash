@@ -17,3 +17,11 @@ body.anomalies-active .period-bar{display:none}
 .an-backdrop{position:fixed;inset:0;z-index:9500;background:#0b1f35aa;display:flex;align-items:flex-start;justify-content:center;padding:25px;overflow:auto}.an-editor{box-sizing:border-box;width:min(900px,100%);background:#fff;border-radius:16px;border-top:4px solid #ee4d2d;padding:28px;box-shadow:0 20px 60px #0003}.an-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.an-wide{grid-column:1/-1}.an-form-grid small{font-size:11px;line-height:1.5;font-weight:400;color:#65758b}#anSaveStatus{font-size:13px;color:#b72d25;line-height:1.6}
 @media(max-width:1000px){.an-kpis{grid-template-columns:repeat(3,1fr)}.an-split{grid-template-columns:1fr}.an-filters{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.an-filters,.an-form-grid{grid-template-columns:1fr}.an-search{grid-column:auto}.an-kpis{grid-template-columns:1fr 1fr}.an-backdrop{padding:12px}.an-editor{padding:20px}.an-heading h1{font-size:26px}#anomalias .panel{padding:17px}}
+
+.an-access-gate{display:grid;place-items:center;min-height:65vh;padding:24px 12px}
+.an-access-card{box-sizing:border-box;width:min(480px,100%);padding:36px;background:white;border:1px solid #e2e8f0;border-top:5px solid #ee4d2d;border-radius:20px;box-shadow:0 14px 45px #0b1f3510;text-align:center}
+.an-access-card h1{font-size:28px;margin:16px 0;color:#102d4a}.an-access-card p,.an-access-card small{color:#65758b;line-height:1.6;font-size:14px}.an-access-icon{display:grid;place-items:center;font-size:30px;background:#fff1ec;border-radius:18px;width:64px;height:64px;margin:0 auto 20px}
+.an-access-card form{display:grid;gap:12px;text-align:left;margin:24px 0 14px}.an-access-card label{font-size:13px;font-weight:700}.an-access-card input{box-sizing:border-box;width:100%;padding:14px;border:1px solid #cad5e2;border-radius:10px;font:inherit}.an-access-card button{min-height:44px}#anAccessStatus{min-height:24px;margin:0;color:#b52c20}
+.an-lock-toolbar{display:flex;justify-content:flex-end;margin-bottom:14px}
+#anomalias button:not(.action-btn):not(.an-rank){border:1px solid #d5deea;background:#fff;color:#102d4a;padding:10px 15px;border-radius:9px;font:inherit;font-size:12px;font-weight:700}
+#anomalias button:not(.action-btn):not(.an-rank):hover{background:#edf4ff}
