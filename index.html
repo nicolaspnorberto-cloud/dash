@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mis-Scan Control Center</title>
-  <link rel="stylesheet" href="styles.css?v=7.0.23" />
+  <link rel="stylesheet" href="styles.css?v=7.9.1-treatment-lock" />
   <link rel="stylesheet" href="training.css?v=7.9.0-lock" />
 
   <style>
@@ -589,6 +589,20 @@
       </div>
     </div>
 
+    <div id="treatmentAccessOverlay" class="treatment-access-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="treatmentAccessTitle">
+      <section class="treatment-access-card">
+        <button id="treatmentAccessClose" type="button" class="modal-close treatment-access-close" aria-label="Cancelar acesso">×</button>
+        <div class="treatment-access-icon" aria-hidden="true">🔒</div>
+        <span class="modal-eyebrow">ACESSO RESTRITO · INSTRUTORIA DE PROCESSOS</span>
+        <h2 id="treatmentAccessTitle">Ficha protegida</h2><p id="treatmentAccessPerson"></p>
+        <p>Informe o PIN para abrir a ficha. O preenchimento é exclusivo dos Instrutores de Processos.</p>
+        <form id="treatmentAccessForm"><label for="treatmentAccessPin">PIN de acesso</label><input id="treatmentAccessPin" type="password" required autocomplete="current-password" placeholder="Mesmo PIN das tratativas" />
+          <p id="treatmentAccessStatus" role="status" aria-live="polite"></p>
+          <div class="treatment-access-actions"><button id="treatmentAccessCancel" type="button">Cancelar</button><button id="treatmentAccessSubmit" type="submit" class="action-btn orange">Desbloquear e continuar</button></div>
+        </form>
+      </section>
+    </div>
+
     <div id="treatmentModal" class="modal-backdrop" aria-hidden="true">
       <div class="modal-card treatment-modal-card">
         <div class="modal-head">
@@ -697,7 +711,8 @@
   <script src="date-loader.js?v=7.0.22"></script>
   <script src="official-share.js?v=7.6.1"></script>
   <script src="presence-ui.js?v=7.3.0"></script>
-  <script src="app.js?v=7.8.0-training-links"></script>
+  <script src="treatment-access.js?v=7.9.1"></script>
+  <script src="app.js?v=7.9.1-treatment-lock"></script>
   <script src="attendance-template.js?v=7.7.1"></script>
   <script src="training.js?v=7.9.0-lock"></script>
   <script src="daily-history.js?v=7.6.1"></script>

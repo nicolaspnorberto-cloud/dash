@@ -1238,3 +1238,18 @@ thead,
 .daily-state.found,.daily-state.linked{background:#e5f5ed;color:#176246}
 .daily-state.not_found,.daily-state.pending{background:#fff0dc;color:#925009}
 .daily-state.unknown,.daily-state.blocked{background:#edf0f5;color:#53647b}
+
+/* Individual treatment access is closed until the PIN is validated. */
+.treatment-access-overlay[hidden]{display:none!important}
+.treatment-access-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:rgba(8,27,47,.65);backdrop-filter:blur(5px);padding:20px;overflow:auto}
+.treatment-access-card{position:relative;width:min(100%,480px);box-sizing:border-box;background:#fff;border:1px solid #dce4ee;border-top:5px solid #ee4d2d;border-radius:20px;padding:34px;color:#102d4a;box-shadow:0 20px 70px #0003}
+.treatment-access-close{position:absolute;top:14px;right:14px}
+.treatment-access-icon{width:62px;height:62px;display:grid;place-items:center;background:#fff1ec;border-radius:18px;font-size:29px;margin-bottom:20px}
+.treatment-access-card h2{font-size:26px;margin:10px 0}
+.treatment-access-card p{font-size:14px;line-height:1.6;color:#65758b}
+#treatmentAccessPerson{color:#102d4a;font-weight:700}
+.treatment-access-card label{display:block;font-size:13px;font-weight:700;margin:22px 0 8px}
+.treatment-access-card input{box-sizing:border-box;width:100%;padding:14px;border:1px solid #cad5e2;border-radius:10px;font:inherit}
+.treatment-access-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+#treatmentAccessStatus{min-height:24px;color:#b52c20}
+@media(max-width:600px){.treatment-access-card{padding:28px 22px}.treatment-access-actions button{flex:1}}
