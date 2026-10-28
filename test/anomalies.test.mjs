@@ -58,3 +58,23 @@ test('tema, instrutor e sinergia filtram a base; pendentes inclui todos os não 
 test('orientados e sinergia são opcionais e não presumem participantes ausentes',()=>{
  const r=validateAnomaly(raw,now);assert.equal(r.oriented,null);assert.equal(r.synergy,'');const provided=validateAnomaly({...raw,oriented:'Pessoa A\nPessoa B\nPessoa A',synergy:'COP e Outbound'},now);assert.deepEqual(provided.oriented,['Pessoa A','Pessoa B']);assert.equal(provided.synergy,'COP e Outbound');
 });
+
+const signedRaw=()=>({...raw,oriented:['Pessoa A','Pessoa B'],orientationPerformed:true,signatures:{instructor:{name:raw.reporter,strokes:[[[10,20],[80,60]]]},recipients:['Pessoa A','Pessoa B'].map(name=>({name,strokes:[[[10,20],[80,60]]]}))}});
+test('orientação exige assinatura de quem orientou e de cada orientado, com nomes e traçados válidos',()=>{
+ const body=signedRaw(),r=validateAnomaly(body,now);assert.equal(r.orientationPerformed,true);assert.equal(r.signatures.recipients.length,2);assert.equal(r.signatures.instructor.recordedAt,now.toISOString());
+ for(const mutate of [b=>delete b.signatures.instructor,b=>b.signatures.recipients.pop(),b=>b.signatures.instructor.name='Outro instrutor',b=>b.signatures.recipients[0].name='Pessoa B',b=>b.signatures.instructor.strokes=[[[10,10],[10,10]]],b=>b.signatures.instructor.strokes=[[[0,0],[901,60]]],b=>b.signatures.instructor.strokes=[[[0,0],['20',60]]],b=>b.oriented=null,b=>b.orientationPerformed=false]){const invalid=structuredClone(body);mutate(invalid);assert.throws(()=>validateAnomaly(invalid,now));}
+ const tooMany=signedRaw();tooMany.signatures.instructor.strokes=Array.from({length:11},()=>Array.from({length:2000},(_,i)=>[i%900,20]));assert.throws(()=>validateAnomaly(tooMany,now),/limite/);
+});
+test('assinaturas persistem no banco compartilhado e na atualização; retentativa não duplica nem troca signatário',async()=>{
+ const {sqlite}=database(),record={...signedRaw(),observedAt:'2026-10-01T12:00:00-03:00'};
+ const created=await (await api.POST(request({action:'create',record}))).json();assert.equal(created.ok,true);
+ assert.equal((await api.POST(request({action:'create',record}))).status,200);
+ const update=await api.POST(request({action:'update',id:record.id,version:1,status:'IN_PROGRESS',actor:'Outro instrutor',resolution:'Acompanhamento',signatures:{}}));assert.equal(update.status,200);
+ const report=await (await get()).json();assert.deepEqual(report.rows[0].signatures,created.record.signatures);assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM misscan_anomalies').get().n,1);
+ record.signatures.recipients[0].strokes=[[[20,20],[90,90]]];assert.equal((await api.POST(request({action:'create',record}))).status,409);
+});
+test('assinatura ausente não grava orientação parcial e registro sem orientação continua permitido',async()=>{
+ const {sqlite}=database(),record={...signedRaw(),observedAt:'2026-10-01T12:00:00-03:00'};delete record.signatures.instructor;
+ assert.equal((await api.POST(request({action:'create',record}))).status,400);assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM misscan_anomalies').get().n,0);
+ const unsigned=await (await api.POST(request({action:'create',record:{...raw,observedAt:record.observedAt}}))).json();assert.equal(unsigned.record.orientationPerformed,false);assert.equal(unsigned.record.signatures,null);
+});

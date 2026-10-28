@@ -68,3 +68,8 @@ A coluna Reinc. informa o número de ocorrências anteriores do mesmo grupo
 na seleção atual (primeira = 0), não o total genérico do processo.
 Os indicadores de líderes/turnos mostram associação dos registros, não comprovam
 responsabilidade causal. Campos ausentes continuam explícitos.
+
+## Assinaturas de orientação
+Na ficha de nova anomalia, marque “Orientação realizada — registrar assinaturas”. Preencha o instrutor e um nome completo por linha em orientados. Selecione cada signatário, assine com dedo/caneta/mouse e clique em “Salvar assinatura na ficha”. São exigidas a assinatura do instrutor e a de cada orientado. Alterar nomes invalida as respectivas assinaturas.
+
+Os traçados e os nomes são validados no servidor e persistidos no payload D1 da ocorrência com horário de registro do servidor. A consulta protegida exibe as assinaturas no detalhe do registro. As atualizações de situação preservam as assinaturas originais. Não há armazenamento local ou envio ao SeaTalk. Registros sem orientação realizada e registros antigos continuam permitidos e são apresentados sem assinaturas, sem presunção de orientação.
