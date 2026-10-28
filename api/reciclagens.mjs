@@ -4,7 +4,7 @@ import {ABS_SOURCE,parseCSV,validateRoster,validateEvent} from '../lib/training.
 import {trainingFileSchema,trainingAttachments,boundedTrainingForm,prepareTrainingFiles,trainingFileStatements} from '../lib/training-files.mjs';
 const ROSTER='misscan/training-roster.json';
 async function schema(){const db=runtimeBinding('MISSCAN_DB');if(!db)throw Object.assign(new Error('Banco MISSCAN_DB não configurado.'),{status:503});await trainingFileSchema(db);await trainingNotificationSchema(db);return db;}
-function pin(request){const expected=envValue('TREATMENT_WRITE_PIN');if(!expected)throw Object.assign(new Error('PIN de gravação não configurado no Cloudflare.'),{status:503});if(request.headers.get('x-treatment-pin')!==expected)throw Object.assign(new Error('PIN de gravação inválido.'),{status:401});}
+function pin(request){const expected=envValue('TREATMENT_WRITE_PIN');if(!expected)throw Object.assign(new Error('PIN de gravação não configurado no Cloudflare.'),{status:503});if(request?.headers?.get('x-treatment-pin')!==expected)throw Object.assign(new Error('PIN de gravação inválido.'),{status:401});}
 async function pullRoster(){
   const query='select C,G,K,N,O';
   const url=`https://docs.google.com/spreadsheets/d/${ABS_SOURCE.spreadsheetId}/gviz/tq?gid=${ABS_SOURCE.sheetId}&range=A4:O5000&headers=1&tqx=out:csv&tq=${encodeURIComponent(query)}`;
@@ -14,8 +14,8 @@ async function pullRoster(){
   const rows=validateRoster(csv.slice(1).filter(r=>r[0]).map(r=>({name:r[0],shift:r[1],sector:r[2],leader:r[3],opsid:r[4]})));
   const roster={rows,source:ABS_SOURCE,updatedAt:new Date().toISOString()};await writeJson(ROSTER,roster);return roster;
 }
-export async function GET(){
-  try {const db=await schema();let roster=await readJson(ROSTER,null),sourceError='';
+export async function GET(request){
+  try {pin(request);const db=await schema();let roster=await readJson(ROSTER,null),sourceError='';
     if(!roster)sourceError='Aguardando a primeira sincronização privada da COPPIT - ABS pelo Apps Script.';
     await trainingFileSchema(db);
     const [result,attachments,notifications]=await Promise.all([db.prepare('SELECT payload FROM misscan_training_events ORDER BY created_at DESC').all(),trainingAttachments(db),trainingNotificationStatuses(db)]);

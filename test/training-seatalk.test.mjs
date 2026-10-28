@@ -48,8 +48,8 @@ test('cadastro cria aviso atomicamente; consulta e repetição de turma antiga n
  const tasks=[];const response=await trainingAPI.POST(request(),{waitUntil(task){tasks.push(task);}});assert.equal(response.status,200);await Promise.all(tasks);
  assert.equal((await trainingNotificationStatuses(db)).length,2);assert.equal((await trainingAPI.POST(request())).status,200);assert.equal((await trainingNotificationStatuses(db)).length,2);
  // Simulate a pre-deployment class: a read or create retry cannot backfill alerts.
- sqlite.exec('DELETE FROM misscan_training_notifications');assert.equal((await trainingAPI.GET()).status,200);assert.equal((await trainingAPI.POST(request())).status,200);assert.equal((await trainingNotificationStatuses(db)).length,0);
- const history=await (await trainingAPI.GET()).json();assert.deepEqual(history.events[0].seatalkNotifications,[]);
+ sqlite.exec('DELETE FROM misscan_training_notifications');assert.equal((await trainingAPI.GET(new Request('https://test/api/reciclagens',{headers:{'x-treatment-pin':'test-only'}}))).status,200);assert.equal((await trainingAPI.POST(request())).status,200);assert.equal((await trainingNotificationStatuses(db)).length,0);
+ const history=await (await trainingAPI.GET(new Request('https://test/api/reciclagens',{headers:{'x-treatment-pin':'test-only'}}))).json();assert.deepEqual(history.events[0].seatalkNotifications,[]);
  sqlite.exec("CREATE TRIGGER reject_notice BEFORE INSERT ON misscan_training_notifications BEGIN SELECT RAISE(ABORT,'Falha de teste'); END;");
  const failed=await trainingAPI.POST(request('nova-turma-teste-00002'));assert.equal(failed.status,400);assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM misscan_training_events').get().n,1);assert.equal((await trainingNotificationStatuses(db)).length,0);
 });

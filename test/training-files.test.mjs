@@ -21,7 +21,7 @@ test('registra turma e PDF na mesma transação e baixa bytes intactos somente c
  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM misscan_training_file_chunks').get().n,2);
  const denied=await attachments.GET(new Request('https://test/api/training-files?id='+id));assert.equal(denied.status,401);
  const downloaded=await attachments.GET(new Request('https://test/api/training-files?id='+id,{headers:{'x-treatment-pin':PIN}}));assert.equal(downloaded.status,200);assert.equal(downloaded.headers.get('cache-control'),'private, no-store');assert.equal(downloaded.headers.get('x-content-type-options'),'nosniff');assert.deepEqual(new Uint8Array(await downloaded.arrayBuffer()),new Uint8Array(await original.arrayBuffer()));
- const history=await (await classes.GET()).json();assert.equal(history.events[0].attachments[0].name,'Lista assinada.pdf');assert.equal(history.events[0].attachments[0].bytes,undefined);
+ const history=await (await classes.GET(new Request('https://test/api/reciclagens',{headers:{'x-treatment-pin':PIN}}))).json();assert.equal(history.events[0].attachments[0].name,'Lista assinada.pdf');assert.equal(history.events[0].attachments[0].bytes,undefined);
 });
 test('arquivo inválido não deixa turma parcial no banco',async()=>{
  const {sqlite}=database();const bad=new File(['<script>alert(1)</script>'],'presenca.pdf',{type:'application/pdf'});const response=await classes.POST(createRequest([bad]));assert.equal(response.status,400);assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM misscan_training_events').get().n,0);

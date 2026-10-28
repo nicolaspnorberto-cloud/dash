@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseCSV,validateRoster,validateEvent} from '../lib/training.mjs';
 import {configureRuntimeEnv} from '../lib/blob-store.mjs';
-import {POST} from '../api/reciclagens.mjs';
+import {GET,POST} from '../api/reciclagens.mjs';
 const roster=validateRoster([{name:'Pessoa Teste',opsid:'OPS123',shift:'T4',sector:'Outbound',leader:'lider@example.test'}]);
 const event={id:'00000000-0000-4000-8000-000000000001',topic:'Bipe duplo',instructor:'Instrutor teste',area:'Outbound',date:'2026-10-07',type:'Reciclagem',participants:['OPS123','OPS123'],presenceConfirmed:true};
 test('preserva turno da fonte e elimina duplicados da turma',()=>{const value=validateEvent(event,roster);assert.equal(value.participants.length,1);assert.equal(value.participants[0].shift,'T4');assert.equal(value.status,'Realizada');assert.equal(value.progress,undefined);});
@@ -19,4 +19,9 @@ test('orientação conclui com duas assinaturas sem foto e rejeita assinatura fa
  assert.throws(()=>validateEvent({...orientation,signatures:{}},roster));
  assert.throws(()=>validateEvent({...orientation,signatures:{instructor:signature(event.instructor),participants:{}}},roster));
  assert.throws(()=>validateEvent({...orientation,signatures:{...orientation.signatures,instructor:signature('Outra pessoa')}},roster));
+});
+
+test('consulta de reciclagens sem senha ou com senha errada é bloqueada antes de ler banco',async()=>{
+ configureRuntimeEnv({TREATMENT_WRITE_PIN:'unit-test-pin',MISSCAN_DB:{prepare(){throw new Error('Não deve acessar o banco');}}});
+ for(const headers of [{},{'x-treatment-pin':'errada'}]){const response=await GET(new Request('https://test/api/reciclagens',{headers}));assert.equal(response.status,401);const data=await response.json();assert.equal(data.events,undefined);assert.equal(data.roster,undefined);assert.match(response.headers.get('cache-control'),/no-store/);}
 });
