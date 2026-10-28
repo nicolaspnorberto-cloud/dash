@@ -1,3 +1,4 @@
+import { dispatchTrainingNotifications } from '../lib/training-seatalk.mjs';
 import { configureRuntimeEnv, json, writeJson } from '../lib/blob-store.mjs';
 import * as officialDetails from '../api/official-details.mjs';
 import * as officialSync from '../api/official-sync.mjs';
@@ -105,6 +106,7 @@ export default {
   async scheduled(_event, env, executionCtx) {
     configureRuntimeEnv(env, new Request('https://dash.nicolas-pnorberto.workers.dev/'));
     const turn=String(_event.cron||'').startsWith('30 ')?'T3':'T2';
+    const trainingTask=dispatchTrainingNotifications({turn}).catch(error=>console.error('TRAINING_SEATALK_SCHEDULE_ERROR',error));
     await (async()=>{
       const attemptedAt=new Date().toISOString();
       const attemptPath=`misscan/seatalk-last-attempt-${turn.toLowerCase()}.json`;
@@ -133,6 +135,6 @@ export default {
       };
       await writeJson(attemptPath,finalRecord);
       await writeJson(historyPath,finalRecord);
-    })().catch(error=>{console.error('SEATALK_ATTEMPT_RECORD_ERROR',error);throw error;});
+    })().catch(error=>{console.error('SEATALK_ATTEMPT_RECORD_ERROR',error);throw error;}).finally(()=>trainingTask);
   }
 };

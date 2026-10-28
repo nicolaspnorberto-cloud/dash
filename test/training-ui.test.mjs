@@ -34,3 +34,8 @@ test('orientação exige assinaturas de instrutor e de todos, sem foto',async()=
  const sign=id=>{el('trSigner').value=id;el('trSignatureCanvas').onpointerdown({pointerId:1,clientX:20,clientY:20});el('trSignatureCanvas').onpointermove({clientX:70,clientY:70});el('trSignatureCanvas').onpointerup();el('trSignatureSave').onclick();};
  sign('instructor');sign('OPS123');assert.equal(el('trSave').disabled,true);sign('OPS456');assert.equal(el('trSave').disabled,false);await el('trSave').onclick();assert.equal(ui.submitted.event.signatures.instructor.name,'Instrutor');assert.equal(ui.submitted.event.signatures.participants.OPS456.name,'Pessoa B');assert.match(el('trHistory').innerHTML,/polyline/);
 });
+
+test('histórico mostra status do aviso SeaTalk sem confundir fila com envio confirmado',async()=>{
+ const original={id:'turma-teste',date:'2026-10-27',topic:'MIS SCAN',type:'Reciclagem',instructor:'Instrutor',participants:roster,seatalkNotifications:[{turn:'T2',status:'PENDING'},{turn:'T3',status:'SENT'}]};
+ const ui=panel({events:[original]});await ui.el('trainingReload').onclick();assert.match(ui.el('trHistory').innerHTML,/T2: Na fila/);assert.match(ui.el('trHistory').innerHTML,/T3: Enviado/);
+});

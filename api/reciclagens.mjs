@@ -1,8 +1,9 @@
+import {trainingNotificationSchema,trainingNotificationHC,planTrainingNotifications,trainingNotificationStatements,trainingNotificationStatuses,dispatchTrainingNotifications} from '../lib/training-seatalk.mjs';
 import {envValue,json,runtimeBinding,readJson,writeJson} from '../lib/blob-store.mjs';
 import {ABS_SOURCE,parseCSV,validateRoster,validateEvent} from '../lib/training.mjs';
 import {trainingFileSchema,trainingAttachments,boundedTrainingForm,prepareTrainingFiles,trainingFileStatements} from '../lib/training-files.mjs';
 const ROSTER='misscan/training-roster.json';
-async function schema(){const db=runtimeBinding('MISSCAN_DB');if(!db)throw Object.assign(new Error('Banco MISSCAN_DB não configurado.'),{status:503});await trainingFileSchema(db);return db;}
+async function schema(){const db=runtimeBinding('MISSCAN_DB');if(!db)throw Object.assign(new Error('Banco MISSCAN_DB não configurado.'),{status:503});await trainingFileSchema(db);await trainingNotificationSchema(db);return db;}
 function pin(request){const expected=envValue('TREATMENT_WRITE_PIN');if(!expected)throw Object.assign(new Error('PIN de gravação não configurado no Cloudflare.'),{status:503});if(request.headers.get('x-treatment-pin')!==expected)throw Object.assign(new Error('PIN de gravação inválido.'),{status:401});}
 async function pullRoster(){
   const query='select C,G,K,N,O';
@@ -17,12 +18,12 @@ export async function GET(){
   try {const db=await schema();let roster=await readJson(ROSTER,null),sourceError='';
     if(!roster)sourceError='Aguardando a primeira sincronização privada da COPPIT - ABS pelo Apps Script.';
     await trainingFileSchema(db);
-    const [result,attachments]=await Promise.all([db.prepare('SELECT payload FROM misscan_training_events ORDER BY created_at DESC').all(),trainingAttachments(db)]);
+    const [result,attachments,notifications]=await Promise.all([db.prepare('SELECT payload FROM misscan_training_events ORDER BY created_at DESC').all(),trainingAttachments(db),trainingNotificationStatuses(db)]);
     const byEvent=new Map();for(const file of attachments){if(!byEvent.has(file.eventId))byEvent.set(file.eventId,[]);byEvent.get(file.eventId).push(file);}
-    return json({ok:true,roster:roster||{rows:[],source:ABS_SOURCE},sourceError,events:(result.results||[]).map(r=>{const event=JSON.parse(r.payload);return {...event,attachments:byEvent.get(event.id)||[]};})});
+    return json({ok:true,roster:roster||{rows:[],source:ABS_SOURCE},sourceError,events:(result.results||[]).map(r=>{const event=JSON.parse(r.payload);return {...event,attachments:byEvent.get(event.id)||[],seatalkNotifications:notifications.filter(n=>n.event_id===event.id)};})});
   }catch(e){return json({ok:false,error:e.message},e.status||500);}
 }
-export async function POST(request){
+export async function POST(request,executionCtx){
   try {pin(request);let body,files=[];
     if((request.headers.get('content-type')||'').startsWith('multipart/form-data')){const form=await boundedTrainingForm(request);const text=String(form.get('event')||'');if(text.length>3000000)throw new Error('Turma acima do limite.');body={action:'create',event:JSON.parse(text)};files=form.getAll('files');}
     else {if(Number(request.headers.get('content-length')||0)>3000000)return json({ok:false,error:'Arquivo acima do limite.'},413);const text=await request.text();if(text.length>3000000)return json({ok:false,error:'Arquivo acima do limite.'},413);body=JSON.parse(text);}
@@ -37,9 +38,14 @@ export async function POST(request){
     await trainingFileSchema(db);
     const existing=await db.prepare('SELECT payload FROM misscan_training_events WHERE id = ?').bind(event.id).first();
     if(existing){const saved=JSON.parse(existing.payload);const canonical=e=>JSON.stringify({...e,createdAt:undefined});if(canonical(saved)!==canonical(event))return json({ok:false,error:'Identificador já usado por outra turma.'},409);}
-    const statements=trainingFileStatements(db,preparedFiles);
+    const plan=!existing?planTrainingNotifications(event,await trainingNotificationHC()):{messages:[],unrouted:[]};
+    const statements=[...trainingFileStatements(db,preparedFiles),...trainingNotificationStatements(db,plan,event.createdAt)];
     if(!existing)statements.unshift(db.prepare('INSERT INTO misscan_training_events (id,payload,created_at) VALUES (?,?,?)').bind(event.id,JSON.stringify(event),event.createdAt));
     if(statements.length)await db.batch(statements);
-    const saved=await db.prepare('SELECT payload FROM misscan_training_events WHERE id = ?').bind(event.id).first();return json({ok:true,event:{...JSON.parse(saved.payload),attachments:await trainingAttachments(db,event.id)}});
+    if(!existing&&plan.messages.length){
+      const task=dispatchTrainingNotifications({db,eventId:event.id}).catch(error=>console.error('TRAINING_SEATALK_DISPATCH_ERROR',error));
+      if(typeof executionCtx?.waitUntil==='function')executionCtx.waitUntil(task);else await task;
+    }
+    const saved=await db.prepare('SELECT payload FROM misscan_training_events WHERE id = ?').bind(event.id).first();return json({ok:true,event:{...JSON.parse(saved.payload),attachments:await trainingAttachments(db,event.id),seatalkNotifications:await trainingNotificationStatuses(db,event.id)},seatalkUnrouted:plan.unrouted});
   }catch(e){return json({ok:false,error:e.message},e.status||400);}
 }
