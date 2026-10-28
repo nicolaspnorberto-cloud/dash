@@ -909,6 +909,7 @@ async function hydrateSharedTreatments(){
 }
 
 function treatmentPin(promptUser=false){
+  const activePin=globalThis.MisscanTreatmentAccess?.pin();if(activePin)return activePin;
   let pin=sessionStorage.getItem(TREATMENT_PIN_SESSION)||'';
   if(!pin&&promptUser){
     pin=String(prompt('Digite o PIN de gravação das tratativas:')||'').trim();
@@ -1186,6 +1187,8 @@ function renderTreatments(){
 
 window.registerRecurrence=async id=>{
   const row=historyTreatmentRow(id);if(!row)return;
+  if(!await globalThis.MisscanTreatmentAccess?.request({label:'Registrar reincidência',collaborator:row.colaborador}))return;
+  try{
   const p=progressFor(id);
   if(!cycleComplete(p,p.requiredCycle))return alert('Conclua o ciclo atual antes de registrar uma reincidência.');
   if(p.requiredCycle>=3)return alert('O colaborador já está no 3º ciclo de tratativa.');
@@ -1193,15 +1196,17 @@ window.registerRecurrence=async id=>{
   addTreatmentHistory(id,'Reincidência registrada',`Novo ciclo: ${p.requiredCycle}`);
   saveTreatmentProgress();renderTreatments();
   await syncTreatmentOrWarn(id);
+  }finally{globalThis.MisscanTreatmentAccess?.release();}
 };
 
 function modalRow(){return historyTreatmentRow(state.treatmentCurrent)}
 function showModal(){const m=$('treatmentModal');m.classList.add('open');m.setAttribute('aria-hidden','false');document.body.style.overflow='hidden'}
-function closeModal(){const m=$('treatmentModal');m.classList.remove('open');m.setAttribute('aria-hidden','true');document.body.style.overflow='';state.treatmentCurrent=null;state.treatmentMode=null}
+function closeModal(){const m=$('treatmentModal');m.classList.remove('open');m.setAttribute('aria-hidden','true');document.body.style.overflow='';state.treatmentCurrent=null;state.treatmentMode=null;globalThis.MisscanTreatmentAccess?.release();}
 function modalHeader(row,cycle,label){$('modalEyebrow').textContent=`${label} • CICLO ${cycle}`;$('modalTitle').textContent=row.colaborador;$('modalMeta').textContent=`Indicador ${fmtPct(row.indicador)} • ${row.turno} • ${row.setor} • Líder: ${row.lider}`}
 
 window.openDialogue=async(id,cycle)=>{
   const row=historyTreatmentRow(id);if(!row)return;
+  if(!await globalThis.MisscanTreatmentAccess?.request({label:'Diálogo de Performance',collaborator:row.colaborador}))return;
   state.treatmentCurrent=id;state.treatmentMode='dialogue';state.treatmentCycle=cycle;
   const d=progressFor(id)[`dialogue${cycle}`]||{};
   modalHeader(row,cycle,'DIÁLOGO DE PERFORMANCE');
@@ -1217,6 +1222,7 @@ window.openDialogue=async(id,cycle)=>{
 
 window.openRecycle=async(id,cycle)=>{
   const row=historyTreatmentRow(id);if(!row)return;
+  if(!await globalThis.MisscanTreatmentAccess?.request({label:'Reciclagem',collaborator:row.colaborador}))return;
   state.treatmentCurrent=id;state.treatmentMode='recycle';state.treatmentCycle=cycle;
   const r=progressFor(id)[`recycle${cycle}`]||{};
   modalHeader(row,cycle,'RECICLAGEM');

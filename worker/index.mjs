@@ -1,3 +1,4 @@
+import * as treatmentAccess from '../api/treatment-access.mjs';
 import { dispatchTrainingNotifications } from '../lib/training-seatalk.mjs';
 import { configureRuntimeEnv, json, writeJson } from '../lib/blob-store.mjs';
 import * as officialDetails from '../api/official-details.mjs';
@@ -23,6 +24,7 @@ import * as operations from '../api/operations.mjs';
 import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
 
 const direct = new Map([
+  ['treatment-access', treatmentAccess],
   ['official-sync', officialSync],
   ['official-details', officialDetails],
   ['dados', dados],
