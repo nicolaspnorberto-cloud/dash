@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mis-Scan Control Center</title>
-  <link rel="stylesheet" href="styles.css?v=7.9.1-treatment-lock" />
-  <link rel="stylesheet" href="anomalies.css?v=8.0.1-lock" />
+  <link rel="stylesheet" href="styles.css?v=8.1.0-operacional" />
+  <link rel="stylesheet" href="anomalies.css?v=8.1.0-cockpit" />
   <link rel="stylesheet" href="training.css?v=7.9.0-lock" />
 
   <style>
@@ -51,15 +51,16 @@
     </div>
   </header>
 
-  <nav class="tabs" aria-label="Navegação principal">
+  <div class="dashboard-navigation"><div class="misscan-navigation-group"><span class="navigation-family-label">MIS SCAN</span>
+  <nav class="tabs" aria-label="Navegação MIS SCAN">
     <button class="tab active" data-tab="produtividade">Produtividade</button>
     <button class="tab" data-tab="tratativas">Tratativas</button>
     <button class="tab" data-tab="evolucao">Evolução</button>
     <button class="tab" data-tab="calendarizacao">Calendarização</button>
     <button class="tab" data-tab="reciclagens">Reciclagens</button>
-    <button class="tab" data-tab="anomalias">Anomalias</button>
-  </nav>
 
+  </nav></div>
+  <details class="operational-navigation"><summary>Operacional <span aria-hidden="true">▾</span></summary><nav aria-label="Menu operacional"><span class="navigation-family-label">PAINÉIS OPERACIONAIS</span><button class="tab" data-tab="anomalias">Anomalias e recorrências</button></nav></details></div>
 
   <section class="period-bar" aria-label="Período de análise">
     <div class="period-summary">
@@ -718,7 +719,8 @@
   <script src="app.js?v=7.9.1-treatment-lock"></script>
   <script src="attendance-template.js?v=7.7.1"></script>
   <script src="training.js?v=7.9.0-lock"></script>
-  <script src="anomalies.js?v=8.0.1-lock"></script>
+  <script src="anomaly-presentation.js?v=8.1.0"></script>
+  <script src="anomalies.js?v=8.1.0-cockpit"></script>
   <script src="daily-history.js?v=7.6.1"></script>
 </body>
 </html>

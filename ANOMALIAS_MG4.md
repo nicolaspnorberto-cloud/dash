@@ -50,3 +50,21 @@ Consultas têm limite explícito de 10 mil registros, sem totais parciais
 silenciosos. A versão inicial não envia avisos de anomalias ao SeaTalk.
 
 Rotas: GET/POST /api/anomalias e GET /api/anomaly-files?id=...
+
+## Cockpit e navegação
+
+Acesso pelo menu separado Operacional > Anomalias e recorrências. A aba exige
+PIN para consultar a base e preserva o bloqueio ao sair.
+
+Estrutura: menu lateral, filtros avançados, seis indicadores de concentração,
+resumo de situação, evolução por mês/semana ISO/dia do mês/dia da semana,
+rankings de turnos, lideranças, áreas, repetições por processo e atividades,
+além da tabela base com descrição e histórico expansíveis.
+
+Filtros adicionais: instrutor/auditor (campo reporter), tema e sinergia.
+Sinergia e nomes de orientados são opcionais no novo registro. Ausência de nomes
+é apresentada como não informada, não como zero participantes confirmados.
+A coluna Reinc. informa o número de ocorrências anteriores do mesmo grupo
+na seleção atual (primeira = 0), não o total genérico do processo.
+Os indicadores de líderes/turnos mostram associação dos registros, não comprovam
+responsabilidade causal. Campos ausentes continuam explícitos.
