@@ -124,3 +124,18 @@
 
 
 body:has(#reciclagens.active) .period-bar{display:none}
+
+/* The protected panel stays hidden even if layout rules set display. */
+#trProtectedContent[hidden],#trAccessGate[hidden]{display:none!important}
+.training-access-gate{min-height:65vh;display:grid;place-items:center;padding:32px 16px}
+.training-access-card{width:min(100%,480px);box-sizing:border-box;background:#fff;border:1px solid #dce4ee;border-top:5px solid #ee4d2d;border-radius:20px;padding:36px;box-shadow:0 14px 45px #0b1f3510;text-align:center}
+.training-access-icon{display:grid;place-items:center;width:68px;height:68px;margin:0 auto 20px;background:#fff1ec;border-radius:20px;font-size:32px}
+.training-access-card h1{font-size:28px;color:#0b1f35;margin:14px 0}
+.training-access-card p,.training-access-card small{color:#5b6c80;line-height:1.6}
+.training-access-card form{display:grid;gap:12px;text-align:left;margin:26px 0 16px}
+.training-access-card label{font-weight:700;color:#0b1f35}
+.training-access-card input{width:100%;box-sizing:border-box;padding:14px;border:1px solid #cad5e2;border-radius:10px;font:inherit}
+.training-access-card button{min-height:46px}
+#trAccessStatus{min-height:24px;margin:0;color:#b52c20;font-size:14px}
+.training-lock-toolbar{display:flex;justify-content:flex-end;margin:0 0 12px}
+@media(max-width:600px){.training-access-card{padding:26px 20px}.training-access-gate{padding:20px 4px}}
