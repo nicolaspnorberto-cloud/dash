@@ -1,6 +1,6 @@
 import {json,runtimeBinding} from '../lib/blob-store.mjs';
 import {assertTrainingPin,boundedTrainingForm} from '../lib/training-files.mjs';
-import {validateAnomaly,updateAnomaly,anomalyReport,validateAnomalyPeriod} from '../lib/anomalies.mjs';
+import {validateAnomaly,updateAnomaly,anomalyReport,validateAnomalyPeriod,anomalySignatureContent} from '../lib/anomalies.mjs';
 import {prepareAnomalyFiles,anomalyFileStatements} from '../lib/anomaly-files.mjs';
 const schemas=new WeakMap();
 export async function anomalyDatabase(){
@@ -39,7 +39,7 @@ export async function POST(request){try{
  if(body.action==='create'){
   const row=validateAnomaly(body.record||{}),prepared=await prepareAnomalyFiles(row.id,files);
   const old=await db.prepare('SELECT payload FROM misscan_anomalies WHERE id=?').bind(row.id).first();
-  if(old){const saved=JSON.parse(old.payload);const fields=['id','area','process','activity','theme','synergy','oriented','description','reporter','leader','shift','priority','dueDate','observedAt'];if(fields.some(k=>JSON.stringify(saved[k]??(k==='oriented'?null:''))!==JSON.stringify(row[k]??(k==='oriented'?null:''))))return json({ok:false,error:'Identificador já utilizado por outra ocorrência.'},409);return json({ok:true,record:saved,duplicate:true});}
+  if(old){const saved=JSON.parse(old.payload);const fields=['id','area','process','activity','theme','synergy','oriented','description','reporter','leader','shift','priority','dueDate','observedAt'];if(!!saved.orientationPerformed!==row.orientationPerformed||JSON.stringify(anomalySignatureContent(saved.signatures))!==JSON.stringify(anomalySignatureContent(row.signatures))||fields.some(k=>JSON.stringify(saved[k]??(k==='oriented'?null:''))!==JSON.stringify(row[k]??(k==='oriented'?null:''))))return json({ok:false,error:'Identificador já utilizado por outra ocorrência.'},409);return json({ok:true,record:saved,duplicate:true});}
   await db.batch([db.prepare('INSERT INTO misscan_anomalies(id,payload,observed_date,version,updated_at) VALUES(?,?,?,?,?)').bind(row.id,JSON.stringify(row),row.observedDate,row.version,row.updatedAt),...anomalyFileStatements(db,prepared)]);
   return json({ok:true,record:row});
  }
