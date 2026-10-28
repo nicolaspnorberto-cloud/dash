@@ -1,3 +1,5 @@
+import * as anomalies from '../api/anomalias.mjs';
+import * as anomalyFiles from '../api/anomaly-files.mjs';
 import * as treatmentAccess from '../api/treatment-access.mjs';
 import { dispatchTrainingNotifications } from '../lib/training-seatalk.mjs';
 import { configureRuntimeEnv, json, writeJson } from '../lib/blob-store.mjs';
@@ -24,6 +26,8 @@ import * as operations from '../api/operations.mjs';
 import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
 
 const direct = new Map([
+  ['anomalias', anomalies],
+  ['anomaly-files', anomalyFiles],
   ['treatment-access', treatmentAccess],
   ['official-sync', officialSync],
   ['official-details', officialDetails],
