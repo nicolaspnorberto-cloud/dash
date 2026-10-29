@@ -82,3 +82,12 @@ Depois de desbloquear a aba Anomalias, “Registrar anomalia” abre a ficha sem
 
 ## Uso no celular / Gemba
 A ficha não solicita Sinergia nem Prazo nos novos registros. Os valores históricos são preservados. No celular (até 600 px), a ficha ocupa a tela, com campos em uma coluna e rolagem própria; cabeçalho e ações de cancelar/salvar permanecem visíveis. Campos com fonte de 16 px, botões de pelo menos 44–48 px e espaço seguro inferior favorecem uso por toque. A assinatura permite desenho no campo sem rolar a página.
+
+## Relatório de Gemba por turno
+Na aba protegida, use “Gerar relatório do turno”. Informe início e fim do recorte em horário de São Paulo e o turno. Ajuste a data final se o turno atravessar a meia-noite. O intervalo máximo é de 36 horas, com os minutos inicial e final incluídos. A consulta usa a API autenticada, independe dos filtros do painel e aplica o horário exato no relatório. T4 é consolidado no T2; T5 no T3.
+
+A prévia reúne resumo, áreas com registros, processos, repetições da mesma área/processo/atividade, orientações assinadas, descrição/ações de cada ocorrência e pendências do recorte. Não comprova a cobertura de Gemba em áreas sem registros nem reconstrói o status no fechamento histórico: reflete a situação atual na consulta. Orientados são nomes exatos, sem deduplicação por OPSID. Orientação declarada só entra como assinada quando há assinatura do instrutor e de cada orientado.
+
+Revise/edite o texto na prévia. “Copiar mensagem” e “Imprimir / Salvar PDF” usam o texto revisado. A impressão usa o diálogo do navegador, com opção Salvar como PDF. Não há envio automático, agendamento, gravação do rascunho nem alteração dos registros. Ao mudar o recorte, fechar o relatório ou bloquear/sair da aba, o texto é descartado. Respostas atrasadas são ignoradas. A API não é consultada sem a aba desbloqueada.
+
+Validação: testes de madrugada, minutos de fronteira, consolidação de turnos, validação do intervalo, duplicados, contagens e assinaturas, base vazia, escape de HTML, consulta com PIN e recorte independente, cópia/impressão da revisão, invalidação e bloqueio com resposta atrasada.
