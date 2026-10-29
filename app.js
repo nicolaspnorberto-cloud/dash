@@ -1,5 +1,6 @@
 // MIS-SCAN CONTROL CENTER V6.13 — operator_fail oficial por BR
 const state = {
+  employeeCohort:'MAIN',newHireView:'tratativas',admissions:new Map(),admissionsMeta:null,admissionsError:'',cohortToday:'',
   sourceRows: 0,
   raw: [],
   dailyRaw: null,
@@ -514,10 +515,33 @@ function resetFilterValues(render=true){
   if(render) applyFilters();
 }
 
+function admissionForEmployee(row){
+  const hc=state.hcOpsMap?.get(String(row.opsid||'').toUpperCase())||state.hcMap.get(normalizeName(row.operator_name||row.colaborador||row.name||''));
+  const opsid=String(row.opsid||(!hc?.ambiguous?hc?.opsid:'')||'').toUpperCase();
+  return state.admissions.get(opsid)||null;
+}
+function employeeAdmission(row){return globalThis.MisscanNewHirePolicy?.classify(admissionForEmployee(row),state.cohortToday||globalThis.MisscanNewHirePolicy.today())||{group:'REVIEW',reason:'Data de admissão não confirmada'};}
+function employeeCohortMatches(row){const isNew=employeeAdmission(row).group==='NEW';return state.employeeCohort==='NEW'?isNew:!isNew;}
+window.MisscanEmployeeCohortMatch=employeeCohortMatches;
+async function loadAdmissions(signal){try{const timeout=AbortSignal.timeout(12000),requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;const response=await fetch('/api/admissions',{cache:'no-store',signal:requestSignal});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Consulta indisponível.');return data;}catch(error){return {ok:false,error:error.message};}}
+function acceptAdmissions(data){
+ if(data?.ok){state.admissions=new Map((data.rows||[]).map(r=>[r.opsid,r]));state.admissionsMeta=data;state.admissionsError=data.available?'':'Aguardando a primeira sincronização de admissões da ABS.';}
+ else state.admissionsError=data?.error||'Admissões indisponíveis; nenhuma data presumida.';
+ state.cohortToday=globalThis.MisscanNewHirePolicy?.today()||'';
+}
+function admissionBadge(row){const info=employeeAdmission(row);if(info.group==='REVIEW')return `<div class="cell-sub admission-review">Admissão a validar</div>`;if(info.group==='NEW')return `<div class="cell-sub">Admissão: ${escapeHtml(info.admissionDate.split('-').reverse().join('/'))} · Principal a partir de ${escapeHtml(info.transferDate.split('-').reverse().join('/'))}</div>`;return '';}
+function renderCohortInfo(){
+ const records=state.hcRecords.map(row=>({row,info:employeeAdmission(row)})),newCount=records.filter(r=>r.info.group==='NEW').length,review=records.filter(r=>r.info.group==='REVIEW');
+ if($('mainCohortNote'))$('mainCohortNote').textContent=`Acompanhamento principal: novos colaboradores com admissão confirmada ficam na página própria até completar um mês. Share mantém o total oficial MG4 como denominador. ${newCount} novo(s) na HC; ${review.length} cadastro(s) com admissão a validar.${state.admissionsError?' '+state.admissionsError:''}`;
+ if($('newHireSource'))$('newHireSource').textContent=state.admissionsError||`Admissão: COPPIT - ABS · Sincronizada ${state.admissionsMeta?.generatedAt?new Date(state.admissionsMeta.generatedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'sem data confirmada'} · Regra: um mês calendário. Turno/líder: HC Matinal.`;
+ if($('newHireCounts'))$('newHireCounts').textContent=`${newCount} novo(s) com admissão confirmada na HC · ${review.length} cadastro(s) para validar · Todos os cálculos de share usam o total MG4, incluindo os dois acompanhamentos.`;
+ if($('newHireReview')){const q=String($('newHireReviewSearch')?.value||'').toLowerCase(),filtered=review.filter(({row})=>`${row.colaborador} ${row.opsid}`.toLowerCase().includes(q));$('newHireReview').innerHTML=filtered.slice(0,50).map(({row,info})=>`<p><strong>${escapeHtml(row.colaborador)}</strong> · ${escapeHtml(row.opsid||'Sem OPSID')} · ${escapeHtml(info.reason)}</p>`).join('')||'<p>Nenhum cadastro a validar neste filtro.</p>';if(filtered.length>50)$('newHireReview').innerHTML+=`<p>Exibindo 50 de ${filtered.length}. Use a busca para localizar o cadastro.</p>`;}
+}
+function showNewHirePanel(view){if(state.employeeCohort!=='NEW')return;state.newHireView=view;document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===view));$('currentTreatmentView').hidden=false;$('dailyTreatmentView').hidden=true;applyFilters();if(view==='tratativas'){hydrateSharedTreatments();refreshTreatmentPresence();}}
 function applyFilters(){
   const vals=Object.fromEntries(filterIds.map(id=>[id,$(id).value]));
   const q=$('operatorSearch').value.trim().toLowerCase();
-  state.filtered=state.raw.filter(r=>
+  state.filtered=state.raw.filter(r=>employeeCohortMatches(r)&&
     (!vals.areaFilter||r.responsabilidade===vals.areaFilter)&&
     (!vals.processFilter||r.process_fail===vals.processFilter)&&
     (!vals.identFilter||r.identificacao===vals.identFilter)&&
@@ -666,7 +690,7 @@ function officialDataNote(){
 
 function filteredOfficialDetails(){
   const vals=Object.fromEntries(filterIds.map(id=>[id,$(id).value])),q=$('operatorSearch').value.trim().toLowerCase();
-  return state.detailRows.filter(r=>(!vals.areaFilter||r.responsabilidade===vals.areaFilter)&&(!vals.processFilter||r.process_fail===vals.processFilter)&&(!vals.identFilter||r.identificacao===vals.identFilter)&&(!vals.turnoFilter||r.turno===vals.turnoFilter)&&(!vals.setorFilter||r.setor===vals.setorFilter)&&(!vals.liderFilter||r.lider_nome===vals.liderFilter)&&(!vals.tipoFilter||r.tipo_hc===vals.tipoFilter)&&(!q||`${r.operator_name} ${r.operator_original} ${r.opsid} ${r.lider_nome}`.toLowerCase().includes(q)));
+  return state.detailRows.filter(r=>employeeCohortMatches(r)&&(!vals.areaFilter||r.responsabilidade===vals.areaFilter)&&(!vals.processFilter||r.process_fail===vals.processFilter)&&(!vals.identFilter||r.identificacao===vals.identFilter)&&(!vals.turnoFilter||r.turno===vals.turnoFilter)&&(!vals.setorFilter||r.setor===vals.setorFilter)&&(!vals.liderFilter||r.lider_nome===vals.liderFilter)&&(!vals.tipoFilter||r.tipo_hc===vals.tipoFilter)&&(!q||`${r.operator_name} ${r.operator_original} ${r.opsid} ${r.lider_nome}`.toLowerCase().includes(q)));
 }
 function officialTOCount(person){
   if(!state.officialDetails?.available)return '—';
@@ -690,6 +714,7 @@ function exportOfficialDetails(){
 }
 
 function renderDestinations(){
+  if(state.employeeCohort==='NEW'){if($('stationBars'))$('stationBars').innerHTML='<div class="empty">A fonte de destinos é agregada do MG4 e não permite separar novos colaboradores. Nenhum destino foi atribuído por suposição.</div>';if($('destinationSourceNote'))$('destinationSourceNote').textContent='Sem detalhamento por colaborador na fonte de destinos.';return;}
   const note=$('stationNote');
   if(!state.liveMeta?.official){if(note)note.textContent='Hubs com maior quantidade de BR';renderBars('stationBars',countBy('lmreceived_station'),10);return;}
   const data=state.destinations;
@@ -710,6 +735,7 @@ function renderDestinations(){
 }
 
 function renderAll(){
+  renderCohortInfo();
   renderKPIs();
   renderBars('areaBars',countBy('responsabilidade'),8);
   renderBars('processBars',countBy('process_fail'),8);
@@ -1122,7 +1148,7 @@ function filteredTreatments(){
     return {...x,indicador:share.value,share_denominator:share.denominator,share_scope:share.scope};
   }).filter(x=>{
     const st=treatmentStatus(x);
-    return x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && MisscanPresenceUI.matches(presenceFilter,treatmentPresenceInfo(x),st.group==='PENDENTE') && (!q||`${x.colaborador} ${x.turno} ${x.setor} ${x.lider}`.toLowerCase().includes(q));
+    return employeeCohortMatches(x) && x.indicador>threshold && (!turno||x.turno===turno) && (!setor||x.setor===setor) && (!status||st.group===status) && MisscanPresenceUI.matches(presenceFilter,treatmentPresenceInfo(x),st.group==='PENDENTE') && (!q||`${x.colaborador} ${x.turno} ${x.setor} ${x.lider}`.toLowerCase().includes(q));
   }).sort((a,b)=>b.indicador-a.indicador||b.miss_scan-a.miss_scan);
 }
 
@@ -1167,7 +1193,7 @@ function renderTreatments(){
     const p=progressFor(x.id),st=treatmentStatus(x),rateCls=x.indicador>1?'':'near',presence=treatmentPresenceInfo(x);
     return `<tr>
       <td>${i+1}</td>
-      <td><strong>${escapeHtml(x.colaborador)}</strong><div class="cell-sub">${escapeHtml(x.operacao)} • ${escapeHtml(x.tipo_hc)}</div></td>
+      <td><strong>${escapeHtml(x.colaborador)}</strong><div class="cell-sub">${escapeHtml(x.operacao)} • ${escapeHtml(x.tipo_hc)}</div>${admissionBadge(x)}</td>
       <td><span class="metric-rate ${rateCls}">${fmtPct(x.indicador)}</span></td>
       <td><strong>${fmtInt.format(x.miss_scan)}</strong></td>
       <td><span class="tag tag-good">${escapeHtml(x.turno)}</span></td>
@@ -2109,7 +2135,7 @@ function filteredEvolution(){
     const current=evolutionIsAboveTarget(row.weeks?.[latest]);
     const scopeOk=(scope==='ALL'&&evolutionHasHistoricalOffense(row))||(scope==='CURRENT'&&current)||(scope==='RECURRENT'&&['Crônico','Recorrente'].includes(metrics.status));
     const currentTreatment=evolutionTreatment(row);
-    return scopeOk
+    return employeeCohortMatches(row)&&scopeOk
       &&(!operation||Object.values(row.weeks||{}).some(metric=>metric.missScan>0))
       &&(!turno||normalizeTurno(row.turno)===turno)
       &&(!status||metrics.status===status)
@@ -2225,8 +2251,14 @@ function exportEvolution(){
 
 function tabs(){
   document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
+    state.employeeCohort=b.dataset.tab==='novos'?'NEW':'MAIN';
+    $('newHireBanner').hidden=state.employeeCohort!=='NEW';
+    $('mainCohortNote').hidden=state.employeeCohort==='NEW'||!['produtividade','tratativas','evolucao'].includes(b.dataset.tab);
+    document.body.classList.toggle('new-hires-active',state.employeeCohort==='NEW');
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
-    document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.tab));
+    document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===(state.employeeCohort==='NEW'?state.newHireView:b.dataset.tab)));
+    applyFilters();
+    if(b.dataset.tab==='novos'){showNewHirePanel(state.newHireView);return;}
     if(b.dataset.tab==='calendarizacao'){refreshCalendarizationV65({silent:true})}
     if(b.dataset.tab==='tratativas'){renderTreatments();hydrateSharedTreatments();refreshTreatmentPresence();}
     if(b.dataset.tab==='evolucao'){
@@ -2717,9 +2749,10 @@ async function refreshLiveData({silent=false,fresh=false}={}){
   setLiveStatus('loading','Atualizando...','Consultando histórico dinâmico da LM');
 
   try{
-    const data=await loadLiveDataV68({fresh,signal:load.signal,baseQuery:query});
+    const [data,admissions]=await Promise.all([loadLiveDataV68({fresh,signal:load.signal,baseQuery:query}),loadAdmissions(load.signal)]);
     if(!load.current())return false;
 
+    acceptAdmissions(admissions);
     state.liveMeta=data.meta||{};
     state.destinations=data.destinations||null;
     syncPeriodControlsFromMeta();
@@ -2810,7 +2843,12 @@ async function checkSourceRevision(){
 }
 
 async function boot(){
-  tabs();loadCalendarPreferences();restorePeriodPreference();
+  tabs();
+  $('newHireProductivity').onclick=()=>showNewHirePanel('produtividade');
+  $('newHireTreatments').onclick=()=>showNewHirePanel('tratativas');
+  $('newHireReviewSearch').oninput=renderCohortInfo;
+  setInterval(()=>{const day=globalThis.MisscanNewHirePolicy.today();if(day!==state.cohortToday){state.cohortToday=day;applyFilters();renderEvolution();}},60000);
+  loadCalendarPreferences();restorePeriodPreference();
   const initialEvolution=restoreEvolutionSnapshot();
   if(initialEvolution)renderEvolution();
   filterIds.forEach(id=>$(id).addEventListener('change',applyFilters));
@@ -2913,6 +2951,8 @@ async function boot(){
     onError:error=>setLiveStatus('error','Falha na verificação',error.message)
   });
   setInterval(()=>refreshController.tick(),5*60*1000);
+  let admissionsChecking=false;
+  setInterval(async()=>{if(document.hidden||admissionsChecking||state.liveRefreshing)return;admissionsChecking=true;try{const data=await loadAdmissions();if(data.ok&&data.generatedAt!==state.admissionsMeta?.generatedAt){acceptAdmissions(data);applyFilters();renderEvolution();}}finally{admissionsChecking=false;}},5*60*1000);
   document.addEventListener('visibilitychange',()=>{
     if(!document.hidden)refreshController.tick();
   });

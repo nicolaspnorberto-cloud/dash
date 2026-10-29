@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mis-Scan Control Center</title>
-  <link rel="stylesheet" href="styles.css?v=8.1.0-operacional" />
+  <link rel="stylesheet" href="styles.css?v=8.6.0-new-hires" />
   <link rel="stylesheet" href="anomalies.css?v=8.5.0-shift-report" />
   <link rel="stylesheet" href="training.css?v=7.9.0-lock" />
 
@@ -55,6 +55,7 @@
   <nav class="tabs" aria-label="Navegação MIS SCAN">
     <button class="tab active" data-tab="produtividade">Produtividade</button>
     <button class="tab" data-tab="tratativas">Tratativas</button>
+    <button class="tab" data-tab="novos">Novos colaboradores</button>
     <button class="tab" data-tab="evolucao">Evolução</button>
     <button class="tab" data-tab="calendarizacao">Calendarização</button>
     <button class="tab" data-tab="reciclagens">Reciclagens</button>
@@ -96,6 +97,8 @@
   </section>
 
   <main>
+    <section id="newHireBanner" class="new-hire-banner panel" hidden><div class="new-hire-heading"><div><span class="eyebrow">MIS SCAN · NOVOS COLABORADORES</span><h1>Acompanhamento do primeiro mês</h1><p>Mesmos indicadores, share e tratativas. Ao completar um mês da admissão, a pessoa passa à página principal com seu histórico preservado.</p></div><div class="new-hire-switch"><button id="newHireProductivity" type="button" class="action-btn blue">Indicadores e ranking</button><button id="newHireTreatments" type="button" class="action-btn orange">Tratativas</button></div></div><p id="newHireSource" role="status"></p><p id="newHireCounts"></p><details><summary>Validar datas de admissão</summary><p class="muted">Datas não confirmadas permanecem no acompanhamento principal. A admissão é consultada na COPPIT - ABS; turno e líder continuam pela HC Matinal.</p><input id="newHireReviewSearch" type="search" placeholder="Buscar nome ou OPSID para validar data" aria-label="Buscar cadastro para validar admissão"><div id="newHireReview"></div></details></section>
+    <p id="mainCohortNote" class="cohort-note" role="status"></p>
     <section id="reciclagens" class="view"></section>
     <section id="anomalias" class="view"></section>
     <section id="produtividade" class="view active">
@@ -716,7 +719,8 @@
   <script src="official-share.js?v=7.6.1"></script>
   <script src="presence-ui.js?v=7.3.0"></script>
   <script src="treatment-access.js?v=7.9.1"></script>
-  <script src="app.js?v=7.9.1-treatment-lock"></script>
+  <script src="new-hire-policy.js?v=8.6.0"></script>
+  <script src="app.js?v=8.6.0-new-hires"></script>
   <script src="attendance-template.js?v=7.7.1"></script>
   <script src="training.js?v=7.9.0-lock"></script>
   <script src="anomaly-presentation.js?v=8.1.0"></script>
@@ -724,6 +728,6 @@
   <script src="anomaly-signatures.js?v=8.2.0"></script>
   <script src="anomaly-shift-report.js?v=8.5.0"></script>
   <script src="anomalies.js?v=8.5.0-shift-report"></script>
-  <script src="daily-history.js?v=7.6.1"></script>
+  <script src="daily-history.js?v=8.6.0-cohort"></script>
 </body>
 </html>
