@@ -684,6 +684,7 @@ function renderKPIs(){
 }
 
 function officialDataNote(){
+  if(state.employeeCohort==='NEW')return `${fmtInt.format(rowTotal(state.filtered))} Miss Scans atribuídos aos novos colaboradores no recorte. Total oficial MG4 para cálculo do share: ${fmtInt.format(rowTotal(state.dailyRaw||state.raw))}. Turno/líder: HC Matinal. Datas de admissão: ABS. Grupos sem identificação individual não são atribuídos aos novatos. TOs: cobertura própria da OUT_12.`;
   const detail=state.liveMeta?.individualization;
   return `Fonte oficial MG4: ${fmtInt.format(rowTotal(state.filtered))} Miss Scans no recorte. Turnos, setores e líderes: HC Matinal. ${detail?`${fmtInt.format(detail.recoveredOccurrences)} ocorrências detalhadas por semana; ${fmtInt.format(detail.remainingGrouped)} ainda agrupadas na fonte. O detalhamento semanal exige o período completo e não altera os registros diários. `:''}TOs identificadas e exemplos de BR: OUT_12, com cobertura própria.`;
 }
@@ -714,7 +715,7 @@ function exportOfficialDetails(){
 }
 
 function renderDestinations(){
-  if(state.employeeCohort==='NEW'){if($('stationBars'))$('stationBars').innerHTML='<div class="empty">A fonte de destinos é agregada do MG4 e não permite separar novos colaboradores. Nenhum destino foi atribuído por suposição.</div>';if($('destinationSourceNote'))$('destinationSourceNote').textContent='Sem detalhamento por colaborador na fonte de destinos.';return;}
+  if(state.employeeCohort==='NEW'){if($('stationBars'))$('stationBars').innerHTML='<div class="empty">A fonte de destinos é agregada do MG4 e não permite separar novos colaboradores. Nenhum destino foi atribuído por suposição.</div>';if($('stationNote'))$('stationNote').textContent='Sem detalhamento por colaborador na fonte de destinos.';return;}
   const note=$('stationNote');
   if(!state.liveMeta?.official){if(note)note.textContent='Hubs com maior quantidade de BR';renderBars('stationBars',countBy('lmreceived_station'),10);return;}
   const data=state.destinations;
