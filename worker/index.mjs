@@ -1,3 +1,4 @@
+import * as admissions from '../api/admissions.mjs';
 import * as anomalies from '../api/anomalias.mjs';
 import * as anomalyFiles from '../api/anomaly-files.mjs';
 import * as treatmentAccess from '../api/treatment-access.mjs';
@@ -26,6 +27,7 @@ import * as operations from '../api/operations.mjs';
 import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
 
 const direct = new Map([
+  ['admissions', admissions],
   ['anomalias', anomalies],
   ['anomaly-files', anomalyFiles],
   ['treatment-access', treatmentAccess],
