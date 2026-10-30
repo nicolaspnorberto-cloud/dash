@@ -522,6 +522,7 @@ function admissionForEmployee(row){
 }
 function employeeAdmission(row){return globalThis.MisscanNewHirePolicy?.classify(admissionForEmployee(row),state.cohortToday||globalThis.MisscanNewHirePolicy.today())||{group:'REVIEW',reason:'Data de admissão não confirmada'};}
 function employeeCohortMatches(row){const isNew=employeeAdmission(row).group==='NEW';return state.employeeCohort==='NEW'?isNew:!isNew;}
+function productivityCohortMatches(row){return state.employeeCohort!=='NEW'||employeeCohortMatches(row);}
 window.MisscanEmployeeCohortMatch=employeeCohortMatches;
 async function loadAdmissions(signal){try{const timeout=AbortSignal.timeout(12000),requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;const response=await fetch('/api/admissions',{cache:'no-store',signal:requestSignal});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Consulta indisponível.');return data;}catch(error){return {ok:false,error:error.message};}}
 function acceptAdmissions(data){
@@ -532,7 +533,7 @@ function acceptAdmissions(data){
 function admissionBadge(row){const info=employeeAdmission(row);if(info.group==='REVIEW')return `<div class="cell-sub admission-review">Admissão a validar</div>`;if(info.group==='NEW')return `<div class="cell-sub">Admissão: ${escapeHtml(info.admissionDate.split('-').reverse().join('/'))} · Principal a partir de ${escapeHtml(info.transferDate.split('-').reverse().join('/'))}</div>`;return '';}
 function renderCohortInfo(){
  const records=state.hcRecords.map(row=>({row,info:employeeAdmission(row)})),newCount=records.filter(r=>r.info.group==='NEW').length,review=records.filter(r=>r.info.group==='REVIEW');
- if($('mainCohortNote'))$('mainCohortNote').textContent=`Acompanhamento principal: novos colaboradores com admissão confirmada ficam na página própria até completar um mês. Share mantém o total oficial MG4 como denominador. ${newCount} novo(s) na HC; ${review.length} cadastro(s) com admissão a validar.${state.admissionsError?' '+state.admissionsError:''}`;
+ if($('mainCohortNote'))$('mainCohortNote').textContent=`Produtividade geral inclui todos os colaboradores, inclusive novatos. Tratativas e evolução mantêm o acompanhamento separado até completar um mês da admissão. Share mantém o total oficial MG4 como denominador. ${newCount} novo(s) na HC; ${review.length} cadastro(s) com admissão a validar.${state.admissionsError?' '+state.admissionsError:''}`;
  if($('newHireSource'))$('newHireSource').textContent=state.admissionsError||`Admissão: COPPIT - ABS · Sincronizada ${state.admissionsMeta?.generatedAt?new Date(state.admissionsMeta.generatedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'sem data confirmada'} · Regra: um mês calendário. Turno/líder: HC Matinal.`;
  if($('newHireCounts'))$('newHireCounts').textContent=`${newCount} novo(s) com admissão confirmada na HC · ${review.length} cadastro(s) para validar · Todos os cálculos de share usam o total MG4, incluindo os dois acompanhamentos.`;
  if($('newHireReview')){const q=String($('newHireReviewSearch')?.value||'').toLowerCase(),filtered=review.filter(({row})=>`${row.colaborador} ${row.opsid}`.toLowerCase().includes(q));$('newHireReview').innerHTML=filtered.slice(0,50).map(({row,info})=>`<p><strong>${escapeHtml(row.colaborador)}</strong> · ${escapeHtml(row.opsid||'Sem OPSID')} · ${escapeHtml(info.reason)}</p>`).join('')||'<p>Nenhum cadastro a validar neste filtro.</p>';if(filtered.length>50)$('newHireReview').innerHTML+=`<p>Exibindo 50 de ${filtered.length}. Use a busca para localizar o cadastro.</p>`;}
@@ -541,7 +542,7 @@ function showNewHirePanel(view){if(state.employeeCohort!=='NEW')return;state.new
 function applyFilters(){
   const vals=Object.fromEntries(filterIds.map(id=>[id,$(id).value]));
   const q=$('operatorSearch').value.trim().toLowerCase();
-  state.filtered=state.raw.filter(r=>employeeCohortMatches(r)&&
+  state.filtered=state.raw.filter(r=>productivityCohortMatches(r)&&
     (!vals.areaFilter||r.responsabilidade===vals.areaFilter)&&
     (!vals.processFilter||r.process_fail===vals.processFilter)&&
     (!vals.identFilter||r.identificacao===vals.identFilter)&&
@@ -691,7 +692,7 @@ function officialDataNote(){
 
 function filteredOfficialDetails(){
   const vals=Object.fromEntries(filterIds.map(id=>[id,$(id).value])),q=$('operatorSearch').value.trim().toLowerCase();
-  return state.detailRows.filter(r=>employeeCohortMatches(r)&&(!vals.areaFilter||r.responsabilidade===vals.areaFilter)&&(!vals.processFilter||r.process_fail===vals.processFilter)&&(!vals.identFilter||r.identificacao===vals.identFilter)&&(!vals.turnoFilter||r.turno===vals.turnoFilter)&&(!vals.setorFilter||r.setor===vals.setorFilter)&&(!vals.liderFilter||r.lider_nome===vals.liderFilter)&&(!vals.tipoFilter||r.tipo_hc===vals.tipoFilter)&&(!q||`${r.operator_name} ${r.operator_original} ${r.opsid} ${r.lider_nome}`.toLowerCase().includes(q)));
+  return state.detailRows.filter(r=>productivityCohortMatches(r)&&(!vals.areaFilter||r.responsabilidade===vals.areaFilter)&&(!vals.processFilter||r.process_fail===vals.processFilter)&&(!vals.identFilter||r.identificacao===vals.identFilter)&&(!vals.turnoFilter||r.turno===vals.turnoFilter)&&(!vals.setorFilter||r.setor===vals.setorFilter)&&(!vals.liderFilter||r.lider_nome===vals.liderFilter)&&(!vals.tipoFilter||r.tipo_hc===vals.tipoFilter)&&(!q||`${r.operator_name} ${r.operator_original} ${r.opsid} ${r.lider_nome}`.toLowerCase().includes(q)));
 }
 function officialTOCount(person){
   if(!state.officialDetails?.available)return '—';
