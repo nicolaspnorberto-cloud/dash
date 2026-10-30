@@ -8,7 +8,8 @@ A página Novos colaboradores reutiliza os indicadores, filtros e tratativas exi
 - Um mês calendário: a pessoa permanece na página nova desde a admissão até a véspera do aniversário mensal; a partir desse aniversário aparece no principal. Meses sem o mesmo dia usam seu último dia (31/01 → 28/02, ou 29 em ano bissexto).
 - Sem data confirmada, inválida, futura ou conflitante: permanece no principal, identificada para validação. Não há inferência pela primeira ocorrência de Miss Scan.
 - Classificação pela data atual em São Paulo, inclusive ao consultar histórico. O histórico completo e o progresso compartilham os IDs originais.
-- Share mantém o denominador oficial MG4 completo. O bot não foi alterado.
+- Produtividade geral inclui os pacotes de todos os colaboradores, inclusive novatos, nos totais, gráficos, ranking, detalhes e exportações. A página de novatos mantém seu recorte próprio; tratativas e evolução mantêm a separação de acompanhamento. Não se somam novamente os novatos ao total já completo.
+- Share mantém o denominador oficial MG4 completo.
 - Dados agregados de destinos não são atribuídos aos novatos: a fonte não permite esse recorte por pessoa.
 
 ## Sincronização
