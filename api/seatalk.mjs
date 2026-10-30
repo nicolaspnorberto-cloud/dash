@@ -50,6 +50,7 @@ export async function GET() {
     recentAttempts:attempts,
     paused: SEATALK_PAUSED,
     route: '/api/seatalk',
+    newHireHighlight:{enabled:true,source:'COPPIT - ABS / data_admissao',rule:'FIRST_CALENDAR_MONTH_FROM_ADMISSION',match:'OPSID',messages:['HOURLY','CLOSING'],unconfirmed:'NOT_LABELED_AS_NEW'},
     destination: seatalkDestinationName(),
     presenceSync: { available: presenceHealth.available, dateKey: presence?.dateKey || '', generatedAt: presence?.generatedAt || '', reason: presenceHealth.reason || '' },
     t3Reminder:{enabled:true,destination:'📊 T3 | Gestão de Performance & Tratativas',turns:['T3','T5'],start:'21:30',closing:'05:30',frequency:'HOURLY_AT_30',presence:{required:true,requiredFrom:'23:30',exemptHours:['21:30','22:30']},presenceDate:'SHIFT_START_DATE',nightPresenceReady:!!presence?.previousDay,timezone:'America/Sao_Paulo',blockedAfterClosing:true},

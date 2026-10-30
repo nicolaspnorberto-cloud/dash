@@ -187,3 +187,20 @@ test('T3 dispensa ABS nas duas primeiras horas; às 23h30 e no fechamento exige 
     assert.equal(result.available,false);assert.equal(result.required,true);
   }
 });
+
+test('fiscal usa a classificação da aba Novos por OPSID, mantendo turno, share e tratativa',()=>{
+ const options={misscan:[...Array.from({length:3},()=>misscan('PESSOA NOVATA','Packed TO','Ops123')),...Array.from({length:97},()=>misscan('BASE OPERACIONAL','Packed TO','Ops999'))],hc:[{norm:'PESSOA NOVATA',opsid:'OPS123',turno:'T2',lider_nome:'Líder de teste'}],admissions:[{opsid:'OPS123',admissionDate:'2026-10-15'}],classificationDate:'2026-10-29'};
+ const [novice]=buildDialogueStatusRows(options);assert.equal(novice.isNewHire,true);assert.equal(novice.indicator,3);assert.equal(novice.turn,'T2');assert.equal(novice.leader,'Líder de teste');
+ const [afterMonth]=buildDialogueStatusRows({...options,classificationDate:'2026-11-15'});assert.equal(afterMonth.isNewHire,false);assert.equal(afterMonth.indicator,novice.indicator);assert.equal(afterMonth.actionLabel,novice.actionLabel);
+ const [unknown]=buildDialogueStatusRows({...options,admissions:[]});assert.equal(unknown.isNewHire,false);
+ for(const record of [{admissionDate:'2026-10-30'},{admissionDate:'2026-02-30'},{admissionDate:'2026-10-15',conflict:true}])assert.equal(buildDialogueStatusRows({...options,admissions:[{opsid:'OPS123',...record}]})[0].isNewHire,false);
+});
+test('alerta e fechamento destacam novatos sem divulgar data de admissão ou alterar o nome',()=>{
+ const novice={id:'TESTE NOVATO',collaborator:'Pessoa Teste',leader:'Líder de teste',indicator:3,cycle:1,isNewHire:true,actionLabel:'Realizar diálogo'},normal={...novice,id:'TESTE NORMAL',collaborator:'Outra Pessoa',isNewHire:false};
+ const message=dialogueReminderMessages([novice,normal])[0];assert.match(message,/Pessoa Teste 🆕 \*\*COLABORADOR NOVATO\*\*/);assert.doesNotMatch(message,/Outra Pessoa 🆕/);assert.match(message,/Reforçar o acompanhamento/);
+ const closing=dialogueClosingMessage([{...novice,done:true,completedActionLabel:'Diálogo realizado'},normal]);assert.match(closing,/Pessoa Teste 🆕 \*\*COLABORADOR NOVATO\*\*/);assert.match(closing,/Realizados \(1\)/);assert.match(closing,/Faltantes \(1\)/);assert.doesNotMatch(message+closing,/15\/10\/2026|2026-10-15/);
+ const regular=dialogueReminderMessages([normal])[0];assert.doesNotMatch(regular,/COLABORADOR NOVATO|Reforçar o acompanhamento/);
+});
+test('novato sem OPS na ocorrência pode ser vinculado ao OPS confirmado na HC; T3/T5 preservados',()=>{
+ const rows=buildDialogueStatusRows({misscan:[...Array.from({length:3},()=>({...misscan('PESSOA NOVATA','Packed TO',''),operator_fail:'PESSOA NOVATA'})),...Array.from({length:97},()=>misscan('BASE OPERACIONAL','Packed TO','Ops999'))],hc:[{norm:'PESSOA NOVATA',opsid:'OPS123',turno:'T5',lider_nome:'Líder de teste'}],admissions:[{opsid:'OPS123',admissionDate:'2026-10-15'}],classificationDate:'2026-10-29',targetTurn:'T3'});assert.equal(rows.length,1);assert.equal(rows[0].isNewHire,true);assert.equal(rows[0].turn,'T3');
+});
