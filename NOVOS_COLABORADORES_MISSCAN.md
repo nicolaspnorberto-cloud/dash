@@ -16,3 +16,10 @@ ADMISOES_ABS_SYNC.gs é instalado no projeto existente, usa WEBHOOK_TOKEN já co
 
 ## Validação
 Testes cobrem mês calendário, bissextos, fim de mês, fuso, fontes/tokens, conflitos, partição sem duplicidade, denominador MG4 e manutenção das tratativas na passagem de página.
+
+## Destaque no fiscal SeaTalk
+O fiscal consulta o mesmo cadastro sincronizado em misscan/admissions.json antes de construir as mensagens. O vínculo usa OPSID da ocorrência, ou OPSID confirmado e não ambíguo da HC pelo cadastro já utilizado no fiscal. A classificação usa a mesma função de mês calendário da página e a data atual de São Paulo, independente do D-1 das ocorrências.
+
+Nos lembretes horários e no fechamento, os nomes classificados como novos recebem “🆕 COLABORADOR NOVATO”, com reforço de acompanhamento do primeiro mês. A mensagem não divulga datas de admissão. Dados ausentes, inválidos, futuros ou conflitantes não geram esse rótulo. Ao completar o mês, o destaque deixa de aparecer automaticamente.
+
+O recorte de ofensores, indicadores, tratativas, horários, grupos, presença ABS, exceção das primeiras duas horas e bloqueios após o fechamento continuam com as regras existentes. Não foram enviados testes ou mensagens manuais ao SeaTalk.
