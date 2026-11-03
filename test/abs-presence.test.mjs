@@ -101,3 +101,5 @@ test('T3 mantém presença do início da noite após meia-noite, com leitura ABS
   assert.throws(()=>validatePresence({...body,previousDay:{...body.previousDay,dateKey:'2026-10-12'}},stamp));
   assert.equal(selectPresentTreatments([treatment('OPS1')],validated,{now:new Date(stamp.getTime()+3600001),dateKey:'2026-10-13'}).available,false);
 });
+
+test('presença aceita somente ABS Ver2.0 e rejeita snapshot da antiga planilha',()=>{const stamp=new Date('2026-11-03T20:00:00Z');const body={source:{spreadsheetId:'1VOKcOI8wgaEBHt_vpBgN50m0vJT8IEICeCcjD0xTaDw',sheetId:1310066375,sheet:'ABS'},dateKey:'2026-11-03',generatedAt:stamp.toISOString(),rows:[{opsid:'OPS1',status:'P',disabled:false}]};assert.equal(validatePresence(body,stamp).rows.length,1);const old={...body,source:{spreadsheetId:'1ltU2eLkym-ERSNyzvFsK0EyvKZT5kKUiHcY6PNiOxR8',sheetId:1890690219,sheet:'ABS'}};assert.throws(()=>validatePresence(old,stamp),/Fonte/);assert.equal(selectPresentTreatments([treatment('OPS1')],old,{now:stamp}).available,false);});

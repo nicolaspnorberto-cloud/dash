@@ -34,3 +34,8 @@ A presença é publicada antes do cadastro COPPIT, mantendo suas validações de
 Se o ciclo falhar, agenda no máximo três retentativas pelo acionador temporário `repetirSincronizacaoABSReciclagens`, após no mínimo 2, 4 e 8 minutos. Uma execução bem-sucedida ou um novo ciclo regular remove somente esses acionadores temporários do próprio usuário e reinicia a sequência. Não remove acionadores de outras rotinas. Se a ABS já estiver rodando, não cria outra execução concorrente.
 
 As retentativas apenas sincronizam as bases. Nenhuma delas chama o SeaTalk. Horários de envio, presença obrigatória e bloqueio de ausentes permanecem no Worker.
+
+## Migração da presença para ABS Ver2.0 — novembro/2026
+A presença passa a usar exclusivamente a planilha `1VOKcOI8wgaEBHt_vpBgN50m0vJT8IEICeCcjD0xTaDw`, aba ABS, sheetId 1310066375. O cabeçalho permanece na linha 4, OPSID em O e as datas reais são localizadas depois de U. A aba contém novembro e a referência anterior para a madrugada. Snapshots da fonte antiga deixam de confirmar presença.
+
+Publicar o Worker antes de salvar o Apps Script e executar `sincronizarABSReciclagens` para a primeira carga. Os acionadores existentes passam a usar o código salvo, sem novo deploy do web app. O cadastro COPPIT e as admissões continuam nas fontes já configuradas; esta migração altera somente a presença. Nenhuma rotina chama o SeaTalk manualmente.

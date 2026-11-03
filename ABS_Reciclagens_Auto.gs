@@ -65,9 +65,9 @@ function executarSincronizacaoABS_() {
   var token = String(props.getProperty('WEBHOOK_TOKEN') || '').trim();
   if (!token) throw new Error('WEBHOOK_TOKEN não configurado no projeto existente.');
   var source = {spreadsheetId:'1ltU2eLkym-ERSNyzvFsK0EyvKZT5kKUiHcY6PNiOxR8',sheetId:942845654,sheet:'COPPIT - ABS'};
-  var ss = SpreadsheetApp.openById(source.spreadsheetId);
   // A presença do fiscal não depende da validação/publicação do cadastro de reciclagens.
-  var presenceResult = sincronizarPresencaFiscalABS_(ss, token);
+  var presenceResult = sincronizarPresencaFiscalABS_(SpreadsheetApp.openById('1VOKcOI8wgaEBHt_vpBgN50m0vJT8IEICeCcjD0xTaDw'), token);
+  var ss = SpreadsheetApp.openById(source.spreadsheetId);
   var sheet = ss.getSheetByName(source.sheet);
   if (!sheet || sheet.getSheetId() !== source.sheetId) throw new Error('Aba COPPIT - ABS não encontrada.');
   var header = sheet.getRange(4,1,1,15).getDisplayValues()[0];
@@ -101,7 +101,7 @@ function executarSincronizacaoABS_() {
 
 /** Usa a data efetiva do cabeçalho, nunca a posição fixa do dia do mês. */
 function sincronizarPresencaFiscalABS_(ss, token) {
-  var source = {spreadsheetId:'1ltU2eLkym-ERSNyzvFsK0EyvKZT5kKUiHcY6PNiOxR8',sheetId:1890690219,sheet:'ABS'};
+  var source = {spreadsheetId:'1VOKcOI8wgaEBHt_vpBgN50m0vJT8IEICeCcjD0xTaDw',sheetId:1310066375,sheet:'ABS'};
   var sheet = ss.getSheetByName(source.sheet);
   if (!sheet || sheet.getSheetId() !== source.sheetId) throw new Error('Aba ABS de presença não encontrada.');
   var day = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
