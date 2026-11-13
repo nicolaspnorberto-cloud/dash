@@ -82,7 +82,7 @@ function lerDetalhesOficiaisMG4_(spreadsheetId){
   var width=sheet.getLastColumn(),last=sheet.getLastRow();
   var headers=sheet.getRange(1,1,1,width).getDisplayValues()[0];
   var required=['data_ref','soc','station_id','colaborador','is_colaborador_identificado','tipo_operacao','lt_viagem','to_voando','regra_atribuicao','nivel_atribuicao','qtd_miss_scan','qtd_brs_distintos','br_exemplo_1','br_exemplo_2','br_exemplo_3','created_at'];
-  var ix={};required.forEach(function(k){ix[k]=headers.indexOf(k);if(ix[k]<0)throw new Error('Coluna OUT_12 ausente: '+k);});
+  var ix={};required.forEach(function(k){ix[k]=headers.indexOf(k);if(k==='br_exemplo_1'&&ix[k]<0&&headers[25]==='Z')ix[k]=25;if(ix[k]<0)throw new Error('Coluna OUT_12 ausente: '+k);});
   var hits=sheet.getRange(2,ix.soc+1,last-1,1).createTextFinder('MG4').matchEntireCell(true).matchCase(true).useRegularExpression(false).findAll().map(function(r){return r.getRow();}).sort(function(a,b){return a-b;});
   var blocks=[];hits.forEach(function(n){var p=blocks[blocks.length-1];if(p&&n-p.end<=6&&n-p.start<1000)p.end=n;else blocks.push({start:n,end:n});});
   var rows=[];blocks.forEach(function(block){sheet.getRange(block.start,1,block.end-block.start+1,width).getValues().forEach(function(line){
