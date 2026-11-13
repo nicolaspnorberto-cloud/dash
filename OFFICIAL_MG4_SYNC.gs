@@ -1,6 +1,7 @@
 /** Fonte dos ofensores: oficial OUT_05 MG4; cadastro/turno: HC Matinal. */
 function sincronizarOfensoresOficiaisMG4(){
-  var lock=LockService.getScriptLock();
+  // Evita disputar o bloqueio geral com as filas de atualização.
+  var lock=LockService.getUserLock();
   if(!lock.tryLock(5000))throw new Error('Outra sincronização em andamento; próxima execução tentará novamente.');
   try{
     var token=PropertiesService.getScriptProperties().getProperty('WEBHOOK_TOKEN');
@@ -21,9 +22,7 @@ function sincronizarOfensoresOficiaisMG4(){
     });});
     var hs=SpreadsheetApp.openById(hcId).getSheetByName('Base de HC 26');
     if(!hs)throw new Error('Base HC Matinal ausente.');
-    var head=hs.getRange(3,1,1,6).getDisplayValues()[0];
-    if(String(head[0]).trim().toLowerCase()!=='colaborador'||String(head[5]).trim().toUpperCase()!=='OPSID')throw new Error('Cabeçalho HC mudou.');
-    var hc=hs.getRange(4,1,hs.getLastRow()-3,6).getDisplayValues().filter(function(r){return String(r[0]).trim();}).map(function(r){return{colaborador:r[0],turno:r[1],setor:r[2],lider_email:r[3],lider_nome:r[4],opsid:r[5]};});
+    var hc=lerHCOficialMG4_(hs);
     var weeklyRows=lerRankingOficialMG4_(officialId);
     var payload={source:{spreadsheetId:officialId,sheet:'OUT_05_COLABORADOR_DIA'},hcSource:{spreadsheetId:hcId,sheet:'Base de HC 26'},rows:rows,hc:hc,weeklyRows:weeklyRows,destinationRows:lerDestinosOficiaisMG4_(officialId)};
     var response=UrlFetchApp.fetch('https://dash.nicolas-pnorberto.workers.dev/api/official-sync',{method:'post',contentType:'application/json',headers:{'X-Sync-Token':token},payload:JSON.stringify(payload),muteHttpExceptions:true});
@@ -83,12 +82,35 @@ function lerDetalhesOficiaisMG4_(spreadsheetId){
   var width=sheet.getLastColumn(),last=sheet.getLastRow();
   var headers=sheet.getRange(1,1,1,width).getDisplayValues()[0];
   var required=['data_ref','soc','station_id','colaborador','is_colaborador_identificado','tipo_operacao','lt_viagem','to_voando','regra_atribuicao','nivel_atribuicao','qtd_miss_scan','qtd_brs_distintos','br_exemplo_1','br_exemplo_2','br_exemplo_3','created_at'];
-  var ix={};required.forEach(function(k){ix[k]=headers.indexOf(k);if(ix[k]<0)throw new Error('Coluna OUT_12 ausente: '+k);});
+  var ix={};required.forEach(function(k){ix[k]=headers.indexOf(k);if(k==='br_exemplo_1'&&ix[k]<0&&headers[25]==='Z')ix[k]=25;if(ix[k]<0)throw new Error('Coluna OUT_12 ausente: '+k);});
   var hits=sheet.getRange(2,ix.soc+1,last-1,1).createTextFinder('MG4').matchEntireCell(true).matchCase(true).useRegularExpression(false).findAll().map(function(r){return r.getRow();}).sort(function(a,b){return a-b;});
   var blocks=[];hits.forEach(function(n){var p=blocks[blocks.length-1];if(p&&n-p.end<=6&&n-p.start<1000)p.end=n;else blocks.push({start:n,end:n});});
   var rows=[];blocks.forEach(function(block){sheet.getRange(block.start,1,block.end-block.start+1,width).getValues().forEach(function(line){
     if(String(line[ix.soc]).trim()!=='MG4')return;
     var row={};required.forEach(function(k){var v=line[ix[k]];row[k]=v instanceof Date?Utilities.formatDate(v,'America/Sao_Paulo',k==='mes_ref'?'yyyy-MM':'yyyy-MM-dd'):v;});rows.push(row);
   });});
+  return rows;
+}
+
+
+function lerHCOficialMG4_(sheet){
+  var width=Math.max(6,sheet.getLastColumn());
+  var headers=sheet.getRange(3,1,2,width).getDisplayValues();
+  function normalize(value){return String(value||'').trim().toUpperCase().replace(/[ _-]/g,'');}
+  var current=headers[1].map(normalize),legacy=headers[0].map(normalize);
+  var index={},start;
+  if(['OPSID','COLABORADOR','TURNO','SETOR','LIDEREMAIL'].every(function(key){return current.indexOf(key)>=0;})){
+    ['OPSID','COLABORADOR','TURNO','SETOR','LIDEREMAIL','LIDERNOME'].forEach(function(key){index[key]=current.indexOf(key);});
+    start=5;
+  }else if(legacy[0]==='COLABORADOR'&&legacy[5]==='OPSID'){
+    index={COLABORADOR:0,TURNO:1,SETOR:2,LIDEREMAIL:3,LIDERNOME:4,OPSID:5};
+    start=4;
+  }else throw new Error('Cabeçalho HC Matinal não reconhecido.');
+  var count=sheet.getLastRow()-start+1;
+  if(count<1)throw new Error('HC Matinal sem registros.');
+  var rows=sheet.getRange(start,1,count,width).getDisplayValues().filter(function(row){return String(row[index.COLABORADOR]||'').trim();}).map(function(row){
+    return {colaborador:row[index.COLABORADOR],turno:row[index.TURNO],setor:row[index.SETOR],lider_email:row[index.LIDEREMAIL],lider_nome:row[index.LIDERNOME]||'',opsid:row[index.OPSID]};
+  });
+  if(!rows.length)throw new Error('HC Matinal sem registros.');
   return rows;
 }
