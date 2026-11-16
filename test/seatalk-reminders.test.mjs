@@ -204,3 +204,14 @@ test('alerta e fechamento destacam novatos sem divulgar data de admissão ou alt
 test('novato sem OPS na ocorrência pode ser vinculado ao OPS confirmado na HC; T3/T5 preservados',()=>{
  const rows=buildDialogueStatusRows({misscan:[...Array.from({length:3},()=>({...misscan('PESSOA NOVATA','Packed TO',''),operator_fail:'PESSOA NOVATA'})),...Array.from({length:97},()=>misscan('BASE OPERACIONAL','Packed TO','Ops999'))],hc:[{norm:'PESSOA NOVATA',opsid:'OPS123',turno:'T5',lider_nome:'Líder de teste'}],admissions:[{opsid:'OPS123',admissionDate:'2026-10-15'}],classificationDate:'2026-10-29',targetTurn:'T3'});assert.equal(rows.length,1);assert.equal(rows[0].isNewHire,true);assert.equal(rows[0].turn,'T3');
 });
+
+test('usa e-mail válido de liderança quando HC Matinal não fornece o nome', () => {
+  const hc = [
+    {colaborador:'SEM NOME', turno:'T4', lider_nome:' ', lider_email:' Lider@Shopee.com '},
+    {colaborador:'COM NOME', turno:'T2', lider_nome:'Líder A', lider_email:'outro@shopee.com'},
+    {colaborador:'SEM LIDER', turno:'T2', lider_email:'Não cadastrado'},
+    {colaborador:'OUTRO TURNO', turno:'T3', lider_email:'lider@shopee.com'}
+  ];
+  const rows = buildDialogueStatusRows({hc, misscan:hc.map((r,i)=>misscan(r.colaborador,'Packed TO','Ops'+(i+1)))});
+  assert.deepEqual(Object.fromEntries(rows.map(r=>[r.collaborator,r.leader])), {'SEM NOME':'lider@shopee.com','COM NOME':'Líder A'});
+});
