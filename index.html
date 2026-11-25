@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css?v=8.6.0-new-hires" />
   <link rel="stylesheet" href="anomalies.css?v=8.5.0-shift-report" />
   <link rel="stylesheet" href="training.css?v=7.9.0-lock" />
+  <link rel="stylesheet" href="official-analysis.css?v=9.0.0" />
 
   <style>
     .row-action-stack{display:flex;gap:6px;flex-wrap:wrap;min-width:150px}
@@ -57,6 +58,8 @@
     <button class="tab" data-tab="tratativas">Tratativas</button>
     <button class="tab" data-tab="novos">Novos colaboradores</button>
     <button class="tab" data-tab="evolucao">Evolução</button>
+    <button class="tab" data-tab="destinos-criticos">Destinos críticos</button>
+    <button class="tab" data-tab="investigacao">Investigação TO/LT</button>
     <button class="tab" data-tab="calendarizacao">Calendarização</button>
     <button class="tab" data-tab="reciclagens">Reciclagens</button>
 
@@ -101,6 +104,8 @@
     <p id="mainCohortNote" class="cohort-note" role="status"></p>
     <section id="reciclagens" class="view"></section>
     <section id="anomalias" class="view"></section>
+    <section id="destinos-criticos" class="view official-analysis-view" aria-label="Destinos críticos"></section>
+    <section id="investigacao" class="view official-analysis-view" aria-label="Investigação TO/LT"></section>
     <section id="produtividade" class="view active">
       <div class="filter-panel">
         <div class="filter-grid filter-grid-wide">
@@ -720,7 +725,8 @@
   <script src="presence-ui.js?v=7.3.0"></script>
   <script src="treatment-access.js?v=7.9.1"></script>
   <script src="new-hire-policy.js?v=8.6.0"></script>
-  <script src="app.js?v=8.6.2-inclusive-productivity"></script>
+  <script src="official-analysis.js?v=9.0.0"></script>
+  <script src="app.js?v=9.0.0-official-analysis"></script>
   <script src="attendance-template.js?v=7.7.1"></script>
   <script src="training.js?v=7.9.0-lock"></script>
   <script src="anomaly-presentation.js?v=8.1.0"></script>

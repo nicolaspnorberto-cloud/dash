@@ -83,11 +83,13 @@ function lerDetalhesOficiaisMG4_(spreadsheetId){
   var headers=sheet.getRange(1,1,1,width).getDisplayValues()[0];
   var required=['data_ref','soc','station_id','colaborador','is_colaborador_identificado','tipo_operacao','lt_viagem','to_voando','regra_atribuicao','nivel_atribuicao','qtd_miss_scan','qtd_brs_distintos','br_exemplo_1','br_exemplo_2','br_exemplo_3','created_at'];
   var ix={};required.forEach(function(k){ix[k]=headers.indexOf(k);if(k==='br_exemplo_1'&&ix[k]<0&&headers[25]==='Z')ix[k]=25;if(ix[k]<0)throw new Error('Coluna OUT_12 ausente: '+k);});
+  var optional=['lt_usada_atribuicao','status_evento_atribuicao','shipment_evento_atribuicao','data_hora_evento_atribuicao','operador_evento_atribuicao','explicacao_atribuicao'];
+  optional.forEach(function(k){ix[k]=headers.indexOf(k);});
   var hits=sheet.getRange(2,ix.soc+1,last-1,1).createTextFinder('MG4').matchEntireCell(true).matchCase(true).useRegularExpression(false).findAll().map(function(r){return r.getRow();}).sort(function(a,b){return a-b;});
   var blocks=[];hits.forEach(function(n){var p=blocks[blocks.length-1];if(p&&n-p.end<=6&&n-p.start<1000)p.end=n;else blocks.push({start:n,end:n});});
   var rows=[];blocks.forEach(function(block){sheet.getRange(block.start,1,block.end-block.start+1,width).getValues().forEach(function(line){
     if(String(line[ix.soc]).trim()!=='MG4')return;
-    var row={};required.forEach(function(k){var v=line[ix[k]];row[k]=v instanceof Date?Utilities.formatDate(v,'America/Sao_Paulo',k==='mes_ref'?'yyyy-MM':'yyyy-MM-dd'):v;});rows.push(row);
+    var row={};required.concat(optional).forEach(function(k){if(ix[k]<0)return;var v=line[ix[k]];row[k]=v instanceof Date?Utilities.formatDate(v,'America/Sao_Paulo',k==='data_hora_evento_atribuicao'?'yyyy-MM-dd HH:mm:ss':k==='mes_ref'?'yyyy-MM':'yyyy-MM-dd'):v;});rows.push(row);
   });});
   return rows;
 }

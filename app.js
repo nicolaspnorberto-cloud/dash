@@ -746,6 +746,7 @@ function renderAll(){
   renderBars('liderBars',countBy('lider_nome',state.filtered.filter(r=>r.identificacao==='IDENTIFICADO')),10);
   renderBars('statusBars',countBy('last_status'),10);
   renderDestinations();
+  globalThis.MisscanOfficialAnalysis?.render({official:!!state.liveMeta?.official,destinations:state.destinations,details:state.officialDetails,rows:state.detailRows,meta:state.liveMeta});
   renderOfficialDetails();renderRanking();renderTreatments();renderProjection();
   if(state.liveMeta?.official){$('dataNote').textContent=officialDataNote();return;}
   const duplicateNote=state.sourceRows-state.raw.length;
