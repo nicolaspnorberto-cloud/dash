@@ -9,11 +9,12 @@
   if(!Array.isArray(data.rows)||!Array.isArray(data.days)||!data.days.length)throw Error('Informe produção diária e dias cobertos pela carga.');
   if(data.rows.length>100000||data.days.length>366||data.processingErrors?.length>100000||data.errorDays?.length>366)throw Error('Carga acima de 100 mil linhas.');
   const checkedDays=new Set(data.days.map(v=>{if(!date(v))throw Error('Dia de cobertura inválido.');return v})),seen=new Set();
-  const rows=data.rows.map(r=>{const id=ops(r.opsid),d=date(r.date),volume=r.bipes;if(!id||!d||!checkedDays.has(d)||typeof volume!=='number'||!Number.isSafeInteger(volume)||volume<0)throw Error('Produção inválida: use date, opsid e bipes inteiro não negativo.');const key=d+'|'+id;if(seen.has(key))throw Error('Produção duplicada por OPSID e dia; consolide na fonte.');seen.add(key);return {date:d,opsid:id,bipes:volume}});
+  const partialDays=[...new Set(data.partialDays||[])];if(partialDays.some(d=>!date(d)||checkedDays.has(d)))throw Error('Dias parciais inválidos.');
+  const rows=data.rows.map(r=>{const id=ops(r.opsid),d=date(r.date),volume=r.bipes;if(!id||!d||!checkedDays.has(d)&&!partialDays.includes(d)||typeof volume!=='number'||!Number.isSafeInteger(volume)||volume<0)throw Error('Produção inválida: use date, opsid e bipes inteiro não negativo.');const key=d+'|'+id;if(seen.has(key))throw Error('Produção duplicada por OPSID e dia; consolide na fonte.');seen.add(key);return {date:d,opsid:id,bipes:volume}});
   if(!['BIPES','BR_UNICOS'].includes(data.unit))throw Error('Confirme a unidade: BIPES ou BR_UNICOS.');
   const errorDays=[...new Set(data.errorDays||[])];if(errorDays.some(d=>!date(d)))throw Error('Cobertura dos erros inválida.');
   const brs=new Map();for(const r of data.processingErrors||[]){const id=ops(r.opsid),d=date(r.date),br=String(r.br||'').trim().toUpperCase();if(!id||!d||!errorDays.includes(d)||!/^BR[A-Z0-9]+$/.test(br))throw Error('Erro exige BR, OPSID e data real de processamento confirmados.');if(brs.has(br)&&(brs.get(br).opsid!==id||brs.get(br).date!==d))throw Error('BR com atribuição ou data conflitante.');brs.set(br,{date:d,opsid:id,br});}
-  return {rows,days:[...checkedDays].sort(),unit:data.unit,errorDays:errorDays.sort(),processingErrors:[...brs.values()],source:String(data.source||'Produtividade Esteiras SPX').slice(0,250),errorSource:String(data.errorSource||'').slice(0,250),updatedAt:new Date().toISOString()};
+  return {rows,partialDays,days:[...checkedDays].sort(),unit:data.unit,errorDays:errorDays.sort(),processingErrors:[...brs.values()],source:String(data.source||'Produtividade Esteiras SPX').slice(0,250),errorSource:String(data.errorSource||'').slice(0,250),updatedAt:new Date().toISOString()};
  }
  function model(data,{from,to,hc=[]}={}){
   const period=days(from,to),volumeComplete=period.every(d=>data?.days?.includes(d)),errorsComplete=!!data?.errorSource&&period.every(d=>data?.errorDays?.includes(d));

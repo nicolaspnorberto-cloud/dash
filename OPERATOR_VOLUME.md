@@ -32,3 +32,11 @@ Turno/líder/nome vêm da HC Matinal da dashboard pelo OPSID. Cadastros duplicad
 
 ## Validação
 Testes unitários cobrem cálculo, ausência versus zero, cobertura parcial, deduplicação/conflito de BR, duplicação de produção, datas inválidas, divisão por zero, erros acima do volume e HC ambígua. A publicação Cloudflare e a carga real devem ser confirmadas separadamente.
+
+## Fonte conectada em 26/11/2026
+
+Planilha: 149QIaAKlVpq28Nm_zPYMb3l0n8LY2ssUpLRC5ShatD8. Usar prod_hist (gid 0) e prod_d0 (gid 36257454); campo packing, data date, identidade operator_id. packed/packed_d0 contam TOs e gaiolas e não entram neste denominador. Consulta pública sem autenticação respondeu 401; preservar os acessos existentes.
+
+PRODUTIVIDADE_HC_SYNC.gs realiza leitura autenticada no Apps Script existente da dashboard. Nenhuma modificação é feita na planilha de origem. D0 substitui a data sobreposta ao histórico. Deduplica registros idênticos por data/posto/hora/OPSID, rejeita contagem conflitante, soma produção por pessoa/dia e identifica o dia atual como parcial. Este volume é bipes, sem confirmação de BRs únicos. O POST productionOnly preserva a fonte de erros previamente carregada.
+
+Validação em Apps Script confirmou extração de 11 a 26/11, com dia 26 parcial. Instalar o acionador somente após primeira sincronização HTTP bem-sucedida. A ativação e publicação precisam ser confirmadas por logs e pela API. Os erros por processamento permanecem uma integração separada; não inventar taxas com agregados por recebimento LM.
