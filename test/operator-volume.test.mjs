@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import '../operator-volume.js';
+const {normalize,model,date,days}=globalThis.MisscanOperatorVolume;
+const from='2026-11-20',to=from;
+const base=()=>({rows:[{opsid:'ops123',date:from,bipes:5000}],days:[from],unit:'BIPES',errorDays:[from],errorSource:'LM oficial por data de processamento',processingErrors:Array.from({length:20},(_,i)=>({date:from,opsid:'ops123',br:'BR'+i}))});
+test('20 erros em 5000 bipes equivalem a 0,40%, com HC Matinal',()=>{const m=model(normalize(base()),{from,to,hc:[{opsid:'OPS123',colaborador:'Pessoa Teste',turno:'T2',lider_nome:'Lider Teste'}]});assert.equal(m.rows[0].rate,.4);assert.equal(m.rows[0].turno,'T2');assert.equal(m.rows[0].colaborador,'Pessoa Teste')});
+test('não transforma ausência de erros em zero sem cobertura confirmada',()=>{const b=base();delete b.errorSource;const m=model(normalize(b),{from,to});assert.equal(m.rows[0].rate,null);assert.equal(m.errorsComplete,false)});
+test('volume parcial nunca produz taxa',()=>{const m=model(normalize(base()),{from,to:'2026-11-21'});assert.equal(m.rows[0].rate,null)});
+test('deduplica BR e recusa atribuição conflitante',()=>{const b=base();b.processingErrors.push(b.processingErrors[0]);assert.equal(normalize(b).processingErrors.length,20);b.processingErrors.push({...b.processingErrors[0],opsid:'OPS456'});assert.throws(()=>normalize(b),/conflitante/)});
+test('reimportação duplicada na mesma carga é recusada',()=>{const b=base();b.rows.push({...b.rows[0]});assert.throws(()=>normalize(b),/duplicada/)});
+test('zero produção e erros acima do volume não geram taxa',()=>{for(const value of [0,1]){const b=base();b.rows[0].bipes=value;assert.equal(model(normalize(b),{from,to}).rows[0].rate,null)}});
+test('zero erros real com cobertura completa pode gerar zero',()=>{const b=base();b.processingErrors=[];assert.equal(model(normalize(b),{from,to}).rows[0].rate,0)});
+test('datas e quantidades inválidas são rejeitadas',()=>{assert.equal(date('2026-02-30'),'');assert.equal(date('2026-99-99'),'');assert.throws(()=>days(to,from.slice(0,8)+'19'));for(const v of [-1,1.3,'5000',null]){const b=base();b.rows[0].bipes=v;assert.throws(()=>normalize(b))}});
+test('HC duplicada não atribui líder ou turno por suposição',()=>{const h={opsid:'OPS123',turno:'T2'};assert.equal(model(normalize(base()),{from,to,hc:[h,h]}).rows[0].turno,'Não confirmado')});
+test('recorte inclui os limites e exclui outros dias sem duplicar totais',()=>{const b=base();b.days.push('2026-11-21');b.rows.push({date:'2026-11-21',opsid:'OPS123',bipes:900});assert.equal(model(normalize(b),{from,to}).rows[0].volume,5000)});
