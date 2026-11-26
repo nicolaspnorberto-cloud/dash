@@ -40,3 +40,9 @@ Planilha: 149QIaAKlVpq28Nm_zPYMb3l0n8LY2ssUpLRC5ShatD8. Usar prod_hist (gid 0) e
 PRODUTIVIDADE_HC_SYNC.gs realiza leitura autenticada no Apps Script existente da dashboard. Nenhuma modificação é feita na planilha de origem. D0 substitui a data sobreposta ao histórico. Deduplica registros idênticos por data/posto/hora/OPSID, rejeita contagem conflitante, soma produção por pessoa/dia e identifica o dia atual como parcial. Este volume é bipes, sem confirmação de BRs únicos. O POST productionOnly preserva a fonte de erros previamente carregada.
 
 Validação em Apps Script confirmou extração de 11 a 26/11, com dia 26 parcial. Instalar o acionador somente após primeira sincronização HTTP bem-sucedida. A ativação e publicação precisam ser confirmadas por logs e pela API. Os erros por processamento permanecem uma integração separada; não inventar taxas com agregados por recebimento LM.
+
+## Comparativo oficial de período (OUT_05)
+
+A leitura de erros passou a usar exclusivamente misscan/official-mg4.json, sincronizado da OUT_05_COLABORADOR_DIA do SoC a SoC BR. Filtro obrigatório ESTЕIRA/MG4. O numerador utiliza official_count e a data_ref oficial, sem reconstruir BRs de exemplo e sem usar Matinal/LM. OPSID direto da identidade oficial; nomes exatos só são associados pela HC Matinal quando unívocos. Quantidades sem identidade confirmada são informadas separadamente.
+
+O percentual compara erros oficiais recebidos no período com produção bipada nesse período. Não é a taxa oficial do SOC nem comprova que o erro é dos mesmos pacotes produzidos nessa janela. A interface e o CSV identificam essa referência. A data real de processamento permanece distinta; não usar data_hora_evento_atribuicao de BR par como substituição. A quantidade agregada oficial é suficiente para este comparativo, sem exigir a lista BR a BR.
