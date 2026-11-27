@@ -18,3 +18,17 @@
  .period-bar .period-separator{display:none}
  body>footer{margin-left:230px}
 }
+
+/* Always-visible desktop handle; small screens retain their original menu. */
+.sidebar-toggle{display:none}
+@media screen and (min-width:1051px){
+ .sidebar-toggle{position:fixed;top:77px;left:211px;z-index:35;display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid #d7e1ec;border-radius:10px;background:#fff;color:var(--navy);box-shadow:0 3px 10px #10233f14;cursor:pointer}
+ .sidebar-toggle:hover{background:var(--orange-soft);color:var(--orange)}
+ .sidebar-toggle:focus-visible{outline:3px solid var(--orange);outline-offset:3px}
+ body.sidebar-collapsed>.dashboard-navigation{display:none}
+ body.sidebar-collapsed>.sidebar-toggle{left:10px}
+ body.sidebar-collapsed>.sidebar-toggle svg{transform:rotate(180deg)}
+ body.sidebar-collapsed>main,body.sidebar-collapsed>footer{margin-left:0}
+ body.sidebar-collapsed>.period-bar{margin-left:24px}
+ body.sidebar-collapsed>.period-bar .period-summary{padding-left:28px}
+}

@@ -29,7 +29,7 @@
     .history-detail-section .history-item span{font-size:11px;color:#7690ad}
     .history-detail-section .history-item p{margin:7px 0 0;line-height:1.45;color:#425a77}
   </style>
-  <link rel="stylesheet" href="unified-layout.css?v=10.0.1-sidebar-only" />
+  <link rel="stylesheet" href="unified-layout.css?v=10.0.2-sidebar-toggle" />
 </head>
 <body>
   <header class="topbar">
@@ -53,7 +53,8 @@
     </div>
   </header>
 
-  <div class="dashboard-navigation"><div class="misscan-navigation-group"><span class="navigation-family-label">MIS SCAN</span>
+  <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-controls="dashboardNavigation" aria-expanded="true" aria-label="Recolher menu lateral" title="Recolher menu lateral"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg></button>
+  <div id="dashboardNavigation" class="dashboard-navigation"><div class="misscan-navigation-group"><span class="navigation-family-label">MIS SCAN</span>
   <nav class="tabs" aria-label="Navegação MIS SCAN">
     <button class="tab active" data-tab="produtividade">Produtividade</button>
     <button class="tab" data-tab="tratativas">Tratativas</button>
@@ -739,5 +740,28 @@
   <script src="anomaly-shift-report.js?v=8.5.0"></script>
   <script src="anomalies.js?v=8.5.0-shift-report"></script>
   <script src="daily-history.js?v=8.6.0-cohort"></script>
+  <script>
+    // Sidebar preference is local to this browser and never changes data or access.
+    (() => {
+      const button = document.getElementById('sidebarToggle');
+      if (!button) return;
+      const key = 'cop-mg4.sidebar-collapsed';
+      function setCollapsed(collapsed) {
+        document.body.classList.toggle('sidebar-collapsed', collapsed);
+        button.setAttribute('aria-expanded', String(!collapsed));
+        const label = collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral';
+        button.setAttribute('aria-label', label);
+        button.title = label;
+      }
+      let saved = false;
+      try { saved = localStorage.getItem(key) === '1'; } catch (_) {}
+      setCollapsed(saved);
+      button.addEventListener('click', () => {
+        const collapsed = !document.body.classList.contains('sidebar-collapsed');
+        setCollapsed(collapsed);
+        try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch (_) {}
+      });
+    })();
+  </script>
 </body>
 </html>
