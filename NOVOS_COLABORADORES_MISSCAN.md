@@ -24,3 +24,7 @@ O fiscal consulta o mesmo cadastro sincronizado em misscan/admissions.json antes
 Nos lembretes horários e no fechamento, os nomes classificados como novos recebem “🆕 COLABORADOR NOVATO”, com reforço de acompanhamento do primeiro mês. A mensagem não divulga datas de admissão. Dados ausentes, inválidos, futuros ou conflitantes não geram esse rótulo. Ao completar o mês, o destaque deixa de aparecer automaticamente.
 
 O recorte de ofensores, indicadores, tratativas, horários, grupos, presença ABS, exceção das primeiras duas horas e bloqueios após o fechamento continuam com as regras existentes. Não foram enviados testes ou mensagens manuais ao SeaTalk.
+
+## Migração da fonte de admissão — 27/11/2026
+
+A fonte passa à planilha 1VOKcOI8wgaEBHt_vpBgN50m0vJT8IEICeCcjD0xTaDw, aba ABS, sheetId 1310066375. Mantém data_admissao em E, Ops ID em O e cabeçalho na linha 4. A API rejeita cargas da fonte antiga para impedir substituição por dados sem admissões de novembro. Publicar o Worker, salvar ADMISOES_ABS_SYNC.gs no projeto existente e executar sincronizarAdmissoesMisscanMG4. O acionador existente continua a cada 30 minutos. Não alterar presença, regras de mês calendário, share, HC de turno/liderança ou enviar mensagens manuais. Nenhum dado pessoal deve ser salvo no repositório.

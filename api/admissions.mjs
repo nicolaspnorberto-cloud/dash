@@ -1,7 +1,7 @@
 import {assertSyncToken,json,readJson,writeJson} from '../lib/blob-store.mjs';
 import '../new-hire-policy.js';
 const PATH='misscan/admissions.json';
-export const SOURCE={spreadsheetId:'1ltU2eLkym-ERSNyzvFsK0EyvKZT5kKUiHcY6PNiOxR8',sheetId:942845654,sheet:'COPPIT - ABS',field:'data_admissao'};
+export const SOURCE={spreadsheetId:'1VOKcOI8wgaEBHt_vpBgN50m0vJT8IEICeCcjD0xTaDw',sheetId:1310066375,sheet:'ABS',field:'data_admissao'};
 export function normalizeAdmissions(body){
  if(Object.keys(SOURCE).some(k=>body.source?.[k]!==SOURCE[k]))throw new Error('Fonte de admissão divergente.');
  if(!Array.isArray(body.rows)||!body.rows.length||body.rows.length>10000)throw new Error('Cadastro de admissões inválido ou vazio.');
