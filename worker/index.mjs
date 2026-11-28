@@ -1,3 +1,4 @@
+import * as operatorErrors from '../api/operator-errors.mjs';
 import * as unitValidation from '../api/unit-validation.mjs';
 import * as operatorVolume from '../api/operator-volume.mjs';
 import * as admissions from '../api/admissions.mjs';
@@ -29,6 +30,7 @@ import * as operations from '../api/operations.mjs';
 import { sendDailyDialogueReminder } from '../lib/seatalk-reminders.mjs';
 
 const direct = new Map([
+  ['operator-errors', operatorErrors],
   ['unit-validation', unitValidation],
   ['operator-volume', operatorVolume],
   ['admissions', admissions],
